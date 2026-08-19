@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==============================================================
+   🍎 TEMA APPLE (HUMAN INTERFACE GUIDELINES)
+   ============================================================== */
+
+/* ATENÇÃO: Se você está usando Tailwind CSS v3, mova todo o bloco @theme 
+   para dentro do arquivo tailwind.config.js (na propriedade theme.extend.colors).
+   Se estiver no Tailwind v4, este bloco já funcionará aqui. */
+@theme {
+  /* O Off-White baseado no seu pedido (padrão Apple) */
+  --color-white: oklch(98.7% 0.022 95.277); 
+  --color-apple-bg: oklch(98.6% 0.031 120.757); /* Aplicado ao fundo global */
+  
+  /* Cores de Superfície e Cartões (Apple "System Backgrounds") */
+  --color-apple-card: #FFFFFF; /* Branco puro para modais/cartões */
+  --color-apple-input: #FFFFFF; /* Branco puro para inputs */
+  --color-apple-border: #D1D1D6; /* Cinza claro Apple para bordas */
+  --color-apple-hover: #F2F2F7; /* Cinza de hover Apple (System Gray 6) */
+
+  /* Cores de Tipografia (Apple Label Colors) */
+  --color-label: #1C1C1E;       /* Preto quase puro (Primary Label) */
+  --color-secondary-label: #3A3A3C; /* Cinza escuro (Secondary Label) */
+  --color-tertiary-label: #8E8E93;  /* Cinza médio (Tertiary Label) */
+  
+  /* Fontes padrão do Apple (San Francisco) */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* ==============================================================
+   APLICAÇÃO GLOBAL DO TEMA
+   ============================================================== */
+
+@layer base {
+  /* Aplicação no Body (Modo Claro) */
+  body {
+    /* Usamos a cor off-white que você passou */
+    @apply bg-[oklch(98.6%_0.031_120.757)] text-[--color-label] antialiased;
+    font-family: var(--font-sans);
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+  }
+
+  /* Aplicação no Body (Modo Escuro) */
+  .dark body {
+    @apply bg-[#000000] text-apple-label-dark; /* Preto verdadeiro no Dark, texto levemente off-white */
+  }
+
+  /* Estilização global de Inputs para terem o visual clean da Apple */
+  input, select, textarea {
+    @apply bg-[--color-apple-input] border-[--color-apple-border] text-[--color-label] rounded-xl px-4 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-colors;
+  }
+  
+  .dark input, .dark select, .dark textarea {
+    @apply bg-apple-card-dark border-apple-border-dark text-apple-label-dark shadow-none;
+  }
+}
+
+/* ==============================================================
+   CORREÇÃO DA PÁGINA DE ISSUES (LEGIBILIDADE NO TEMA CLARO)
+   ============================================================== */
+
+/* 1. Corrigindo o fundo da "Barra de Busca Avançada" */
+/* Se o seu componente AdvancedSearch não tiver a classe ".advanced-search-container",
+   envolva ele em uma div com essa classe. */
+.advanced-search-container {
+  @apply bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm;
+}
+
+/* Mantém o fundo escuro apenas no modo Dark */
+.dark .advanced-search-container {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 2. Ajuste do Cabeçalho e Linhas da Grid das Issues */
+.issue-grid-header {
+  @apply bg-[#F2F2F7] dark:bg-apple-card-dark/60 text-[--color-tertiary-label] dark:text-[--color-tertiary-label] font-semibold text-[11px] uppercase tracking-wider border-b border-apple-border-light dark:border-apple-border-dark px-4 py-3 transition-colors;
+}
+
+.issue-grid-row {
+  @apply bg-white dark:bg-apple-card-dark border-b border-[#E5E5EA] dark:border-apple-border-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors duration-150 ease-in-out;
+}
+
+/* 3. Textos da Grid com hierarquia visual */
+.issue-grid-title {
+  @apply text-[--color-label] dark:text-apple-label-dark font-medium text-sm hover:text-blue-500 transition-colors truncate;
+}
+
+.issue-grid-subtitle {
+  @apply text-[--color-tertiary-label] dark:text-apple-tertiary-light text-[10px] font-mono truncate;
+}
+
+/* 4. Removendo fundos escuros desnecessários e ajustando Pills (Badges) */
+.issue-pill-branch {
+  @apply bg-[#F2F2F7] dark:bg-[#38383A] text-[--color-secondary-label] dark:text-[#E5E5EA] px-2 py-0.5 rounded text-[10px] font-medium border border-[#E5E5EA] dark:border-transparent;
+}
+
+.issue-pill-severity-high {
+  @apply bg-[#FFD1D1] dark:bg-[#FF453A]/40 text-[#FF453A] dark:text-[#FF453A];
+}
+.issue-pill-severity-critical {
+  @apply bg-[#FF3B30]/20 text-apple-red dark:bg-[#FF3B30]/40;
+}
+.issue-pill-severity-medium {
+  @apply bg-[#FF9F0A]/20 text-[#FF9F0A] dark:bg-[#FF9F0A]/40;
+}
