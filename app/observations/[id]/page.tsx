@@ -155,7 +155,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   if (!issue) return <div className="text-center py-12 text-apple-tertiary-light">Issue não encontrada.</div>;
 
   const pattern = issue.patternId || null;
-  const azureUrl = `${session?.user?.azureSettings?.instanceUrl || ''}/tfs/${session?.user?.azureSettings?.azureCollection || ''}/${issue.project}/_git/${issue.repository}?path=${issue.filePath}&_a=contents`;
+  const azureUrl = `${session?.user?.azureSettings?.instanceUrl || ''}/tfs/${session?.user?.azureSettings?.azureCollection || ''}/${issue.project}/_git/${issue.repository}?path=${issue.filePath}&_a=contents&version=GB${issue.branch}`;
 
   const renderSnippetContent = () => {
     if (loadingSnippets) {

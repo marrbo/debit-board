@@ -7,9 +7,14 @@ async function clearIssues() {
   await connectToDatabase();
 
   console.log('🗑️ Removendo todas as issues do banco de dados...');
-  const result = await Issue.deleteMany({});
+  const result = await Issue.deleteMany({
+    $or: [
+      { patternId: null },
+      { patternId: { $exists: false } }
+    ]
+  });
   
-  console.log(`✅ ${result.deletedCount} issues removidas com sucesso!`);
+  console.log(`✅ ${result.deletedCount} issues sem patternId removidas com sucesso!`);
   process.exit(0);
 }
 
