@@ -87,7 +87,7 @@ export default function SASTPage() {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!res.ok) {
-        let errorMsg = 'Erro ao executar SAST';
+        let errorMsg = 'Erro ao executar Advanced Code Scanner';
         try {
           const errorData = await res.json();
           errorMsg = errorData.error || errorMsg;
@@ -144,7 +144,7 @@ export default function SASTPage() {
             <button
               onClick={runSAST}
               disabled={running}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-gray-900 dark:text-white px-4 py-2 rounded-lg font-medium"
+              className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue disabled:opacity-50 text-apple-bg-light dark:text-apple-bg-light px-4 py-2 rounded-lg font-medium"
             >
               {running ? (
                 <>
@@ -154,7 +154,7 @@ export default function SASTPage() {
               ) : (
                 <>
                   <Play className="w-4 h-4" />
-                  Executar SAST
+                  Executar Advanced Code Scanner
                 </>
               )}
             </button>

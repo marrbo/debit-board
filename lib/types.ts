@@ -1,13 +1,24 @@
 // lib/types.ts
 export interface SearchItem {
+  patternId: string;
+  query: string;
   fileName: string;
   path: string;
   hitCount: number;
-  hits: any[];
+  hits: Hits[];
   azureCollection: string;
   project: string;
   repository: string;
   branch: string;
+}
+
+export interface Hits {
+    charOffset: number;
+    length: number;
+    line: number;
+    column: number;
+    codeSnippet: string | null;
+    type: string | null
 }
 
 export interface SearchResponse {

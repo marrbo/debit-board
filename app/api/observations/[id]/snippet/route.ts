@@ -1,4 +1,4 @@
-// app/api/issues/[id]/snippet/route.ts
+// app/api/observations/[id]/snippet/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Issue } from '@/models/Issue';

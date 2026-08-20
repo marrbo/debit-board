@@ -54,7 +54,7 @@ export default function LoginPage() {
 
         <button
           onClick={handleSSOLogin}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-gray-900 dark:text-white font-medium py-2.5 rounded-lg transition-all shadow-md shadow-blue-900/40 flex justify-center items-center gap-2"
+          className="w-full bg-blue-600 hover:bg-blue-500 text-apple-bg-light dark:text-apple-bg-light font-medium py-2.5 rounded-lg transition-all shadow-md shadow-blue-900/40 flex justify-center items-center gap-2"
         >
           <Shield className="w-4 h-4" />
           Entrar com SSO Corporativo

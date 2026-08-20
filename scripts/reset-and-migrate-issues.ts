@@ -1,42 +1,57 @@
-// scripts/reset-and-migrate-issues.ts
 import { connectToDatabase } from '../lib/mongodb';
 import { Issue } from '../models/Issue';
 import { VulnerabilityPattern } from '../models/VulnerabilityPattern';
+import mongoose from 'mongoose';
 
 async function runMigration() {
-  console.log('🚀 Conectando ao MongoDB e corrigindo banco de dados...');
+  console.log('🚀 Conectando ao MongoDB...');
   await connectToDatabase();
 
-  // 1. Força a correção de status (WONT_FIX -> OPEN)
-  const statusResult = await Issue.updateMany(
-    { status: 'wont_fix' },
-    { $set: { status: 'open' } }
-  );
-  console.log(`✅ Status corrigido: ${statusResult.modifiedCount} issues atualizadas de 'wont_fix' para 'open'.`);
-
-  // 3. Busca issues sem padrão vinculado
-  const issues = await Issue.find({ 
-    $or: [
-      { patternId: { $exists: false } },
-      { patternId: null }
-    ]
+  // 🔥 CORREÇÃO CRUCIAL: Utilizamos $where (JavaScript nativo do Mongo)
+  // Isso impede que o Mongoose tente fazer o "Cast" do "null" para ObjectId e quebre a query.
+  const issues = await Issue.find({
+    $where: function() {
+      return this.patternId === null || 
+             this.patternId === "null" || 
+             this.patternId === "" || 
+             this.patternId === undefined;
+    }
   });
 
-  console.log(`🔍 Encontradas ${issues.length} issues sem padrão. Tentando vincular...`);
-  let updatedCount = 0;
-  
+  console.log(`🔍 Encontradas ${issues.length} issues sem padrão válido. Tentando vincular...`);
+
+  if (issues.length === 0) {
+    console.log('✅ Nenhuma issue precisa ser atualizada.');
+    return;
+  }
+
+  const bulkOps: mongoose.AnyBulkWriteOperation<any>[] = [];
+
   for (const issue of issues) {
-    // Tenta vincular pela Categoria
-    const pattern = await VulnerabilityPattern.findOne({ category: issue.category });
+    // Busca padrão pela categoria ignorando maiúsculas/minúsculas (case-insensitive)
+    const pattern = await VulnerabilityPattern.findOne({
+      category: { $regex: new RegExp('^' + issue.category + '$', 'i') }
+    });
+
     if (pattern) {
-      issue.patternId = pattern._id;
-      await issue.save();
-      updatedCount++;
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: issue._id },
+          update: { $set: { patternId: pattern._id } }
+        }
+      });
+    } else {
+      console.log(`⚠️ Nenhum padrão encontrado no banco para a categoria: "${issue.category}" (Issue ID: ${issue._id})`);
     }
   }
-  console.log(`✅ ${updatedCount} issues vinculadas a padrões.`);
 
-  console.log('🎉 Migração e reset concluídos! Restart o seu servidor e recarregue a página.');
+  if (bulkOps.length > 0) {
+    console.log(`🚀 Executando atualização em lote para ${bulkOps.length} issues...`);
+    const result = await Issue.bulkWrite(bulkOps);
+    console.log(`✅ ${result.modifiedCount} issues atualizadas com sucesso.`);
+  }
+
+  console.log('🎉 Migração concluída!');
 }
 
 runMigration().catch(console.error);

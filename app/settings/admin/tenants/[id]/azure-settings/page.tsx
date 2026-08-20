@@ -11,7 +11,7 @@ export default async function TenantAzureSettings({ params }: { params: { id: st
   const adminEmail = process.env.ADMIN_EMAIL;
 
   if (session?.user?.email !== adminEmail) {
-    redirect("/");
+    redirect("/stats");
   }
 
   await connectToDatabase();

@@ -8,7 +8,7 @@ db.tenants.insertOne({
   createdAt: new Date()
 });
 
-// 2. Inserir Padrões de Vulnerabilidade (SAST)
+// 2. Inserir Padrões de Vulnerabilidade
 db.vulnerabilitypatterns.insertMany([
   {
     name: "AllowAnonymous em Controllers",

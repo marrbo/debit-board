@@ -1,4 +1,4 @@
-// app/issues/layout.tsx
+// app/observations/layout.tsx
 import Sidebar from '@/components/Sidebar';
 
 export default function IssuesLayout({

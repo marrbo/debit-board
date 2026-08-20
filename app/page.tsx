@@ -92,7 +92,7 @@ export default function Dashboard() {
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.uniqueGerencia}</p>
             </div>
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-4 shadow-sm transition-colors">
-              <p className="text-xs text-gray-500 dark:text-slate-400 uppercase">SAST Issues</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 uppercase">Observations</p>
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{data.issuesStats.open + data.issuesStats.recurring}</p>
             </div>
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 rounded-xl p-4 text-center shadow-sm transition-colors">

@@ -8,6 +8,7 @@ export interface ISASTScan extends Document {
     patternId: string;
     query: string;
     category: string;
+    hits: any[];
     results: any[];
     hitCount: number;
   }[];

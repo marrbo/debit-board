@@ -149,7 +149,7 @@ export async function executeSearch(
   }
 
   const totalCount = initialData.results?.count || 0;
-  if (totalCount === 0) return { results: [], hitCount: 0 };
+  if (totalCount === 0) return { results: [], hitCount: 0  };
 
   const MAX_ALLOWED = 1000; const maxToFetch = Math.min(totalCount, MAX_ALLOWED); const BATCH_SIZE = 100;
   let allValues: SearchItem[] = []; let currentSkip = 0;

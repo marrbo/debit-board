@@ -9,6 +9,7 @@ import { SASTScan } from '@/models/SASTScan';
 import { Issue } from '@/models/Issue';
 import { executeSearch } from '@/lib/azureSearch';
 import mongoose from 'mongoose';
+import { SearchItem, SearchResponse } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,7 +80,8 @@ export async function POST(req: NextRequest) {
             category: pattern.category,
             severity: pattern.severity,
             slaHours: pattern.slaHours,
-            results: [],
+            values: [],
+            hits: [],
             hitCount: 0,
             error: result.error,
           });
@@ -111,6 +113,8 @@ export async function POST(req: NextRequest) {
                     status: 'recurring',
                     lastSeen: new Date(),
                     hitCount: item.hitCount || 0,
+                    patternId: pattern._id.toString(),
+                    hits: item.hits,
                     scanId: newScan._id,
                     project: item.project || '',
                     repository: item.repository || '',
@@ -121,14 +125,6 @@ export async function POST(req: NextRequest) {
           } else {
             const now = new Date();
             const slaDueAt = new Date(now.getTime() + (pattern.slaHours || 72) * 3600 * 1000);
-
-            let snippet = '';
-            let lineNumber = 0;
-            if (item.hits && Array.isArray(item.hits) && item.hits.length > 0) {
-              const firstHit = item.hits[0];
-              snippet = firstHit.content || firstHit.line || '';
-              lineNumber = firstHit.lineNumber || firstHit.line || 0;
-            }
 
             // 🔥 GRAVAÇÃO CORRETA DA SEVERIDADE E SLA
             newIssues.push({
@@ -145,12 +141,13 @@ export async function POST(req: NextRequest) {
               repository: item.repository || '',
               branch: item.branch || 'main',
               hitCount: item.hitCount || 0,
+              hits: item.hits,
               status: 'open',
               firstSeen: now,
               lastSeen: now,
               slaDueAt: slaDueAt,
-              snippet: snippet,
-              lineNumber: lineNumber,
+              snippet: null,
+              lineNumber: 0,
             });
           }
         }
@@ -177,7 +174,7 @@ export async function POST(req: NextRequest) {
       await Issue.bulkWrite(updates);
     }
 
-    newScan.patterns = patternResults;
+    newScan.patterns = (patternResults as any);
     newScan.totalOccurrences = totalOccurrences;
     newScan.summary = [];
     await newScan.save();

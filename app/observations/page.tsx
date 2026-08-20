@@ -1,4 +1,4 @@
-// app/issues/page.tsx
+// app/observations/page.tsx
 'use client';
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
@@ -310,8 +310,8 @@ export default function IssuesPage() {
       params.set('page', pageNum.toString());
       params.set('limit', '20');
 
-      const res = await fetch(`/api/issues?${params}`);
-      if (!res.ok) throw new Error('Erro ao carregar issues');
+      const res = await fetch(`/api/observations?${params}`);
+      if (!res.ok) throw new Error('Erro ao carregar Observations');
       const data = await res.json();
       setIssues(data.issues);
       setTotalPages(data.totalPages || 1);
@@ -362,7 +362,7 @@ export default function IssuesPage() {
 
   const updateIssue = async (issueId: string, value: string) => {
     try {
-      const res = await fetch('/api/issues', {
+      const res = await fetch('/api/observations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ issueId, assignedTo: value || null }),
@@ -382,7 +382,7 @@ export default function IssuesPage() {
     if (searchQuery) params.set('search', searchQuery);
     if (filterProjectId !== 'all') params.set('projectId', filterProjectId);
     params.set('all', 'true');
-    const res = await fetch(`/api/issues?${params}`);
+    const res = await fetch(`/api/observations?${params}`);
     if (!res.ok) throw new Error('Erro ao buscar dados completos');
     const data = await res.json();
     return data.issues as IIssue[];
@@ -612,7 +612,7 @@ export default function IssuesPage() {
                     </div>
 
                     <div className="overflow-hidden pr-2 min-w-0 flex flex-col gap-0.5">
-                      <Link href={`/issues/${issue._id}`} className="text-apple-label-light dark:text-apple-label-dark font-medium text-sm hover:text-apple-blue dark:hover:text-[#0A84FF] transition-colors truncate cursor-pointer">
+                      <Link href={`/observations/${issue._id}`} className="text-apple-label-light dark:text-apple-label-dark font-medium text-sm hover:text-apple-blue dark:hover:text-[#0A84FF] transition-colors truncate cursor-pointer">
                         {issue.fileName}
                       </Link>
                       <div className="text-apple-tertiary-light dark:text-apple-tertiary-light text-[10px] font-mono truncate">{issue.filePath}</div>

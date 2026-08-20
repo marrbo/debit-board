@@ -1,9 +1,9 @@
-// app/api/issue-filters/route.ts
+// app/api/observation-filters/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Issue } from '@/models/Issue';
 import { getServerAuthSession } from '@/lib/auth';
-import { PipelineStage } from 'mongoose'; // <--- Importe o tipo
+import { PipelineStage } from 'mongoose';
 
 // Mapeamento de alias de campos amigáveis para campos reais do MongoDB
 const FIELD_MAP: Record<string, string> = {

@@ -1,12 +1,12 @@
 // lib/mainMenuItems.ts
 import { 
   BarChart3, 
-  Bug, 
   Shield, 
   Search, 
   BookOpen, 
   Settings,
-  LucideIcon
+  LucideIcon,
+  Binoculars
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -18,7 +18,7 @@ export interface MenuItem {
 // Itens do topo (Navegação principal)
 export const topNavItems: MenuItem[] = [
   { href: '/stats', label: 'Stats', icon: BarChart3 },
-  { href: '/issues', label: 'Issues', icon: Bug },
+  { href: '/observations', label: 'Observations', icon: Binoculars },
   { href: '/sast', label: 'SAST', icon: Shield },
   { href: '/azure-search-code', label: 'Search', icon: Search },
 ];

@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       tenantId: tenantId,
       status: { $in: ['open', 'recurring'] },
       slaDueAt: { $lt: new Date() }
-    }, { $set: { status: 'wont_fix' } });
+    }, { $set: { status: 'open' } });
   }
 
   return NextResponse.json({

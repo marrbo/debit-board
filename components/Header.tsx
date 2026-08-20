@@ -16,7 +16,7 @@ export default function Header() {
     { href: '/stats', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/azure-search-code', label: 'Azure Search Code', icon: Search },
     { href: '/sast', label: 'SAST Scanner', icon: Shield },
-    { href: '/issues', label: 'Issues', icon: AlertCircle },
+    { href: '/observations', label: 'Observations', icon: AlertCircle },
     ...(isAdmin ? [{ href: '/settings/admin', label: 'Admin', icon: UserCog }] : []),
   ];
 

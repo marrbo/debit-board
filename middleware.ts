@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isOnboardingCompleted && isOnSetupPage) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/stats', request.url));
   }
 
   return NextResponse.next();

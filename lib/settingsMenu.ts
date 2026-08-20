@@ -8,10 +8,10 @@ import {
 
 export const settingsMenuItems = [
   { href: '/settings/profile/user', label: 'Profile', icon: User },
-  { href: '/settings/repository', label: 'Repositórios', icon: GitBranchPlus },
   { href: '/settings/projects', label: 'Projetos', icon: FolderGit2 },
-  { href: '#', label: 'Auth (OpenID)', icon: ShieldCheck },
+  { href: '/settings/repository', label: 'Repositórios', icon: GitBranchPlus },
   { href: '#', label: 'Integrations (Azure)', icon: Puzzle },
-  { href: '/settings/admin', label: 'Admin', icon: UserCog },
-  { href: '/settings/admin/patterns', label: 'SAST Patterns', icon: SquareAsterisk },
+  { href: '#', label: 'Auth (OpenID)', icon: ShieldCheck },
+  { href: '/settings/admin/patterns', label: 'Security Patterns', icon: SquareAsterisk },
+  { href: '/settings/admin', label: 'Admin', icon: UserCog }
 ];

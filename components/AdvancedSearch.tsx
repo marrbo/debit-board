@@ -133,7 +133,7 @@ export default function AdvancedSearch({
 
         try {
           const res = await fetch(
-            `/api/issue-filters?field=${fieldKey}&query=${query}&context=${context}`,
+            `/api/observation-filters?field=${fieldKey}&query=${query}&context=${context}`,
             { signal: controller.signal }
           );
           if (res.ok) {
