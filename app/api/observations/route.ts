@@ -5,52 +5,126 @@ import { Issue } from '@/models/Issue';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern'; 
 import { getServerAuthSession } from '@/lib/auth';
 
-// 🔥 PARSER DBQL APRIMORADO: Suporta wildcards (*) e conversão para regex
-function parseDBQL(queryString: string): any[] | null {
-  const conditions: any[] = [];
+// 🛠️ Função auxiliar para converter um termo individual (ex: branch:main ou !fileName:*Test*) em objeto do MongoDB
+function buildMongoCondition(isNot: boolean, key: string, rawValue: string): any {
+  const condition: any = {};
 
-  // Expressão regular para extrair: (opcional !) + (campo) + : + ("valor entre aspas" ou valor sem espaço)
-  const termRegex = /(?:^|\s)(!?)(\w+):(?:"([^"]*)"|(\S+))/g;
-  let match;
-
-  let tempQuery = queryString;
-  let matchFound = false;
-
-  while ((match = termRegex.exec(tempQuery)) !== null) {
-    matchFound = true;
-    const isNot = match[1] === '!';
-    const key = match[2];
-    const rawValue = match[3] || match[4]; 
-
-    if (!rawValue) continue;
-
-    const condition: any = {};
-
-    // Verifica se o valor contém o caractere curinga (*)
-    if (rawValue.includes('*')) {
-      // Converte o coringa '*' em expressão regular '.*' e escapa caracteres especiais do regex (exceto o *)
-      const escaped = rawValue.replace(/([.+?^${}()|[\]\\])/g, '\\$1').replace(/\*/g, '.*');
-      // Garante correspondência em toda a string (^...$)
-      const regexPattern = `^${escaped}$`;
-      
-      if (isNot) {
-        condition[key] = { $not: { $regex: regexPattern, $options: 'i' } };
-      } else {
-        condition[key] = { $regex: regexPattern, $options: 'i' };
-      }
+  if (rawValue.includes('*')) {
+    const escaped = rawValue.replace(/([.+?^${}()|[\]\\])/g, '\\$1').replace(/\*/g, '.*');
+    const regexPattern = `^${escaped}$`;
+    
+    if (isNot) {
+      condition[key] = { $not: { $regex: regexPattern, $options: 'i' } };
     } else {
-      // Busca exata (mas case-insensitive ou direta conforme sua preferência, mantendo a lógica anterior)
-      if (isNot) {
-        condition[key] = { $ne: rawValue };
-      } else {
-        condition[key] = rawValue;
-      }
+      condition[key] = { $regex: regexPattern, $options: 'i' };
     }
+  } else {
+    if (isNot) {
+      condition[key] = { $ne: rawValue };
+    } else {
+      condition[key] = rawValue;
+    }
+  }
+  return condition;
+}
 
-    conditions.push(condition);
+// 🔥 PARSER DBQL COMPLETO: Suporte a OR, AND, NOT, ! e Parênteses com recursão
+function parseDBQL(queryString: string): any {
+  if (!queryString || !queryString.trim()) return null;
+
+  // Normaliza espaços extras
+  const queryStr = queryString.trim();
+
+  // Função interna para tokenizar a string respeitando parênteses e operadores lógicos
+  function tokenize(str: string) {
+    const regex = /\s*(AND|OR|NOT|\(|\)|!?[a-zA-Z0-9_]+:(?:"[^"]*"|\S+))\s*/gi;
+    const tokens: string[] = [];
+    let match;
+    let lastIndex = 0;
+
+    // Garante que pegamos todos os tokens válidos
+    while ((match = regex.exec(str)) !== null) {
+      if (match.index > lastIndex) {
+        // Se houver caracteres inesperados significativos entre os tokens, tratamos
+        const unparsed = str.substring(lastIndex, match.index).trim();
+        if (unparsed) tokens.push(unparsed);
+      }
+      tokens.push(match[1]);
+      lastIndex = regex.lastIndex;
+    }
+    return tokens;
   }
 
-  return matchFound ? conditions : null;
+  const tokens = tokenize(queryStr);
+  if (tokens.length === 0) return null;
+
+  let tokenIndex = 0;
+
+  function parseExpression(): any {
+    let left = parseTerm();
+
+    while (tokenIndex < tokens.length) {
+      const operator = tokens[tokenIndex].toUpperCase();
+      if (operator === 'OR' || operator === 'AND') {
+        tokenIndex++; // consome o operador
+        const right = parseTerm();
+        if (operator === 'OR') {
+          left = { $or: [left, right] };
+        } else {
+          // AND implícito ou explícito
+          left = { $and: [left, right] };
+        }
+      } else {
+        break;
+      }
+    }
+    return left;
+  }
+
+  function parseTerm(): any {
+    if (tokenIndex >= tokens.length) return {};
+
+    const token = tokens[tokenIndex];
+
+    // Tratamento de Parênteses (Agrupamento)
+    if (token === '(') {
+      tokenIndex++; // consome '('
+      const expr = parseExpression();
+      if (tokens[tokenIndex] === ')') {
+        tokenIndex++; // consome ')'
+      }
+      return expr;
+    }
+
+    // Tratamento de operador NOT unário
+    if (token.toUpperCase() === 'NOT') {
+      tokenIndex++; // consome 'NOT'
+      const subExpr = parseTerm();
+      // Inverte a condição aplicando $nor ou negando o objeto
+      return { $not: subExpr };
+    }
+
+    // Tratamento de termo folha (campo:valor ou !campo:valor)
+    tokenIndex++;
+    const termMatch = token.match(/^(!?)(\w+):(?:"([^"]*)"|(\S+))$/);
+    if (termMatch) {
+      const isNot = termMatch[1] === '!';
+      const key = termMatch[2];
+      const value = termMatch[3] || termMatch[4];
+      return buildMongoCondition(isNot, key, value || '');
+    }
+
+    // Fallback caso encontre token avulso
+    return {};
+  }
+
+  try {
+    const result = parseExpression();
+    return result;
+  } catch (e) {
+    console.error('❌ Erro no parser DBQL avançado:', e);
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -95,12 +169,19 @@ export async function GET(req: NextRequest) {
     if (severity) query.severity = severity;
     if (projectId) query.project = projectId;
 
-    // 🔥 APLICAÇÃO DA BUSCA COM PARSER DBQL ATUALIZADO
+    // 🔥 APLICAÇÃO DA ÁRVORE DBQL GERADA PELO PARSER RECURSIVO
     if (search) {
-      const dbqlConditions = parseDBQL(search);
-      if (dbqlConditions && dbqlConditions.length > 0) {
-        query.$and = dbqlConditions;
+      const dbqlParsedQuery = parseDBQL(search);
+      if (dbqlParsedQuery && Object.keys(dbqlParsedQuery).length > 0) {
+        // Mescla as condições da DBQL com o tenantId obrigatório usando $and
+        query.$and = [
+          { tenantId: session.user.tenantId },
+          dbqlParsedQuery
+        ];
+        // Remove o tenantId raiz duplicado para evitar conflito na query final do Mongoose
+        delete query.tenantId;
       } else {
+        // Fallback de texto livre caso a query não siga o padrão DBQL
         query.$or = [
           { fileName: { $regex: search, $options: 'i' } },
           { filePath: { $regex: search, $options: 'i' } },
