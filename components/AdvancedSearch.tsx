@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, X, Code2, Tag, HelpCircle } from 'lucide-react';
+import { Search, X, Code2, Tag, HelpCircle, AlertCircle } from 'lucide-react';
 
 interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
@@ -11,16 +11,43 @@ interface AdvancedSearchProps {
   context?: 'issues' | 'stats' | 'projects' | 'repositories';
 }
 
-const STORAGE_KEY = 'debitboard_global_query';
+const STORAGE_KEY_QUERY = 'debitboard_global_query';
+const STORAGE_KEY_MODE = 'debitboard_search_mode';
+
+const HELP_PROPERTIES = {
+  issues: [
+    { prop: 'category', desc: 'Categoria da vulnerabilidade', ex: 'category:"Broken Access Control"' },
+    { prop: 'severity', desc: 'Severidade (critical, high, medium, low)', ex: 'severity:critical' },
+    { prop: 'branch', desc: 'Branch do repositório', ex: 'branch:main' },
+    { prop: 'project', desc: 'Nome do projeto', ex: 'project:GEPIN_AS' },
+    { prop: 'fileName', desc: 'Nome ou caminho do arquivo', ex: 'fileName:*Controller.cs' },
+    { prop: 'repository', desc: 'Repositório', ex: 'repository:repo-name' },
+    { prop: 'status', desc: 'Status da issue (open, fixed, etc.)', ex: 'status:open' },
+    { prop: 'is', desc: 'Estado especial', ex: 'is:unresolved' },
+  ],
+  stats: [
+    { prop: 'project', desc: 'Filtrar métricas por projeto', ex: 'project:GEPIN_AS' },
+    { prop: 'severity', desc: 'Filtrar por severidade', ex: 'severity:high' },
+  ],
+  projects: [
+    { prop: 'name', desc: 'Nome do projeto', ex: 'name:Portal' },
+    { prop: 'tech', desc: 'Stack tecnológica', ex: 'tech:Next.js' },
+  ],
+  repositories: [
+    { prop: 'name', desc: 'Nome do repositório', ex: 'name:backend-api' },
+    { prop: 'branch', desc: 'Branch principal', ex: 'branch:main' },
+  ]
+};
 
 export default function AdvancedSearch({
   onSearch,
-  placeholder = 'Search...',
+  placeholder = 'Buscar... ex: category:"Broken Access Control"',
   context = 'issues'
 }: AdvancedSearchProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get('q') || '';
+  const urlMode = searchParams.get('mode');
 
   const [mode, setMode] = useState<'tags' | 'advanced'>('tags');
   const [inputValue, setInputValue] = useState('');
@@ -30,391 +57,406 @@ export default function AdvancedSearch({
   const [activeField, setActiveField] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [syntaxError, setSyntaxError] = useState<string | null>(null);
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 🔥 CORREÇÃO DAS ASPAS: Tokeniza a string adicionando aspas duplas em valores com espaços
-  const parseInputToTags = (input: string): string[] => {
-    const parts = input.trim().split(' ');
-    const result: string[] = [];
-    let i = 0;
+  // 🛡️ Linter DBQL refinado
+  const validateDBQL = (query: string): string | null => {
+    if (!query) return null;
 
-    while (i < parts.length) {
-      const current = parts[i];
-      if (current.includes(':')) {
-        let value = current;
-        let j = i + 1;
-        while (
-          j < parts.length &&
-          !parts[j].includes(':') &&
-          parts[j] !== 'AND' &&
-          parts[j] !== 'OR' &&
-          parts[j] !== 'NOT'
-        ) {
-          value += ' ' + parts[j];
-          j++;
-        }
-        // Separa a chave e o valor
-        const [key, ...valParts] = value.split(':');
-        const finalVal = valParts.join(':').trim();
-        
-        // Se o valor contém espaço ou aspas já existentes, envolve em aspas duplas
-        if (finalVal.includes(' ') && !finalVal.startsWith('"')) {
-          result.push(`${key}:"${finalVal}"`);
-        } else {
-          result.push(`${key}:${finalVal}`);
-        }
-        i = j;
-      } else {
-        result.push(current);
-        i++;
-      }
+    let openCount = 0;
+    for (let i = 0; i < query.length; i++) {
+      if (query[i] === '(') openCount++;
+      if (query[i] === ')') openCount--;
+      if (openCount < 0) return 'Erro de sintaxe: Parêntese fechado sem ter sido aberto.';
     }
-    return result;
+    if (openCount > 0) return 'Erro de sintaxe: Parêntese aberto sem fechamento.';
+    if (/\(\s*\)/.test(query)) return 'Erro de sintaxe: Agrupamento vazio ( ).';
+
+    if (/(?:NOT\s+!|!\s*NOT)/i.test(query)) return 'Erro de sintaxe: Uso redundante de negação (NOT junto de !).';
+    if (/\b(?:AND|OR)\s+NOT\s+!/i.test(query)) return 'Erro de sintaxe: Combinação inválida de "AND/OR NOT" seguido de "!".';
+    if (/\b(AND|OR)\s+(AND|OR)\b/i.test(query)) return 'Erro de sintaxe: Operadores lógicos duplicados.';
+
+    return null;
   };
 
-  // Restaura a UI a partir da URL/sessionStorage
-  useEffect(() => {
-    let query = urlQuery;
-    if (!query) {
-      const storedQuery = sessionStorage.getItem(STORAGE_KEY);
-      if (storedQuery) query = storedQuery;
-    }
+  const hasComplexSyntax = (query: string): boolean => {
+    return /[\(\)!\*]/.test(query);
+  };
 
-    if (query && query.trim() !== '') {
-      const hasSpecialSyntax = /[\(\)!\*]/.test(query);
-      if (hasSpecialSyntax) {
+  const parseInputToTags = (input: string): string[] => {
+    const regex = /(?:(?:AND|OR)\s+NOT\s+|(?:AND|OR|NOT)\s+)?!?[a-zA-Z0-9_]+:(?:"[^"]*"|\S+)/gi;
+    const matches = input.match(regex) || [];
+    return matches.map(m => m.trim());
+  };
+
+  const getEditingToken = (text: string) => {
+    const tokens = text.split(/(?=\b(?:AND|OR)\b|\s)/).map(t => t.trim()).filter(Boolean);
+    const currentToken = tokens[tokens.length - 1] || '';
+    const cleanToken = currentToken.replace(/^[\(!]+|\b(?:AND\s+NOT|OR\s+NOT|NOT|AND|OR)\s+/i, '');
+
+    if (!cleanToken.includes(':')) return null;
+
+    const colonIndex = cleanToken.indexOf(':');
+    const fieldKey = cleanToken.substring(0, colonIndex).trim();
+    const rawQuery = cleanToken.substring(colonIndex + 1).trim();
+    const query = rawQuery.replace(/^"/, '');
+
+    return { rawToken: currentToken, cleanToken, fieldKey, query };
+  };
+
+  useEffect(() => {
+    const storedQuery = urlQuery || sessionStorage.getItem(STORAGE_KEY_QUERY) || '';
+    const storedMode = urlMode || sessionStorage.getItem(STORAGE_KEY_MODE) || 'tags';
+
+    if (storedQuery) {
+      if (hasComplexSyntax(storedQuery) || storedMode === 'advanced') {
         setMode('advanced');
-        setInputValue(query);
-        setTags([]);
+        setInputValue(storedQuery);
       } else {
         setMode('tags');
-        const newTags = parseInputToTags(query);
-        setTags(newTags);
-        setInputValue('');
+        setTags(parseInputToTags(storedQuery));
       }
     } else {
-      setMode('tags');
-      setTags([]);
-      setInputValue('');
+      setMode(storedMode as 'tags' | 'advanced');
     }
-    setIsOpen(false);
-  }, [urlQuery]);
+  }, [urlQuery, urlMode]);
 
-  // Busca as sugestões da API (Modo Tags) com cancelamento
   useEffect(() => {
-    if (mode === 'advanced') {
+    const queryToValidate = mode === 'advanced' 
+      ? inputValue 
+      : [...tags, inputValue].filter(Boolean).join(' ');
+    
+    setSyntaxError(validateDBQL(queryToValidate));
+  }, [inputValue, tags, mode]);
+
+  useEffect(() => {
+    const tokenData = getEditingToken(inputValue);
+
+    if (!tokenData || !tokenData.fieldKey || tokenData.query.includes('*')) {
+      setSuggestions([]);
       setIsOpen(false);
+      setActiveField(null);
       return;
     }
 
-    const fetchSuggestions = async () => {
-      const parts = inputValue.split(':');
-      if (parts.length === 2 && parts[0].trim() !== '') {
-        const fieldKey = parts[0].trim();
-        let query = parts[1].trim();
+    setActiveField(tokenData.fieldKey);
+    setIsLoading(true);
 
-        if (query.includes('*')) {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/observation-filters?field=${encodeURIComponent(tokenData.fieldKey)}&query=${encodeURIComponent(tokenData.query)}&context=${encodeURIComponent(context)}`,
+          { signal: controller.signal }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.suggestions || data.values || [];
+          setSuggestions(list);
+          setIsOpen(list.length > 0);
+        } else {
           setSuggestions([]);
           setIsOpen(false);
-          setActiveField(null);
-          return;
         }
-
-        setActiveField(fieldKey);
-        setIsLoading(true);
-
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          setSuggestions([]);
+          setIsOpen(false);
         }
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
-        try {
-          const res = await fetch(
-            `/api/observation-filters?field=${fieldKey}&query=${query}&context=${context}`,
-            { signal: controller.signal }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            setSuggestions(data.suggestions || []);
-            if (data.suggestions.length > 0 && inputValue.trim()) {
-              setIsOpen(true);
-            } else {
-              setIsOpen(false);
-            }
-          } else {
-            setSuggestions([]);
-            setIsOpen(false);
-          }
-        } catch (err: any) {
-          if (err.name !== 'AbortError') {
-            console.error('Erro ao buscar sugestões:', err);
-            setSuggestions([]);
-            setIsOpen(false);
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setSuggestions([]);
-        setActiveField(null);
-        setIsOpen(false);
+      } finally {
+        setIsLoading(false);
       }
-    };
+    }, 250);
 
-    const timeout = setTimeout(() => {
-      if (inputValue) fetchSuggestions();
-    }, 300);
+    return () => clearTimeout(timeout);
+  }, [inputValue, context]);
 
-    return () => {
-      clearTimeout(timeout);
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [inputValue, mode, context]);
+  const updateAndSearch = (fullQuery: string, currentMode: 'tags' | 'advanced') => {
+    if (syntaxError) return;
 
-  const updateAndSearch = (newQuery: string) => {
-    if (newQuery) sessionStorage.setItem(STORAGE_KEY, newQuery);
-    else sessionStorage.removeItem(STORAGE_KEY);
-
+    sessionStorage.setItem(STORAGE_KEY_QUERY, fullQuery);
+    sessionStorage.setItem(STORAGE_KEY_MODE, currentMode);
+    
     const params = new URLSearchParams(searchParams);
-    if (newQuery) params.set('q', newQuery);
+    if (fullQuery) params.set('q', fullQuery);
     else params.delete('q');
+    params.set('mode', currentMode);
+    
     router.replace(`?${params.toString()}`, { scroll: false });
+    if (onSearch) onSearch(fullQuery);
+  };
 
-    if (onSearch) onSearch(newQuery);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (syntaxError) return;
+
+      if (mode === 'advanced') {
+        updateAndSearch(inputValue, mode);
+      } else {
+        if (inputValue.trim()) {
+          const newTags = [...tags, inputValue.trim()];
+          setTags(newTags);
+          setInputValue('');
+          updateAndSearch(newTags.join(' '), mode);
+        } else {
+          updateAndSearch(tags.join(' '), mode);
+        }
+      }
+      setIsOpen(false);
+    } else if (e.key === 'Backspace' && mode === 'tags' && !inputValue && tags.length > 0) {
+      const newTags = tags.slice(0, -1);
+      setTags(newTags);
+      updateAndSearch(newTags.join(' '), mode);
+    }
+  };
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    const tokenData = getEditingToken(inputValue);
+    if (!tokenData || !tokenData.fieldKey) return;
+
+    const formattedVal = suggestion.includes(' ') && !suggestion.startsWith('"')
+      ? `"${suggestion}"` : suggestion;
+
+    const prefixMatch = tokenData.rawToken.match(/^([\(!]+|\b(?:AND\s+NOT|OR\s+NOT|NOT|AND|OR)\s+)/i);
+    const prefix = prefixMatch ? prefixMatch[0] : '';
+    const newToken = `${prefix}${tokenData.fieldKey}:${formattedVal}`;
+
+    if (mode === 'advanced') {
+      const tokens = inputValue.split(/(?=\b(?:AND|OR)\b|\s)/).map(t => t.trim()).filter(Boolean);
+      tokens[tokens.length - 1] = newToken;
+      const newQuery = tokens.join(' ');
+      setInputValue(newQuery);
+      if (!validateDBQL(newQuery)) updateAndSearch(newQuery, mode);
+    } else {
+      const newTags = [...tags, newToken];
+      setTags(newTags);
+      if (!validateDBQL(newTags.join(' '))) updateAndSearch(newTags.join(' '), mode);
+      setInputValue('');
+    }
+
+    setSuggestions([]);
+    setIsOpen(false);
+    setActiveField(null);
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  const removeTag = (indexToRemove: number) => {
+    const newTags = tags.filter((_, idx) => idx !== indexToRemove);
+    setTags(newTags);
+    updateAndSearch(newTags.join(' '), mode);
+  };
+
+  const toggleMode = () => {
+    if (mode === 'tags') {
+      const fullQuery = tags.join(' ') + (inputValue ? ` ${inputValue}` : '');
+      setInputValue(fullQuery.trim());
+      setMode('advanced');
+      if (!validateDBQL(fullQuery.trim())) updateAndSearch(fullQuery.trim(), 'advanced');
+    } else {
+      if (hasComplexSyntax(inputValue)) {
+        alert("Não é possível voltar para o modo padrão. A consulta possui sintaxes exclusivas do modo avançado, como parênteses (), exclamações ! ou asteriscos *.");
+        return;
+      }
+      if (syntaxError) {
+        alert("Corrija os erros de sintaxe antes de alternar os modos.");
+        return;
+      }
+      const parsed = parseInputToTags(inputValue);
+      setTags(parsed);
+      setInputValue('');
+      setMode('tags');
+      updateAndSearch(parsed.join(' '), 'tags');
+    }
   };
 
   const clearAll = () => {
     setTags([]);
     setInputValue('');
-    setIsOpen(false);
-    updateAndSearch('');
-    if (inputRef.current) inputRef.current.focus();
-  };
-
-  const toggleMode = () => {
-    if (mode === 'tags') {
-      const currentQuery = tags.join(' ');
-      setMode('advanced');
-      setInputValue(currentQuery);
-    } else {
-      const hasComplexSyntax = /[\(\)!\*]/.test(inputValue);
-      if (hasComplexSyntax) {
-        alert('Não é possível converter para o modo Tags. O texto atual contém parênteses `()`, negações `!` ou curingas `*`, que são suportados apenas no modo Avançado.');
-        return;
-      }
-      const newTags = parseInputToTags(inputValue);
-      setMode('tags');
-      setTags(newTags);
-      setInputValue('');
-      updateAndSearch(newTags.join(' '));
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (mode === 'advanced') {
-      if (e.key === 'Enter' && inputValue.trim()) {
-        updateAndSearch(inputValue.trim());
-        setIsOpen(false);
-      }
-      return;
-    }
-
-    if (e.key === 'Enter' && inputValue.trim()) {
-      if (suggestions.length > 0) {
-        handleSelectSuggestion(suggestions[0]);
-        return;
-      }
-
-      const rawInput = inputValue.trim();
-      const newTerms = parseInputToTags(rawInput);
-
-      if (newTerms.length > 0) {
-        const updatedTags = [...tags, ...newTerms];
-        setTags(updatedTags);
-        updateAndSearch(updatedTags.join(' '));
-        setInputValue('');
-        setIsOpen(false);
-        if (inputRef.current) inputRef.current.focus();
-      } else {
-        setInputValue('');
-      }
-    } else if (e.key === 'Enter' && !inputValue.trim() && tags.length > 0) {
-      updateAndSearch(tags.join(' '));
-    } else if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
-      const newTags = tags.slice(0, -1);
-      setTags(newTags);
-      updateAndSearch(newTags.join(' '));
-    }
-  };
-
-  const removeTag = (index: number) => {
-    const newTags = tags.filter((_, i) => i !== index);
-    setTags(newTags);
-    updateAndSearch(newTags.join(' '));
-  };
-
-  const handleSelectSuggestion = (suggestion: string) => {
-    if (!activeField) return;
-    const finalTag = `${activeField}:${suggestion}`;
-    const newTags = [...tags, finalTag];
-    setTags(newTags);
-    updateAndSearch(newTags.join(' '));
-    setInputValue('');
     setSuggestions([]);
-    setActiveField(null);
     setIsOpen(false);
-    if (inputRef.current) inputRef.current.focus();
+    setSyntaxError(null);
+    updateAndSearch('', mode);
   };
 
-  const handleBlur = () => {
-    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-    blurTimeoutRef.current = setTimeout(() => setIsOpen(false), 200);
-  };
+  const currentProps = HELP_PROPERTIES[context] || HELP_PROPERTIES['issues'];
 
   return (
-    <div className="relative w-full bg-[#FFFFFF] dark:bg-[#1C1C1E] border border-[#D1D1D6] dark:border-[#38383A] rounded-2xl px-4 py-3 flex flex-col gap-2 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#007AFF]/30 transition-all shadow-sm">
-      
-      {/* 🍎 LINHA DAS TAGS (Acima do Input) */}
-      {mode === 'tags' && tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 w-full pb-1 border-b border-[#D1D1D6]/30 dark:border-[#38383A]/30">
-          {tags.map((tag, index) => (
-            <span key={index} className="bg-[#E5E5EA] dark:bg-[#38383A] text-[#1C1C1E] dark:text-[#F5F5F7] px-2 py-0.5 rounded-full text-xs flex items-center gap-1.5 font-medium transition-colors">
-              {tag}
-              <button onClick={() => removeTag(index)} className="hover:text-[#FF453A] dark:hover:text-[#FF453A] transition-colors">
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+    <div className="relative w-full flex flex-col gap-1">
+      <div className={`flex items-center gap-2 bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-2 shadow-sm transition-all focus-within:ring-2 ${
+        syntaxError 
+          ? 'border-[#FF3B30] focus-within:ring-[#FF3B30]/30' 
+          : 'border-[#D1D1D6] dark:border-[#38383A] focus-within:ring-[#007AFF]/30'
+      }`}>
+        <Search className={`w-4 h-4 shrink-0 ${syntaxError ? 'text-[#FF3B30]' : 'text-[#8E8E93] dark:text-[#636366]'}`} />
 
-      {/* 🍎 LINHA DO INPUT (Abaixo das Tags) */}
-      <div className="flex items-center gap-2 w-full">
-        <Search className="w-4 h-4 text-[#8E8E93] shrink-0" />
+        {mode === 'tags' && (
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            {tags.map((tag, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-[#333333] dark:text-[#F2F2F7] px-2 py-1 rounded-md border border-[#E5E5EA] dark:border-[#38383A] shadow-sm font-medium"
+              >
+                {tag}
+                <button type="button" onClick={() => removeTag(idx)} className="text-[#8E8E93] hover:text-[#FF3B30] transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
-        <div className="flex-1 flex items-center min-w-[100px]">
-          <input
-            ref={inputRef}
-            type="text"
-            value={mode === 'advanced' ? inputValue : inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            placeholder={mode === 'tags' && tags.length > 0 ? '' : placeholder}
-            className="flex-1 bg-transparent outline-none text-sm text-[#1C1C1E] dark:text-[#F5F5F7] min-w-[50px] placeholder:text-[#8E8E93] dark:placeholder:text-[#636366]"
-          />
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={mode === 'tags' && tags.length > 0 ? '' : placeholder}
+          className={`flex-1 bg-transparent text-[14px] outline-none min-w-[200px] ${
+            syntaxError ? 'text-[#FF3B30] placeholder-[#FF3B30]/60' : 'text-[#1C1C1E] dark:text-[#F2F2F7] placeholder-[#8E8E93]'
+          }`}
+        />
 
-          <button
-            onClick={toggleMode}
-            className="ml-1 p-1.5 rounded-full text-[#8E8E93] dark:text-[#8E8E93] hover:bg-[#F2F2F7] dark:hover:bg-[#38383A] transition-colors shrink-0"
-            title={mode === 'tags' ? 'Alternar para modo Avançado' : 'Voltar para modo Tags'}
-          >
-            {mode === 'tags' ? <Code2 className="w-4 h-4" /> : <Tag className="w-4 h-4" />}
-          </button>
-
-          <button
-            onClick={() => setIsHelpModalOpen(true)}
-            className="ml-1 p-1.5 rounded-full text-[#8E8E93] dark:text-[#8E8E93] hover:bg-[#F2F2F7] dark:hover:bg-[#38383A] transition-colors shrink-0"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-
-          {(tags.length > 0 || inputValue) && (
-            <button
-              onClick={clearAll}
-              className="ml-1 p-1.5 rounded-full text-[#8E8E93] dark:text-[#8E8E93] hover:bg-[#F2F2F7] dark:hover:bg-[#38383A] transition-colors shrink-0 focus:outline-none"
-            >
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {(inputValue || tags.length > 0) && (
+            <button type="button" onClick={clearAll} className="p-1.5 hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] rounded-md text-[#8E8E93] transition-colors">
               <X className="w-4 h-4" />
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={toggleMode}
+            className={`p-1.5 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+              mode === 'advanced'
+                ? 'bg-[#E5F0FF] text-[#007AFF] border-[#007AFF]/20 dark:bg-[#007AFF]/20 dark:border-[#007AFF]/30'
+                : 'bg-transparent text-[#8E8E93] border-transparent hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E]'
+            }`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span>DBQL</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsHelpModalOpen(true)}
+            className="p-1.5 text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-[#F2F2F7] transition-colors"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Sugestões */}
-      {isOpen && suggestions.length > 0 && (
-        <div className="absolute left-0 top-full mt-2 w-full bg-[#FFFFFF] dark:bg-[#1C1C1E] border border-[#D1D1D6] dark:border-[#38383A] rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] z-50 py-2 overflow-hidden transition-all">
-          <div className="px-4 py-1.5 text-[9px] uppercase text-[#8E8E93] dark:text-[#636366] font-semibold border-b border-[#D1D1D6] dark:border-[#38383A] mb-1">
+      {syntaxError && (
+        <div className="flex items-center gap-1.5 text-[12px] text-[#FF3B30] mt-1 ml-1 font-medium">
+          <AlertCircle className="w-3.5 h-3.5" />
+          {syntaxError}
+        </div>
+      )}
+
+      {isOpen && suggestions.length > 0 && !syntaxError && (
+        <div className="absolute top-12 left-0 right-0 bg-white dark:bg-[#1C1C1E] border border-[#D1D1D6] dark:border-[#38383A] rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
+          <div className="px-4 py-2 text-[11px] font-bold text-[#8E8E93] uppercase bg-[#F9F9F9] dark:bg-[#2C2C2E] border-b border-[#E5E5EA] dark:border-[#38383A]">
             Sugestões para {activeField}
           </div>
-          {suggestions.map((s, i) => (
+          {suggestions.map((item, idx) => (
             <button
-              key={i}
-              onClick={() => handleSelectSuggestion(s)}
-              className="w-full text-left px-4 py-2 hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors flex justify-between items-center"
+              key={idx}
+              type="button"
+              onClick={() => handleSelectSuggestion(item)}
+              className="w-full text-left px-4 py-2.5 text-sm text-[#1C1C1E] dark:text-[#F2F2F7] hover:bg-[#F2F2F7] dark:hover:bg-[#38383A] transition-colors border-b last:border-b-0 border-[#E5E5EA] dark:border-[#2C2C2E]"
             >
-              <span className="text-[#007AFF] text-sm font-mono">{s}</span>
+              <span className="font-medium text-[#007AFF] mr-1">{activeField}:</span>
+              <span>{item.includes(' ') ? `"${item}"` : item}</span>
             </button>
           ))}
         </div>
       )}
 
-      {isLoading && isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-full bg-[#FFFFFF] dark:bg-[#1C1C1E] border border-[#D1D1D6] dark:border-[#38383A] rounded-2xl shadow-xl z-50 px-4 py-3 text-[#8E8E93] dark:text-[#636366] text-sm">
-          Carregando sugestões...
-        </div>
-      )}
-
-      {/* Modal de Ajuda Rápida (Mantido) */}
+      {/* Modal de Ajuda DBQL */}
       {isHelpModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-[#FFFFFF] dark:bg-[#1C1C1E] border border-[#D1D1D6] dark:border-[#38383A] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-[0_16px_48px_rgba(0,0,0,0.16)] overflow-hidden transition-colors">
-            <div className="p-5 border-b border-[#D1D1D6] dark:border-[#38383A] flex justify-between items-center">
-              <h3 className="text-lg font-bold text-[#1C1C1E] dark:text-[#F5F5F7]">DBQL - Sintaxe Rápida</h3>
-              <button onClick={() => setIsHelpModalOpen(false)} className="text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-[#F5F5F7] transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto text-sm text-[#1C1C1E] dark:text-[#F5F5F7]">
-              <h4 className="font-semibold mb-2">🔍 Propriedades</h4>
-              <table className="w-full text-xs border-collapse border border-[#D1D1D6] dark:border-[#38383A] mb-4 rounded-lg overflow-hidden transition-colors">
-                <thead className="bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#8E8E93] dark:text-[#636366]">
-                  <tr><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Propriedade</th><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Descrição</th><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Exemplo</th></tr>
-                </thead>
-                <tbody className="text-[#1C1C1E] dark:text-[#F5F5F7] bg-[#FFFFFF] dark:bg-[#1C1C1E]">
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">category</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Categoria da vulnerabilidade</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">category:"Broken Access Control"</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">severity</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Severidade (critical, high, medium, low)</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">severity:critical</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">branch</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Branch do repositório</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">branch:main</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">project</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Nome do projeto</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">project:GEPIN_AS</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">repository</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Repositório</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">repository:repo-name</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">status</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Status da issue (open, fixed, etc.)</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">status:open</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">is</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Estado especial</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">is:unresolved</td></tr>
-                </tbody>
-              </table>
+         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <div className="bg-white dark:bg-[#1C1C1E] rounded-xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="flex justify-between items-center p-5 border-b border-[#E5E5EA] dark:border-[#38383A]">
+                <h3 className="text-xl font-bold text-[#1C1C1E] dark:text-[#F2F2F7]">DBQL - Sintaxe Rápida</h3>
+                <button onClick={() => setIsHelpModalOpen(false)} className="text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                <div>
+                  <h4 className="font-semibold text-[15px] text-[#1C1C1E] dark:text-[#F2F2F7] mb-3 flex items-center gap-2">
+                    🔍 Propriedades
+                  </h4>
+                  <div className="border border-[#E5E5EA] dark:border-[#38383A] rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-[13px]">
+                      <thead className="bg-[#F9F9F9] dark:bg-[#2C2C2E] border-b border-[#E5E5EA] dark:border-[#38383A]">
+                        <tr>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-1/4">Propriedade</th>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-2/4">Descrição</th>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-1/4">Exemplo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E5EA] dark:divide-[#38383A]">
+                        {currentProps.map((p, idx) => (
+                          <tr key={idx} className="bg-white dark:bg-[#1C1C1E]">
+                            <td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">{p.prop}</td>
+                            <td className="p-3 text-[#333333] dark:text-[#D1D1D6]">{p.desc}</td>
+                            <td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">{p.ex}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-              <h4 className="font-semibold mb-2">⚙️ Operadores e Símbolos</h4>
-              <table className="w-full text-xs border-collapse border border-[#D1D1D6] dark:border-[#38383A] rounded-lg overflow-hidden transition-colors">
-                <thead className="bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#8E8E93] dark:text-[#636366]">
-                  <tr><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Operador</th><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Descrição</th><th className="border border-[#D1D1D6] dark:border-[#38383A] p-2 text-left">Exemplo</th></tr>
-                </thead>
-                <tbody className="text-[#1C1C1E] dark:text-[#F5F5F7] bg-[#FFFFFF] dark:bg-[#1C1C1E]">
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">AND</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">E lógico</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">branch:main AND severity:critical</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">OR</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">OU lógico</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">severity:high OR severity:critical</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">NOT</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">NÃO lógico</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">NOT branch:main</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">!</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Nega um termo (atalho)</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">!branch:main</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">( )</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Agrupamento</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">(severity:high OR severity:critical)</td></tr>
-                  <tr><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-bold text-[#007AFF]">*</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2">Curinga (Wildcard)</td><td className="border border-[#D1D1D6] dark:border-[#38383A] p-2 font-mono">fileName:*Controller.cs</td></tr>
-                </tbody>
-              </table>
-              <div className="mt-4 pt-4 border-t border-[#D1D1D6] dark:border-[#38383A]">
-                <p className="text-xs text-[#8E8E93] dark:text-[#636366] mb-3">Para uma documentação completa com exemplos avançados, consulte a Wiki.</p>
+                <div>
+                  <h4 className="font-semibold text-[15px] text-[#1C1C1E] dark:text-[#F2F2F7] mb-3 flex items-center gap-2">
+                    ⚙️ Operadores e Símbolos
+                  </h4>
+                  <div className="border border-[#E5E5EA] dark:border-[#38383A] rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-[13px]">
+                      <thead className="bg-[#F9F9F9] dark:bg-[#2C2C2E] border-b border-[#E5E5EA] dark:border-[#38383A]">
+                        <tr>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-1/5">Operador</th>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-2/5">Descrição</th>
+                          <th className="p-3 text-[#666666] dark:text-[#A1A1A6] font-semibold w-2/5">Exemplo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E5EA] dark:divide-[#38383A]">
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">AND</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">E lógico</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">branch:main AND severity:critical</td></tr>
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">OR</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">OU lógico</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">severity:high OR severity:critical</td></tr>
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">NOT</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">NÃO lógico</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">NOT branch:main</td></tr>
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">!</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">Nega um termo (atalho)</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">!branch:main</td></tr>
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">( )</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">Agrupamento</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">(severity:high OR severity:critical)</td></tr>
+                        <tr className="bg-white dark:bg-[#1C1C1E]"><td className="p-3 font-bold text-[#007AFF]">*</td><td className="p-3 text-[#333333] dark:text-[#D1D1D6]">Curinga (Wildcard)</td><td className="p-3 font-mono text-[#333333] dark:text-[#F2F2F7]">fileName:*Controller.cs</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-[#E5E5EA] dark:border-[#38383A] bg-[#F9F9F9] dark:bg-[#2C2C2E] flex flex-col gap-3">
+                <p className="text-[13px] text-[#8E8E93]">Para uma documentação completa com exemplos avançados, consulte a Wiki.</p>
                 <a
                   href="/wiki/dbql/syntax"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[#007AFF] hover:bg-[#0063CE] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
+                  className="inline-flex justify-center items-center bg-[#007AFF] hover:bg-[#0063CE] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm self-start"
                 >
                   Abrir Página de Ajuda Completa
                 </a>
               </div>
-            </div>
-          </div>
-        </div>
+           </div>
+         </div>
       )}
     </div>
   );

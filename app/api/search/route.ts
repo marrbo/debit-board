@@ -1,6 +1,5 @@
 // app/api/search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { Settings } from '@/lib/types';
 import { executeSearch } from '@/lib/azureSearch';
 import { getServerAuthSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';

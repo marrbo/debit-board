@@ -5,7 +5,7 @@ import { Issue } from '@/models/Issue';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern'; 
 import { getServerAuthSession } from '@/lib/auth';
 
-// 🔥 PARSER DBQL: Converte a string de busca em condições MongoDB
+// 🔥 PARSER DBQL APRIMORADO: Suporta wildcards (*) e conversão para regex
 function parseDBQL(queryString: string): any[] | null {
   const conditions: any[] = [];
 
@@ -20,22 +20,36 @@ function parseDBQL(queryString: string): any[] | null {
     matchFound = true;
     const isNot = match[1] === '!';
     const key = match[2];
-    // Pega o valor que pode estar em aspas no grupo 3, ou sem aspas no grupo 4
-    const value = match[3] || match[4]; 
+    const rawValue = match[3] || match[4]; 
 
-    if (!value) continue;
+    if (!rawValue) continue;
 
     const condition: any = {};
-    // Busca exata, independente de maiúsculas/minúsculas
-    if (isNot) {
-      condition[key] = { $ne: value };
+
+    // Verifica se o valor contém o caractere curinga (*)
+    if (rawValue.includes('*')) {
+      // Converte o coringa '*' em expressão regular '.*' e escapa caracteres especiais do regex (exceto o *)
+      const escaped = rawValue.replace(/([.+?^${}()|[\]\\])/g, '\\$1').replace(/\*/g, '.*');
+      // Garante correspondência em toda a string (^...$)
+      const regexPattern = `^${escaped}$`;
+      
+      if (isNot) {
+        condition[key] = { $not: { $regex: regexPattern, $options: 'i' } };
+      } else {
+        condition[key] = { $regex: regexPattern, $options: 'i' };
+      }
     } else {
-      condition[key] = value;
+      // Busca exata (mas case-insensitive ou direta conforme sua preferência, mantendo a lógica anterior)
+      if (isNot) {
+        condition[key] = { $ne: rawValue };
+      } else {
+        condition[key] = rawValue;
+      }
     }
+
     conditions.push(condition);
   }
 
-  // Se não encontrou nenhum padrão campo:valor, retorna null para cair no fallback
   return matchFound ? conditions : null;
 }
 
@@ -81,13 +95,12 @@ export async function GET(req: NextRequest) {
     if (severity) query.severity = severity;
     if (projectId) query.project = projectId;
 
-    // 🔥 CORREÇÃO DA BUSCA: Aplica o parser DBQL
+    // 🔥 APLICAÇÃO DA BUSCA COM PARSER DBQL ATUALIZADO
     if (search) {
       const dbqlConditions = parseDBQL(search);
       if (dbqlConditions && dbqlConditions.length > 0) {
         query.$and = dbqlConditions;
       } else {
-        // Fallback: Se não for uma DBQL válida, faz uma busca ampla ($or) com regex global
         query.$or = [
           { fileName: { $regex: search, $options: 'i' } },
           { filePath: { $regex: search, $options: 'i' } },
