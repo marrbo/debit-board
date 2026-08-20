@@ -1,0 +1,108 @@
+# DBQL Examplos & Casos de uso
+
+Esta página contém um guia prático com exemplos reais de consultas utilizando a **Debit Board Query Language (DBQL)**. Aqui você aprenderá como aplicar a sintaxe apresentada na [documentação oficial](./syntax) para realizar buscas precisas por vulnerabilidades, issues e padrões de código dentro dos seus repositórios.
+
+---
+
+## 🧭 Como Usar a DBQL
+
+A DBQL pode ser utilizada diretamente na barra de busca da plataforma. Siga este passo a passo para começar:
+
+1. **Acesse o Módulo de Issues:** Navegue até a aba **"Issues"** ou utilize a busca global no menu **"Search"**.
+2. **Modo Básico:** Digite a propriedade, seguida de dois pontos `:` e o valor desejado. Ex: `severity:high`.
+3. **Modo Avançado:** Para combinar várias condições, utilize o botão **`</>` (Modo Avançado)** na barra de busca. Ele permite escrever consultas complexas com parênteses `( )`, negação `!` e curingas `*`.
+4. **Limpeza de Filtros:** Para remover uma condição específica, utilize o prefixo `!` ou a palavra-chave `NOT`. Ex: `!branch:main` ou `NOT branch:main`.
+
+> **Dica:** A busca é **case-insensitive** (não diferencia maiúsculas de minúsculas), mas respeita espaços e aspas duplas `" "` para buscas exatas (ex: `category:"Broken Access Control"`).
+
+---
+
+## 📝 Exemplos por Categoria
+
+### 1. Filtrando por Severidade e Status
+Encontre issues críticas que ainda não foram corrigidas ou filtre por severidades específicas para priorizar seus trabalhos.
+
+| Objetivo | Consulta DBQL |
+| :--- | :--- |
+| **Vulnerabilidades Críticas** | `severity:critical` |
+| **Erros Abertos de Alta Prioridade** | `severity:high AND status:open` |
+| **Vulnerabilidades Médias Já Corrigidas** | `severity:medium AND status:fixed` |
+| **Todas as Issues, exceto as de Baixa Gravidade** | `!severity:low` |
+
+### 2. Filtrando por Projeto e Repositório
+Restrinja suas buscas a um projeto ou repositório específico, evitando "ruído" de outras áreas.
+
+| Objetivo | Consulta DBQL |
+| :--- | :--- |
+| **Issues apenas do Projeto "GEPIN_AS"** | `project:GEPIN_AS` |
+| **Issues do Repositório "backend-api"** | `repository:backend-api` |
+| **Projetos de Frontend (que contêm "front")** | `project:*front*` |
+
+### 3. Filtrando por Arquivo e Extensão
+Ideal para encontrar vulnerabilidades de segurança em partes específicas do código, como controllers, serviços ou extensões de linguagem.
+
+| Objetivo | Consulta DBQL |
+| :--- | :--- |
+| **Issues em arquivos C#** | `fileName:*Controller.cs` |
+| **Issues em arquivos de extensão JavaScript** | `fileName:*.js` |
+| **Issues em diretórios específicos** (usando curinga duplo) | `fileName:*models/*.ts` |
+
+### 4. Filtros Avançados com Lógica Booleana
+Combine múltiplas regras utilizando `AND`, `OR`, `NOT` e agrupamentos.
+
+| Objetivo | Consulta DBQL |
+| :--- | :--- |
+| **Buscar SQL Injection ou XSS que estão em aberto** | `(category:"SQL Injection" OR category:"Cross-site Scripting") AND status:open` |
+| **Excluir a branch "main" e buscar arquivos de Controller** | `!branch:main AND fileName:*Controller.cs` |
+| **Issues críticas ou de alta severidade em repositórios de backend** | `(severity:critical OR severity:high) AND repository:*backend*` |
+
+### 5. Identificando Problemas Recorrentes
+Problemas que já foram corrigidos mas retornaram (regressão) ou que ainda não foram totalmente resolvidos.
+
+| Objetivo | Consulta DBQL |
+| :--- | :--- |
+| **Issues Recorrentes (Reabertas)** | `status:recurring` |
+| **Issues Não Resolvidas (Unresolved)** | `is:unresolved` |
+| **Issues com status "Won't Fix"** | `status:wont_fix` |
+
+---
+
+## 🚀 Cenários do Mundo Real
+
+Aqui estão exemplos práticos de como aplicar a DBQL no seu dia a dia dentro da DebitBoard.
+
+### Cenário 1: "Preciso corrigir todas as vulnerabilidades críticas e altas dos meus projetos principais"
+Você quer focar nas issues mais perigosas, ignorando branches de desenvolvimento antigos.
+
+```sql
+!branch:develop AND (severity:critical OR severity:high) AND status:open
+```
+*Interpretação:* Exclui a branch `develop`, busca qualquer issue com severidade crítica OU alta que esteja atualmente em aberto.
+
+### Cenário 2: "Quero ver quais Injeções de SQL estão abertas nos meus Controllers C#"
+Você suspeita que seu código legado tem vulnerabilidades de SQL Injection nos controladores.
+
+```sql
+category:"SQL Injection" AND fileName:*Controller.cs AND status:open
+```
+*Interpretação:* Filtra pela categoria exata "SQL Injection", limita a arquivos com nome terminado em `Controller.cs` que estão em aberto.
+
+### Cenário 3: "Levantamento de vulnerabilidades de segurança em bibliotecas JS no projeto X"
+Uma revisão de segurança para encontrar problemas em dependências JavaScript.
+
+```sql
+project:"DebitBoard" AND fileName:package-lock.json AND severity:high
+```
+*Interpretação:* Busca no projeto "DebitBoard", exclusivamente no arquivo `package-lock.json`, vulnerabilidades de alta severidade (indicando problemas em dependências).
+
+---
+
+## 💡 Dicas e Boas Práticas
+
+- **Use curingas com moderação**: O uso excessivo de `*` pode tornar a busca lenta em repositórios muito grandes. Prefira sempre especificar o máximo possível.
+- **Agrupe para clareza**: Ao combinar múltiplos `OR` com `AND`, sempre use parênteses para garantir a precedência correta.
+- **Salve suas consultas favoritas**: Se você tem uma consulta muito útil que usa com frequência, considere salvá-la em um bloco de notas na sua equipe para padronizar a busca.
+
+A DBQL é uma ferramenta extremamente poderosa para manter a qualidade e segurança do seu código. Utilize os exemplos acima como ponto de partida e adapte-os às suas necessidades.
+
+*Confira também a [Referência de Sintaxe](./syntax) para uma lista completa de todas as propriedades disponíveis.*
