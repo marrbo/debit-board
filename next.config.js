@@ -1,14 +1,13 @@
 /** @type {import('next').NextConfig} */
-
-import  { codecovWebpackPlugin } from "@codecov/webpack-plugin";
+import { codecovWebpackPlugin } from "@codecov/webpack-plugin";
 
 const nextConfig = {
   experimental: {
-    // Permite que o Mongoose/MongoDB sejam executados no servidor Node.js
+    // Allows Mongoose/MongoDB to run on the Node.js server
     serverComponentsExternalPackages: ['mongoose', 'mongodb'],
   },
   webpack: (config) => {
-    // Ignora módulos Node.js que causam conflito no Edge/Middleware e no Webpack
+    // Ignore Node.js modules that cause conflicts in Edge/Middleware
     config.resolve.fallback = {
       ...config.resolve.fallback,
       net: false,
@@ -16,17 +15,19 @@ const nextConfig = {
       fs: false,
       'node:diagnostics_channel': false,
     };
+
+    // Add Codecov plugin
+    config.plugins.push(
+      codecovWebpackPlugin({
+        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+        bundleName: "example-webpack-bundle",
+        uploadToken: process.env.CODECOV_TOKEN,
+      })
+    );
+
     return config;
   },
-  plugins: [
-    // ...
-    // Put the Codecov webpack plugin after all other plugins
-    codecovWebpackPlugin({
-      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
-      bundleName: "example-webpack-bundle",
-      uploadToken: process.env.CODECOV_TOKEN,
-    }),
-  ],
 };
 
-module.exports = nextConfig;
+// Use ES module export (instead of module.exports)
+export default nextConfig;
