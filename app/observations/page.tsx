@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   FileSpreadsheet, FileText, Search, UserPlus, Check, User, 
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+  Binoculars
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { useReactToPrint } from 'react-to-print';
@@ -541,7 +542,8 @@ export default function IssuesPage() {
       </div>
 
       <PageHeader
-        title="Feed"
+        title="Observations Feed"
+        icon={<Binoculars size="36px" />}
         subtitle="Acompanhe as vulnerabilidades encontradas no seu código."
         filters={
           <div className="flex flex-wrap gap-2">

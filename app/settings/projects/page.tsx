@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { RefreshCw, FolderGit2, ListTree } from 'lucide-react';
+import { RefreshCw, ListTree } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AdvancedSearch from '@/components/AdvancedSearch';
 
@@ -35,7 +35,6 @@ export default function ProjectsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Busca projetos e repositórios em paralelo
       const [projRes, repoRes] = await Promise.all([
         fetch('/api/projects'),
         fetch('/api/repository'),
@@ -49,7 +48,6 @@ export default function ProjectsPage() {
     }
   };
 
-  // Sincronização com Azure
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
@@ -57,7 +55,7 @@ export default function ProjectsPage() {
       const res = await fetch('/api/azure/sync', { method: 'POST' });
       if (res.ok) {
         alert('Sincronização concluída com sucesso!');
-        await fetchData(); // Recarrega a lista local
+        await fetchData();
       } else {
         const err = await res.json();
         alert('Erro na sincronização: ' + (err.error || 'Erro desconhecido'));
@@ -67,7 +65,7 @@ export default function ProjectsPage() {
     } finally {
       setSyncing(false);
     }
-};
+  };
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -78,7 +76,6 @@ export default function ProjectsPage() {
   if (status === 'loading') return <div className="py-10 text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando...</div>;
   if (!session) { router.push('/login'); return null; }
 
-  // Mapa de contagem de repositórios por projectId
   const repoCountMap = useMemo(() => {
     const map = new Map<string, number>();
     repos.forEach(repo => {
@@ -87,12 +84,9 @@ export default function ProjectsPage() {
     return map;
   }, [repos]);
 
-  // Filtro DBQL local (suporta propriedades como name, teamIds)
   const filteredProjects = useMemo(() => {
     if (!searchQuery.trim()) return projects;
     return projects.filter(proj => {
-      const lowerQuery = searchQuery.toLowerCase();
-      // Suporte básico para chave:valor
       const parts = searchQuery.split(' ');
       return parts.every(part => {
         if (part.includes(':')) {
@@ -101,7 +95,6 @@ export default function ProjectsPage() {
           if (key === 'teamIds') return proj.teamIds.some(id => id.toLowerCase().includes(value.toLowerCase()));
           return true;
         }
-        // Busca global no nome
         return proj.name.toLowerCase().includes(part);
       });
     });
@@ -133,24 +126,24 @@ export default function ProjectsPage() {
           </div>
         }
         searchBar={
-          <AdvancedSearch onSearch={setSearchQuery} context="projects" placeholder="Buscar projetos (ex: name:backend OR teamIds:dev)" />
+          <AdvancedSearch onSearch={setSearchQuery} context="projects" placeholder="Buscar projetos (ex: name:Portal)" />
         }
       />
 
       {loading ? (
         <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando...</div>
       ) : filteredProjects.length === 0 ? (
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark shadow-sm">
+        <div className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark shadow-sm">
           {projects.length === 0 
             ? 'Nenhum projeto encontrado. Clique em "Sincronizar" para buscar no Azure.' 
             : 'Nenhum projeto corresponde ao filtro.'}
         </div>
       ) : (
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden w-full shadow-sm">
+        <div className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden shadow-sm">
           <table className="w-full text-sm text-left">
             <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-apple-tertiary-light dark:text-apple-tertiary-dark border-b border-apple-border-light dark:border-apple-border-dark">
               <tr>
-                <th className="p-4 font-medium">Projeto</th>
+                <th className="p-4 font-medium">Nome</th>
                 <th className="p-4 text-center font-medium">Repositórios Vinculados</th>
                 <th className="p-4 text-right font-medium">Ações</th>
               </tr>

@@ -10,6 +10,7 @@ import Charts from '@/components/Charts';
 import PageHeader from '@/components/PageHeader';
 import AdvancedSearch from '@/components/AdvancedSearch';
 import { ChartDataPoint } from '@/lib/types';
+import { BarChart3 } from 'lucide-react';
 
 export default function StatsPage() {
   const { data: session, status } = useSession();
@@ -58,9 +59,10 @@ export default function StatsPage() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Stats & Usage"
+        icon={<BarChart3 size="36px" />}
         subtitle="Visão geral das issues de segurança do seu Tenant."
         searchBar={
-          <AdvancedSearch onSearch={setSearchQuery} placeholder="Search stats, e.g. severity:critical OR project:my-api" context="stats"/>
+          <AdvancedSearch onSearch={setSearchQuery} placeholder="Search stats, e.g. severity:critical OR project:my-api" context="issues"/>
         }
       />
 

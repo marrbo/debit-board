@@ -21,7 +21,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   const router = useRouter();
   
   // Estados Principais
-  const [issue, setIssue] = useState<IIssue | null>(null);
+  const [issue, setIssue] = useState<any>(null);
   const [loadingIssue, setLoadingIssue] = useState(true);
   const [errorIssue, setErrorIssue] = useState<string | null>(null);
   
@@ -314,7 +314,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
                     <BookOpen className="w-5 h-5 text-apple-blue mb-2 " />
                     <div className="prose prose-slate dark:prose-invert max-w-none scroll-my-20 min-h-[350px] max-h-[550px] overflow-auto p-3">
                         <Markdown remarkPlugins={[remarkGfm]}>
-                            {pattern?.description || "Não há descrição cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
+                            {/*pattern?.description ||*/ "Não há descrição cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
                         </Markdown>
                     </div>
                 </div>
@@ -325,7 +325,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
                     <BookOpen className="w-5 h-5 text-apple-green mb-2" />
                     <div className="prose prose-slate dark:prose-invert max-w-none scroll-my-20 min-h-[362px] max-h-[550px] overflow-auto p-3">
                         <Markdown remarkPlugins={[remarkGfm]}>
-                            {pattern?.recommendation || "Não há recomendação cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
+                            {/*pattern?.recommendation || */"Não há recomendação cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
                         </Markdown>
                     </div>
                 </div>

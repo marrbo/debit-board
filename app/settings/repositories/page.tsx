@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { RefreshCw, Search, ArrowLeft } from 'lucide-react';
+import { RefreshCw, ArrowLeft } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AdvancedSearch from '@/components/AdvancedSearch';
 
