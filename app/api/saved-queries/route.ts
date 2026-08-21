@@ -34,18 +34,23 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectToDatabase();
+    
     const body = await req.json();
-    const { name, queryString, context } = body;
+    
+    const { name, tenantId, queryString, context, visibility } = body;
 
     if (!name || !queryString) {
       return NextResponse.json({ error: 'Nome e query são obrigatórios.' }, { status: 400 });
     }
 
+    
+
     const newSavedQuery = await SavedQuery.create({
-      tenantId: session.user.tenantId,
+      tenantId,
       name,
       queryString,
       context: context || 'issues',
+      visibility
     });
 
     return NextResponse.json(newSavedQuery, { status: 201 });
@@ -64,15 +69,15 @@ export async function PUT(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
-    const { id, name, queryString, context } = body;
+    const { id, name, tenantId, queryString, context, visibility } = body;
 
     if (!id || !name || !queryString) {
       return NextResponse.json({ error: 'ID, nome e query são obrigatórios.' }, { status: 400 });
     }
 
     const updated = await SavedQuery.findOneAndUpdate(
-      { _id: id, tenantId: session.user.tenantId },
-      { name, queryString, context: context || 'issues' },
+      { _id: id, tenantId },
+      { name, queryString, context: context || 'issues', visibility },
       { new: true }
     );
 

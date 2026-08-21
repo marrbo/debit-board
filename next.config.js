@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
+
+import  { codecovWebpackPlugin } from "@codecov/webpack-plugin";
+
 const nextConfig = {
   experimental: {
     // Permite que o Mongoose/MongoDB sejam executados no servidor Node.js
@@ -15,6 +18,15 @@ const nextConfig = {
     };
     return config;
   },
+  plugins: [
+    // ...
+    // Put the Codecov webpack plugin after all other plugins
+    codecovWebpackPlugin({
+      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+      bundleName: "example-webpack-bundle",
+      uploadToken: process.env.CODECOV_TOKEN,
+    }),
+  ],
 };
 
 module.exports = nextConfig;

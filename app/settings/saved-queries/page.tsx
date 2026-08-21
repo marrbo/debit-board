@@ -6,12 +6,14 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Bookmark, Trash2, Edit3, Plus, Play, X } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import DBQLRichInput from '@/components/DBQLRichInput';
 
 interface SavedQueryItem {
   _id: string;
   name: string;
   queryString: string;
   context: string;
+  visibility: 'private' | 'shared' | 'public' | 'temporary';
   createdAt: string;
 }
 
@@ -26,12 +28,18 @@ export default function SavedQueriesPage() {
   const [name, setName] = useState('');
   const [queryString, setQueryString] = useState('');
   const [context, setContext] = useState('issues');
+  const [visibility, setVisibility] = useState<SavedQueryItem['visibility']>('private');
 
   const fetchQueries = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/saved-queries');
-      if (res.ok) setQueries(await res.json());
+      if (res.ok) { 
+        let data = await res.json();
+        data = data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        data = data.filter((q: any) => q.visibility !== 'temporary');
+        setQueries(data);
+      }
     } catch (err) {
       console.error('Erro ao carregar consultas salvas:', err);
     } finally {
@@ -53,25 +61,49 @@ export default function SavedQueriesPage() {
     setName('');
     setQueryString('');
     setContext('issues');
+    setVisibility('private');
     setIsModalOpen(true);
   };
+
+  function getVisibilityLabel(visibility: string): string {
+    const map: Record<string, string> = {
+      public: 'Pública',
+      shared: 'Compartilhada',
+      private: 'Privada',
+    };
+    return map[visibility] || 'Temporária';
+  }
 
   const handleOpenEdit = (q: SavedQueryItem) => {
     setEditingId(q._id);
     setName(q.name);
     setQueryString(q.queryString);
     setContext(q.context || 'issues');
+    setVisibility(q.visibility || 'private');
     setIsModalOpen(true);
   };
+
+  const handleVisibilityChange = (value: string) => {
+    const validVisibilities: SavedQueryItem['visibility'][] = ['private', 'shared', 'public', 'temporary'];
+    if (validVisibilities.includes(value as any)) {
+        setVisibility(value as SavedQueryItem['visibility']);
+    }
+ };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !queryString) return;
 
     try {
+        console.log('Payload enviado:', { 
+        name, queryString, context, visibility, tenantId: session.user.tenantId 
+        });
+
       const url = '/api/saved-queries';
       const method = editingId ? 'PUT' : 'POST';
-      const body = editingId ? { id: editingId, name, queryString, context } : { name, queryString, context };
+      const body = editingId 
+        ? { id: editingId, tenantId: session.user.tenantId, name, queryString, context, visibility } 
+        : { name, tenantId: session.user.tenantId, queryString, context, visibility };
 
       const res = await fetch(url, {
         method,
@@ -102,8 +134,12 @@ export default function SavedQueriesPage() {
   };
 
   const handleRunQuery = (q: SavedQueryItem) => {
-    const targetPath = q.context !== 'issues' ? '/settings/{q.context}' : '/observations';
-    router.push(`${targetPath}?q=${encodeURIComponent(q.queryString)}&mode=advanced`);
+    let targetPath = '/observations';
+    if (q.context === 'projects') targetPath = '/settings/projects';
+    else if (q.context === 'repositories') targetPath = '/settings/repositories';
+    else if (q.context === 'stats') targetPath = '/settings/stats';
+
+    router.push(`${targetPath}?q=${q._id}&m=a`);
   };
 
   return (
@@ -134,6 +170,7 @@ export default function SavedQueriesPage() {
               <tr>
                 <th className="p-4 font-medium">Nome</th>
                 <th className="p-4 font-medium">Contexto</th>
+                <th className="p-4 font-medium">Visibilidade</th>
                 <th className="p-4 font-medium">Query DBQL</th>
                 <th className="p-4 text-right font-medium">Ações</th>
               </tr>
@@ -147,35 +184,41 @@ export default function SavedQueriesPage() {
                     </div>
                     {q.name}
                   </td>
-                  <td className="p-4 text-apple-secondary-light dark:text-apple-secondary-dark uppercase text-xs font-semibold">
-                    <span className="bg-apple-hover dark:bg-[#2C2C2E] px-2 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark">
+                  <td className="p-4 text-apple-secondary-light dark:text-apple-secondary-dark uppercase text-xs font-light">
+                    <span className="bg-apple-hover dark:bg-[#2C2C2E] px-1 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark">
                       {q.context}
                     </span>
                   </td>
-                  <td className="p-4 font-mono text-xs text-apple-secondary-light dark:text-apple-secondary-dark max-w-md truncate">
+                  <td className="p-4 text-apple-secondary-light dark:text-apple-secondary-dark text-xs">
+                    {getVisibilityLabel(q.visibility)}
+                  </td>
+                  <td className="p-4 font-mono text-xs text-apple-secondary-light/45 italic monospace dark:text-apple-secondary-dark max-w-md truncate">
                     {q.queryString}
                   </td>
                   <td className="p-4 text-right space-x-2">
                     <button 
                       onClick={() => handleRunQuery(q)}
                       title="Executar Consulta"
-                      className="inline-flex items-center gap-1 bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
                     >
-                      <Play className="w-3.5 h-3.5" /> Executar
+                      <Play className="w-3.5 h-3.5" />
+                      <span className="hidden focus:inline">Executar</span>
                     </button>
                     <button 
                       onClick={() => handleOpenEdit(q)}
                       title="Editar"
-                      className="inline-flex items-center gap-1 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
                     >
-                      <Edit3 className="w-3.5 h-3.5" /> Editar
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span className="hidden focus:inline">Editar</span>
                     </button>
                     <button 
                       onClick={() => handleDelete(q._id)}
                       title="Excluir"
-                      className="inline-flex items-center gap-1 bg-apple-red/10 text-apple-red hover:bg-apple-red/20 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 border border-apple-red text-apple-red px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-red/30"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Excluir
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="hidden focus:inline">Excluir</span>
                     </button>
                   </td>
                 </tr>
@@ -210,30 +253,44 @@ export default function SavedQueriesPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Contexto</label>
-              <select 
-                value={context} 
-                onChange={(e) => setContext(e.target.value)} 
-                className="w-full"
-              >
-                <option value="issues">Issues</option>
-                <option value="projects">Projetos</option>
-                <option value="repositories">Repositórios</option>
-                <option value="stats">Estatísticas</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Contexto</label>
+                <select 
+                  value={context} 
+                  onChange={(e) => setContext(e.target.value)} 
+                  className="w-full"
+                >
+                  <option value="issues">Issues</option>
+                  <option value="projects">Projetos</option>
+                  <option value="repositories">Repositórios</option>
+                  <option value="stats">Estatísticas</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Visibilidade</label>
+                <select 
+                  value={visibility} 
+                  onChange={(e) => handleVisibilityChange(e.target.value)} 
+                  className="w-full"
+                >
+                  <option value="private">Privada (Apenas você)</option>
+                  <option value="shared">Compartilhada (Equipe)</option>
+                  <option value="public">Pública</option>
+                  <option value="temporary">Temporária</option>
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Query DBQL</label>
-              <textarea 
-                value={queryString} 
-                onChange={(e) => setQueryString(e.target.value)} 
-                placeholder="Ex: category:'Broken Access Control' AND severity:critical" 
-                required 
-                rows={3}
-                className="w-full"
-              />
+                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Query DBQL</label>
+                <DBQLRichInput
+                    value={queryString}
+                    onChange={setQueryString}
+                    placeholder='Ex: category:"Broken Access Control" AND severity:critical'
+                    rows={3}
+                />
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-apple-border-light dark:border-apple-border-dark">
