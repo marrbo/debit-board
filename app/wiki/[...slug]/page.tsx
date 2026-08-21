@@ -14,7 +14,7 @@ export default async function WikiPage({
 }) {
   const authOptions = await getAuthOptions();
   const session = await getServerSession(authOptions);
-  const isAdmin = session?.user?.tenantId === 'tenant_admin';
+  const isAdmin: boolean = session?.user?.isAdmin || false;
 
   // 🔍 DEBUG: Se você não estiver vendo o botão, olhe no terminal do servidor para ver o que está vindo na sessão
   console.log('🔍 Sessão detectada pelo Servidor:', session?.user?.email, 'Role:', session?.user?.tenantId);

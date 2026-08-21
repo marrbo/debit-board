@@ -24,7 +24,7 @@ export default function ProfilePage() {
 
     const fetchProfile = async () => {
       setLoading(true);
-      const res = await fetch('/api/user/me');
+      const res = await fetch('/api/users/me');
       if (res.ok) {
         const data = await res.json();
         setForm({
@@ -49,7 +49,7 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch('/api/user/me', {
+    const res = await fetch('/api/users/me', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),

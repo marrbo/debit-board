@@ -6,7 +6,10 @@ const nextConfig = {
     // Allows Mongoose/MongoDB to run on the Node.js server
     serverComponentsExternalPackages: ['mongoose', 'mongodb'],
   },
-  webpack: (config) => {
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.devtool = 'source-map'; // garante source maps detalhados
+    }
     // Ignore Node.js modules that cause conflicts in Edge/Middleware
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -20,8 +23,9 @@ const nextConfig = {
     config.plugins.push(
       codecovWebpackPlugin({
         enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
-        bundleName: "example-webpack-bundle",
+        bundleName: "debit-board-webpack-bundle",
         uploadToken: process.env.CODECOV_TOKEN,
+        telemetry: false,
       })
     );
 

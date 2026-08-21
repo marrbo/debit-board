@@ -43,16 +43,16 @@ export default function WikiEditor({ slug }: { slug: string }) {
         <div className="flex gap-3">
           <button
             onClick={() => router.back()}
-            className="px-4 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+            className="inline-flex items-center gap-1.5 border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 text-sm rounded-md bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
           >
-            {saving ? 'Salvando...' : 'Salvar Alterações'}
+            {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </div>

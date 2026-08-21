@@ -16,7 +16,7 @@ export default async function WikiLayout({ children }: { children: React.ReactNo
       </aside>
 
       {/* 📄 ÁREA DA WIKI (Fundo Off-White Apple no claro, Preto no escuro) */}
-      <main className="flex-1 h-full overflow-y-auto p-4 bg-apple-bg-light dark:bg-apple-bg-dark text-apple-label-light dark:text-apple-label-dark transition-colors duration-200">
+      <main className="flex-1 px-12 h-full overflow-y-auto p-4 bg-apple-bg-light dark:bg-apple-bg-dark text-apple-label-light dark:text-apple-label-dark transition-colors duration-200">
         {children}
       </main>
       

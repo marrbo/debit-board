@@ -2,17 +2,18 @@
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Link from 'next/link';
+import { SquarePen } from 'lucide-react';
 
-export default function WikiViewer({ slug, content, isAdmin }: { slug: string, content: string, isAdmin: boolean }) {
+export default function WikiViewer({ slug, content, isAdmin = false }: { slug: string, content: string, isAdmin?: boolean }) {
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="w-full mx-auto p-4">
       {isAdmin && (
         <div className="flex justify-end mb-4">
           <Link
             href={`/wiki/${slug}?edit=true`}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white text-sm rounded-lg shadow-sm transition-colors"
+            className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
           >
-            ✏️ Editar Página
+            <SquarePen className="w-4 h-4 mr-2" /> Editar
           </Link>
         </div>
       )}

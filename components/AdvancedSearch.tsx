@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import DBQLRichInput from './DBQLRichInput';
 
+/**
+ * Propriedades do componente AdvancedSearch.
+ */
 interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
   placeholder?: string;
@@ -26,6 +29,11 @@ const MEME_QUIPS = [
   "Stack overflow de tokens: operadores encadeados demais para uma única query."
 ];
 
+/**
+ * Hook para detectar cliques fora de um elemento (útil para fechar modais/dropdowns).
+ * @param ref - Referência do elemento que deve ser monitorado.
+ * @param callback - Função executada ao clicar fora.
+ */
 const useOutsideClick = (ref: React.RefObject<HTMLElement>, callback: () => void) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,6 +52,10 @@ interface ValidationError {
   errorLength: number;
 }
 
+/**
+ * Componente de Busca Avançada utilizando DebitBoard Query Language (DBQL).
+ * Suporta modo tags, modo DBQL livre, salvamento de consultas e validação ao vivo.
+ */
 export default function AdvancedSearch({
   onSearch,
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
@@ -63,7 +75,6 @@ export default function AdvancedSearch({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
   
-  // Modais e Estados de UI
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -73,7 +84,6 @@ export default function AdvancedSearch({
   const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>({});
   const [activeSavedQuery, setActiveSavedQuery] = useState<{ id: string; name: string; queryString: string } | null>(null);
   
-  // Estados para o modal de IA baseada em prompt manual
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -92,6 +102,11 @@ export default function AdvancedSearch({
   useOutsideClick(saveModalRef, () => setIsSaveModalOpen(false));
   useOutsideClick(aiModalRef, () => setIsAiModalOpen(false));
 
+  /**
+   * Valida a string DBQL em tempo real procurando por erros de sintaxe (parênteses, aspas ou operadores mal formados).
+   * @param {string} query - A query crua do input.
+   * @returns {ValidationError[]} - Lista de erros encontrados.
+   */
   const validateDBQL = (query: string): ValidationError[] => {
     if (!query) return [];
     const errors: ValidationError[] = [];
@@ -282,36 +297,54 @@ export default function AdvancedSearch({
     return () => clearTimeout(timeout);
   }, [inputValue, context]);
 
-  const updateAndSearch = async (fullQuery: string, currentMode: 'tags' | 'advanced') => {
+  /**
+   * Sincroniza a busca com os parâmetros de URL, garantindo que consultas salvas 
+   * preservem seu ID no parâmetro "q", em vez de gerar novas consultas temporárias indiscriminadamente.
+   * 
+   * @param {string} fullQuery - A string consolidada que será buscada.
+   * @param {'tags' | 'advanced'} currentMode - Modo no qual a consulta foi originada.
+   * @param {string} [explicitQueryId] - Força a injeção de um ID (usado ao selecionar uma query listada).
+   */
+  const updateAndSearch = async (fullQuery: string, currentMode: 'tags' | 'advanced', explicitQueryId?: string) => {
     if (syntaxErrors.length > 0) return;
     const modeParamVal = currentMode === 'advanced' ? 'a' : 't';
     sessionStorage.setItem(STORAGE_KEY_MODE, currentMode);
     
-    let queryRefId = rawUrlQueryId;
+    // Inicia utilizando o ID passado (ex: clique no menu dropdown) ou o da URL
+    let queryRefId = explicitQueryId || rawUrlQueryId;
 
     if (fullQuery) {
-      try {
-        if (tempQueryIdRef.current) {
-          await fetch('/api/saved-queries', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: tempQueryIdRef.current, name: `Temporária (${context})`, queryString: fullQuery, context, visibility: 'temporary' })
-          });
-          queryRefId = tempQueryIdRef.current;
-        } else {
-          const res = await fetch('/api/saved-queries', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: `Temporária (${context})`, queryString: fullQuery, context, isTemporary: true, visibility: 'private' })
-          });
-          if (res.ok) {
-            const created = await res.json();
-            tempQueryIdRef.current = created._id;
-            queryRefId = created._id;
+      // Se não temos um ID explícito, mas a query digitada for idêntica à que já está ativa (salva),
+      // amarramos novamente ao ID oficial dela ao invés de forçar temporária.
+      if (!explicitQueryId && activeSavedQuery && fullQuery === activeSavedQuery.queryString) {
+         queryRefId = activeSavedQuery.id;
+      }
+      
+      // Se realmente não amarrou a nenhuma consulta salva, lida com criação de query temporária.
+      if (!queryRefId || queryRefId === tempQueryIdRef.current) {
+        try {
+          if (tempQueryIdRef.current) {
+            await fetch('/api/saved-queries', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: tempQueryIdRef.current, name: `Temporária (${context})`, queryString: fullQuery, context, visibility: 'temporary' })
+            });
+            queryRefId = tempQueryIdRef.current;
+          } else {
+            const res = await fetch('/api/saved-queries', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: `Temporária (${context})`, queryString: fullQuery, context, isTemporary: true, visibility: 'private' })
+            });
+            if (res.ok) {
+              const created = await res.json();
+              tempQueryIdRef.current = created._id;
+              queryRefId = created._id;
+            }
           }
+        } catch (e) {
+          console.error('Erro ao registrar query temporária', e);
         }
-      } catch (e) {
-        console.error('Erro ao registrar query temporária', e);
       }
     } else {
       queryRefId = '';
@@ -415,26 +448,26 @@ export default function AdvancedSearch({
   };
 
   const handleUpdateActiveQuery = async () => {
-  if (!activeSavedQuery || !isQueryModified) return;
-  try {
-    const res = await fetch('/api/saved-queries', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: activeSavedQuery.id,
-        name: activeSavedQuery.name, // <- Faltava passar o nome da query aqui!
-        queryString: currentQueryString,
-        context
-      })
-    });
-    if (res.ok) {
-      setActiveSavedQuery({ ...activeSavedQuery, queryString: currentQueryString });
-      fetchSavedQueries();
+    if (!activeSavedQuery || !isQueryModified) return;
+    try {
+      const res = await fetch('/api/saved-queries', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: activeSavedQuery.id,
+          name: activeSavedQuery.name,
+          queryString: currentQueryString,
+          context
+        })
+      });
+      if (res.ok) {
+        setActiveSavedQuery({ ...activeSavedQuery, queryString: currentQueryString });
+        fetchSavedQueries();
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar query salva', err);
     }
-  } catch (err) {
-    console.error('Erro ao atualizar query salva', err);
-  }
-};
+  };
 
   const handleDeleteSavedQuery = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -501,7 +534,6 @@ Solicitação do usuário em linguagem natural:
 
 Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
 
-  // Consultas salvas reais (excluindo as temporárias da listagem do usuário)
   const realSavedQueries = savedQueries.filter(q => !q.isTemporary);
 
   return (
@@ -539,12 +571,10 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
           </div>
         </div>
 
-        {/* BARRA INFERIOR COM BOTÕES E INDICADOR DE ESTADO DA QUERY */}
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
           <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
             {activeSavedQuery ? (
               <div className="flex items-center gap-1.5">
-                {/* Indicador visual de status (bolinha colorida) */}
                 <span 
                   className={`w-2 h-2 rounded-full ${isQueryModified ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} 
                   title={isQueryModified ? 'Consulta modificada (alterações não salvas)' : 'Consulta salva e sincronizada'}
@@ -585,7 +615,6 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <span>Salvar</span>
             </button>
 
-            {/* Dropdown de Consultas Salvas com o padrão exato solicitado */}
             <div className="relative">
               <button
                 ref={savedButtonRef}
@@ -630,15 +659,17 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                       <div
                         key={q._id}
                         onClick={() => {
+                          const targetMode = hasComplexSyntax(q.queryString) ? 'advanced' : 'tags';
                           setActiveSavedQuery({ id: q._id, name: q.name, queryString: q.queryString });
-                          if (hasComplexSyntax(q.queryString)) {
+                          if (targetMode === 'advanced') {
                             setMode('advanced');
                             setInputValue(q.queryString);
                           } else {
                             setMode('tags');
                             setTags(parseInputToTags(q.queryString));
                           }
-                          updateAndSearch(q.queryString, mode);
+                          // IMPORTANTE: passa o ID forçado para que a URL seja reconstruída com o Q param correto.
+                          updateAndSearch(q.queryString, targetMode, q._id);
                           setIsSavedDropdownOpen(false);
                         }}
                         className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${

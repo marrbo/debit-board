@@ -17,6 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import AdvancedSearch from '@/components/AdvancedSearch';
 import PageHeader from '@/components/PageHeader';
 import ProjectSelect from '@/components/ProjectSelect';
+import AssigneeSelect from '@/components/AssigneeSelect'; // Importação adicionada
 import { IIssue } from '@/models/Issue';
 import React from 'react';
 
@@ -276,9 +277,6 @@ export default function IssuesPage() {
   const [sortBy, setSortBy] = useState<string>('firstSeen');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const [openAssignee, setOpenAssignee] = useState<string | null>(null);
-  const [assigneeSearch, setAssigneeSearch] = useState('');
-
   const componentRef = useRef<HTMLDivElement>(null);
   const [reportIssues, setReportIssues] = useState<IIssue[]>([]);
   const handlePrint = useReactToPrint({ contentRef: componentRef, documentTitle: 'Relatorio_Issues' });
@@ -287,7 +285,7 @@ export default function IssuesPage() {
     if (status !== 'authenticated' || !session) return;
     const fetchBaseData = async () => {
       const [usersRes, projectsRes] = await Promise.all([
-        fetch('/api/user'),
+        fetch('/api/users'),
         fetch('/api/projects'),
       ]);
       if (usersRes.ok) setUsers(await usersRes.json());
@@ -370,7 +368,6 @@ export default function IssuesPage() {
       });
       if (!res.ok) throw new Error('Erro ao atualizar');
       fetchIssues(page);
-      setOpenAssignee(null);
     } catch (err: any) { alert(err.message); }
   };
 
@@ -551,14 +548,12 @@ export default function IssuesPage() {
           </div>
         }
         searchBar={
-          /* 🔽 AdvancedSearch agora com a classe correta para o Modo Claro */
           <div className="advanced-search-container">
             <AdvancedSearch onSearch={setSearchQuery} context="issues" placeholder="Search for issues, e.g. is:unresolved" />
           </div>
         }
       />
 
-      {/* 🔽 Botões Estilo Apple */}
       <div className="flex flex-wrap gap-3 justify-end">
         <button onClick={handleExportExcel} className="flex items-center gap-2 bg-apple-green hover:bg-[#28A745] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
           <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
@@ -578,13 +573,13 @@ export default function IssuesPage() {
         </div>
       ) : (
         <>
-          {/* 🔥 GRID COMPLETO E PAGINAÇÃO (PADRÃO APPLE) */}
-          <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden w-full transition-colors duration-200">
+          {/* 🔥 GRID COMPLETO (overflow-hidden REMOVIDO DAQUI) */}
+          <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none w-full transition-colors duration-200">
             
-            {/* 🍎 HEADER DA GRADE */}
+            {/* 🍎 HEADER DA GRADE (rounded-t-2xl ADICIONADO) */}
             <div className="grid grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] gap-0 text-[10px] 
             font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider bg-[#F2F2F7] dark:bg-apple-card-dark/60 border-b border-apple-border-light dark:border-apple-border-dark px-4 py-3 items-center hover:cursor-pointer 
-            lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] transition-colors">
+            lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] transition-colors rounded-t-2xl">
               <div></div>
               <div onClick={() => handleSort('fileName')} className="flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Issue {getSortIcon('fileName')}</div>
               <div onClick={() => handleSort('lastSeen')} className="hidden md:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Last Seen {getSortIcon('lastSeen')}</div>
@@ -601,13 +596,14 @@ export default function IssuesPage() {
             <div className="divide-y divide-[#E5E5EA] dark:divide-[#38383A] w-full">
               {sortedItems.map((issue) => {
                 const assignedUser = users.find(u => u.sub === issue.assignedTo);
-                const isOpenPopup = openAssignee === issue._id.toString();
+                
                 return (
                   <div 
                     key={issue._id.toString()} 
+                    /* relative REMOVIDO, last:rounded-b-2xl ADICIONADO */
                     className="grid grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] gap-0 items-center 
-                    bg-apple-card-light dark:bg-apple-card-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors duration-150 ease-in-out px-4 py-3 relative group 
-                    lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px]"
+                    bg-apple-card-light dark:bg-apple-card-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors duration-150 ease-in-out px-4 py-3 group 
+                    lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] last:rounded-b-2xl"
                   >
                     <div className="flex items-center justify-center">
                       <input type="checkbox" className="w-3.5 h-3.5 rounded bg-white dark:bg-apple-card-dark border-apple-border-light dark:border-apple-border-dark focus:ring-apple-blue" />
@@ -644,7 +640,6 @@ export default function IssuesPage() {
                       {issue.hitCount}
                     </div>
 
-                    {/* Pills de Severidade no Padrão Apple */}
                     <div className="hidden lg:block text-xs">
                       <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
                         issue.severity === 'critical' ? 'bg-[#FFD1D1] dark:bg-[#FF453A]/40 text-[#FF453A] dark:text-[#FF453A]' :
@@ -661,43 +656,21 @@ export default function IssuesPage() {
                     </div>
 
                     <div className="flex justify-center relative">
-                      <button onClick={() => setOpenAssignee(isOpenPopup ? null : issue._id.toString())} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[#F2F2F7] dark:hover:bg-[#38383A] transition-colors">
-                        {assignedUser ? (
-                          <UserAvatar name={assignedUser.name} sub={assignedUser.sub} className="w-6 h-6 text-[8px]" />
-                        ) : (
-                          <User className="w-3.5 h-3.5 text-apple-tertiary-light" />
-                        )}
-                      </button>
-
-                      {/* Popover de Assignee no Padrão Apple */}
-                      {isOpenPopup && (
-                        <div className="absolute right-0 top-8 z-50 w-72 bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-4 transition-colors">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Assignee</span>
-                            <button onClick={() => updateIssue(issue._id.toString(), '')} className="text-[10px] text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark transition-colors">Clear</button>
-                          </div>
-                          <div className="relative mb-3">
-                            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-apple-tertiary-light" />
-                            <input type="text" placeholder="Search users..." value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} className="w-full bg-[#F2F2F7] dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl pl-8 pr-3 py-1.5 text-xs text-apple-label-light dark:text-apple-label-dark transition-colors" />
-                          </div>
-                          <div className="space-y-1 max-h-48 overflow-y-auto">
-                            <div className="text-[9px] uppercase text-apple-tertiary-light dark:text-apple-tertiary-dark font-semibold px-1 mt-1 mb-1">Members</div>
-                            {users.filter(u => !assigneeSearch || u.name?.toLowerCase().includes(assigneeSearch.toLowerCase())).map(u => (
-                              <button key={u.sub} onClick={() => updateIssue(issue._id.toString(), u.sub)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] text-left transition-colors">
-                                <UserAvatar name={u.name} sub={u.sub} className="w-6 h-6 text-[8px]" />
-                                <span className="text-xs text-apple-label-light dark:text-apple-label-dark">{u.name || u.email}</span>
-                                {issue.assignedTo === u.sub && <Check className="w-3 h-3 text-apple-blue ml-auto" />}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="mt-3 pt-2 border-t border-apple-border-light dark:border-apple-border-dark">
-                            <button onClick={() => alert("Funcionalidade 'Invite Member' em breve!")} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-xl hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] text-left text-apple-secondary-light dark:text-apple-secondary-dark transition-colors">
-                              <UserPlus className="w-3.5 h-3.5 text-apple-tertiary-light" />
-                              <span className="text-xs">Invite Member (Em breve)</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <AssigneeSelect
+                        currentAssignee={
+                          assignedUser
+                            ? {
+                                id: assignedUser.sub,
+                                name: assignedUser.name || assignedUser.email,
+                                email: assignedUser.email,
+                                avatarUrl: assignedUser.image || assignedUser.avatarUrl,
+                              }
+                            : null
+                        }
+                        onSelectAssignee={(user) => {
+                          updateIssue(issue._id.toString(), user?.id || '');
+                        }}
+                      />
                     </div>
                   </div>
                 );
@@ -705,7 +678,7 @@ export default function IssuesPage() {
             </div>
           </div>
 
-          {/* Paginação no Padrão Apple */}
+          {/* Paginação */}
           <div className="flex justify-between items-center">
             <span className="text-apple-tertiary-light dark:text-apple-tertiary-dark text-sm">Página {page} de {totalPages}</span>
             <div className="flex gap-2">

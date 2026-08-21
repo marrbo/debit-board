@@ -17,7 +17,7 @@ export async function PUT(request: Request, { params }: { params: { slug: string
   const session = await getServerSession(authOptions);
   
   // Garantia de segurança: Apenas Admin Global pode salvar
-  if (session?.user?.tenantId !== 'tenant_admin') {
+  if (session?.user?.isAdmin !== true) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

@@ -8,7 +8,7 @@
       "command": "npm run dev",
       "serverReadyAction": {
         "action": "debugWithChrome",
-        "pattern": "https://localhost:3000",
+        "pattern": "Listening on  ${protocol}://${address}:${port}",
         "webRoot": "${workspaceFolder}",
       },
       "sourceMaps": true
@@ -25,7 +25,8 @@
       "type": "chrome",
       "request": "launch",
       "url": "https://localhost:3000",
-      "webRoot": "${workspaceFolder}"
+      "webRoot": "${workspaceFolder}",
+      "trace": true
     }
   ]
 }
