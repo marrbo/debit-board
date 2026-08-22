@@ -129,3 +129,37 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
   }
 }
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerAuthSession();
+    if (!session?.user?.tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = params;
+    const body = await req.json();
+    const { assigneeId } = body; // Recebe o ID do usuário selecionado (ou null para limpar)
+
+    await connectToDatabase();
+
+    // Garante que a observação pertence ao tenant do usuário logado
+    const updatedObservation = await Issue.findOneAndUpdate(
+      { _id: id, tenantId: session.user.tenantId },
+      { $set: { assigneeId: assigneeId || null } },
+      { new: true }
+    );
+
+    if (!updatedObservation) {
+      return NextResponse.json({ error: 'Observation not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedObservation);
+  } catch (error) {
+    console.error('Erro ao atualizar assignee da observation:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

@@ -12,7 +12,7 @@ export default function IssuesLayout({
       <Sidebar />
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-8 -mt-6">
+      <main className="flex-1 w-full h-screen overflow-y-auto">
         <div className="w-full mx-auto">
           {children}
         </div>

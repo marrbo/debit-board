@@ -28,31 +28,75 @@ function buildMongoCondition(isNot: boolean, key: string, rawValue: string): any
   return condition;
 }
 
+// 🛠️ Função para negar expressões complexas (evita erro do MongoDB com $not em operadores lógicos)
+function negateExpression(expr: any): any {
+  if (!expr) return {};
+  if (expr.$or) {
+    return { $nor: expr.$or };
+  }
+  if (expr.$and) {
+    return { $or: expr.$and.map(negateExpression) };
+  }
+  const keys = Object.keys(expr);
+  if (keys.length === 1) {
+    const field = keys[0];
+    const val = expr[field];
+    if (val && typeof val === 'object') {
+      if (val.$regex) {
+        return { [field]: { $not: { $regex: val.$regex, $options: val.$options || 'i' } } };
+      }
+      if (val.$ne !== undefined) {
+        return { [field]: val.$ne };
+      }
+    } else {
+      return { [field]: { $ne: val } };
+    }
+  }
+  return { $nor: [expr] };
+}
+
 // 🔥 PARSER DBQL COMPLETO: Suporte a OR, AND, NOT, ! e Parênteses com recursão
 function parseDBQL(queryString: string): any {
   if (!queryString || !queryString.trim()) return null;
 
-  // Normaliza espaços extras
   const queryStr = queryString.trim();
 
   // Função interna para tokenizar a string respeitando parênteses e operadores lógicos
   function tokenize(str: string) {
-    const regex = /\s*(AND|OR|NOT|\(|\)|!?[a-zA-Z0-9_]+:(?:"[^"]*"|\S+))\s*/gi;
+    const regex = /\s*(AND|OR|NOT|!|\(|\)|!?[a-zA-Z0-9_]+:(?:"[^"]*"|\S+))\s*/gi;
     const tokens: string[] = [];
     let match;
     let lastIndex = 0;
 
-    // Garante que pegamos todos os tokens válidos
     while ((match = regex.exec(str)) !== null) {
       if (match.index > lastIndex) {
-        // Se houver caracteres inesperados significativos entre os tokens, tratamos
         const unparsed = str.substring(lastIndex, match.index).trim();
         if (unparsed) tokens.push(unparsed);
       }
       tokens.push(match[1]);
       lastIndex = regex.lastIndex;
     }
-    return tokens;
+
+    // 🔥 Pós-processamento: Separa parênteses de fechamento grudados em valores (ex: branch:master))
+    const expandedTokens: string[] = [];
+    for (const t of tokens) {
+      if (t !== ')' && t.endsWith(')')) {
+        let clean = t;
+        const closingParens: string[] = [];
+        while (clean.endsWith(')') && clean.length > 1 && !clean.endsWith('"')) {
+          closingParens.unshift(')');
+          clean = clean.slice(0, -1);
+        }
+        if (closingParens.length > 0) {
+          expandedTokens.push(clean);
+          expandedTokens.push(...closingParens);
+          continue;
+        }
+      }
+      expandedTokens.push(t);
+    }
+
+    return expandedTokens;
   }
 
   const tokens = tokenize(queryStr);
@@ -71,7 +115,6 @@ function parseDBQL(queryString: string): any {
         if (operator === 'OR') {
           left = { $or: [left, right] };
         } else {
-          // AND implícito ou explícito
           left = { $and: [left, right] };
         }
       } else {
@@ -96,12 +139,11 @@ function parseDBQL(queryString: string): any {
       return expr;
     }
 
-    // Tratamento de operador NOT unário
-    if (token.toUpperCase() === 'NOT') {
-      tokenIndex++; // consome 'NOT'
+    // Tratamento de operador NOT unário ou '!'
+    if (token === '!' || token.toUpperCase() === 'NOT') {
+      tokenIndex++; // consome '!' ou 'NOT'
       const subExpr = parseTerm();
-      // Inverte a condição aplicando $nor ou negando o objeto
-      return { $not: subExpr };
+      return negateExpression(subExpr);
     }
 
     // Tratamento de termo folha (campo:valor ou !campo:valor)
@@ -173,15 +215,12 @@ export async function GET(req: NextRequest) {
     if (search) {
       const dbqlParsedQuery = parseDBQL(search);
       if (dbqlParsedQuery && Object.keys(dbqlParsedQuery).length > 0) {
-        // Mescla as condições da DBQL com o tenantId obrigatório usando $and
         query.$and = [
           { tenantId: session.user.tenantId },
           dbqlParsedQuery
         ];
-        // Remove o tenantId raiz duplicado para evitar conflito na query final do Mongoose
         delete query.tenantId;
       } else {
-        // Fallback de texto livre caso a query não siga o padrão DBQL
         query.$or = [
           { fileName: { $regex: search, $options: 'i' } },
           { filePath: { $regex: search, $options: 'i' } },

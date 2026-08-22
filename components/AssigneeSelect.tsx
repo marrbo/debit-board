@@ -1,207 +1,182 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { User as UserIcon, Search, Check, Loader2 } from 'lucide-react';
-
-export interface TenantUser {
-  id: string;
-  name: string;
-  email?: string;
-  avatarUrl?: string;
-}
+import { useState, useRef, useEffect } from "react";
+import { Search, Check, User } from "lucide-react";
 
 interface AssigneeSelectProps {
-  currentAssignee?: TenantUser | null;
-  onSelectAssignee: (user: TenantUser | null) => void;
+  users: any[];
+  value?: string | null;
+  onChange: (userId: string | null) => void;
+  className?: string;
 }
 
 export default function AssigneeSelect({
-  currentAssignee = null,
-  onSelectAssignee,
+  users = [],
+  value = null,
+  onChange,
+  className = "",
 }: AssigneeSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [users, setUsers] = useState<TenantUser[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [searchQuery, setSearchQuery] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Fechar o popover ao clicar fora dele
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isOpen]);
 
-  // Buscar usuários do Tenant na API ao abrir
-  useEffect(() => {
-    if (!isOpen) return;
+  const filteredUsers = users.filter((u) => {
+    const name = u.name || u.email || "";
+    const email = u.email || "";
+    return (
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
-    const fetchUsers = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const res = await fetch('/api/users');
-        if (!res.ok) throw new Error('Falha ao carregar usuários');
-        const data = await res.json();
-        
-        const rawUsers = data.users || data || [];
-
-        // 🔥 A MÁGICA ACONTECE AQUI: Mapeamos o 'sub' (da API) para 'id' (do Componente)
-        const mappedUsers: TenantUser[] = rawUsers.map((u: any) => ({
-          id: u.sub || u._id,
-          name: u.name || u.email || 'Usuário Desconhecido',
-          email: u.email,
-          avatarUrl: u.image || u.avatarUrl,
-        }));
-
-        setUsers(mappedUsers);
-      } catch (err: any) {
-        console.error('Erro ao carregar usuários:', err);
-        setError('Não foi possível carregar os usuários.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, [isOpen]);
-
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handleSelect = (user: TenantUser | null) => {
-    onSelectAssignee(user);
+  const handleSelect = (userId: string | null) => {
+    onChange(userId);
     setIsOpen(false);
   };
 
+  const currentUser = users.find((u) => (u.sub || u.id || u._id) === value);
+  const userName = currentUser
+    ? currentUser.name || currentUser.email || "Desconhecido"
+    : "";
+  const sub = currentUser
+    ? currentUser.sub || currentUser.id || currentUser._id
+    : "";
+
+  const colors = [
+    "bg-blue-600",
+    "bg-red-600",
+    "bg-emerald-600",
+    "bg-purple-600",
+    "bg-amber-600",
+    "bg-pink-600",
+  ];
+  const colorIndex = (sub || userName || "").length % colors.length;
+  const initial = userName ? userName.charAt(0).toUpperCase() : "U";
+
   return (
-    <div ref={popoverRef} className="relative inline-block text-left">
-      {/* Botão Gatilho (Exibido na célula da tabela) */}
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-apple-border-light/30 dark:hover:bg-[#2C2C2E] transition-colors focus:outline-none"
-        title="Alterar Assignee"
-      >
-        {currentAssignee ? (
-          <div className="flex items-center gap-2">
-            {currentAssignee.avatarUrl ? (
-              <img
-                src={currentAssignee.avatarUrl}
-                alt={currentAssignee.name}
-                className="w-6 h-6 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-apple-blue/10 text-apple-blue font-semibold text-[11px] flex items-center justify-center">
-                {currentAssignee.name.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <span className="text-xs font-medium text-apple-label-light dark:text-apple-label-dark max-w-[110px] truncate">
-              {currentAssignee.name}
-            </span>
+    <div
+      ref={popoverRef}
+      className={`relative align-middle text-center ${className}`}
+    >
+      {/* Gatilho Integrado: Exibe o Avatar/Nome se atribuído ou o botão tracejado se vazio */}
+      {currentUser ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="flex items-center gap-2 group focus:outline-none text-left"
+          title="Alterar responsável"
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${colors[colorIndex]}`}
+          >
+            {initial}
           </div>
-        ) : (
-          <div className="w-7 h-7 rounded-full border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-            <UserIcon className="w-4 h-4" />
-          </div>
-        )}
-      </button>
+          <span className="text-xs font-medium text-apple-label-light dark:text-apple-label-dark truncate max-w-[90px] group-hover:text-apple-blue transition-colors">
+            {userName}
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="w-8 h-8 rounded-full bg-apple-border-light/50 dark:bg-[#2C2C2E] flex items-center justify-center border border-dashed border-apple-tertiary-light/50 hover:border-apple-blue hover:bg-apple-blue/10 transition-all focus:outline-none"
+          title="Atribuir responsável"
+        >
+          <User className="w-3.5 h-3.5 text-apple-tertiary-light" />
+        </button>
+      )}
 
       {/* Popover Flutuante */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-2xl z-[9999] p-3 flex flex-col gap-3 font-sans">
-          {/* Cabeçalho */}
+        <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-2xl z-[9999] p-3 flex flex-col gap-3 font-sans">
           <div className="flex items-center justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-2">
             <span className="text-xs font-bold text-apple-label-light dark:text-apple-label-dark">
-              Assignee
+              Atribuir Responsável
             </span>
-            {currentAssignee && (
+            {value && (
               <button
                 type="button"
                 onClick={() => handleSelect(null)}
                 className="text-[11px] font-medium text-apple-tertiary-light hover:text-apple-red transition-colors"
               >
-                Clear
+                Limpar
               </button>
             )}
           </div>
 
-          {/* Campo de Busca */}
           <div className="relative flex items-center">
             <Search className="w-3.5 h-3.5 absolute left-3 text-apple-tertiary-light pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search users..."
+              placeholder="Buscar usuários..."
               className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl pl-8 pr-3 py-1.5 text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark placeholder:text-apple-tertiary-light"
               autoFocus
             />
           </div>
 
-          {/* Lista de Usuários */}
           <div className="max-h-52 overflow-y-auto flex flex-col gap-1 pr-1">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-6 text-apple-tertiary-light">
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                <span className="text-xs">Buscando usuários...</span>
-              </div>
-            ) : error ? (
-              <div className="text-xs text-apple-red text-center py-4">{error}</div>
-            ) : filteredUsers.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <div className="text-xs text-apple-tertiary-light text-center py-4">
                 Nenhum usuário encontrado.
               </div>
             ) : (
-              filteredUsers.map((user) => {
-                const isSelected = currentAssignee?.id === user.id;
+              filteredUsers.map((u) => {
+                const userId = u.sub || u.id || u._id;
+                const isSelected = value === userId;
+                const uName = u.name || u.email || "Desconhecido";
+                const uSub = u.sub || userId;
+                const uColorIndex =
+                  (uSub || uName || "").length % colors.length;
+
                 return (
                   <button
-                    key={user.id}
+                    key={userId}
                     type="button"
-                    onClick={() => handleSelect(user)}
+                    onClick={() => handleSelect(userId)}
                     className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors text-left ${
                       isSelected
-                        ? 'bg-apple-blue/10 text-apple-blue font-semibold'
-                        : 'hover:bg-apple-border-light/30 dark:hover:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark'
+                        ? "bg-apple-blue/10 text-apple-blue font-semibold"
+                        : "hover:bg-apple-border-light/30 dark:hover:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {user.avatarUrl ? (
-                        <img
-                          src={user.avatarUrl}
-                          alt={user.name}
-                          className="w-6 h-6 rounded-full object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-apple-border-light dark:bg-[#3A3A3C] text-apple-label-light dark:text-apple-label-dark font-medium text-[10px] flex items-center justify-center shrink-0">
-                          {user.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <div
+                        className={`w-6 h-6 rounded-full text-white font-medium text-[10px] flex items-center justify-center shrink-0 ${colors[uColorIndex]}`}
+                      >
+                        {uName.charAt(0).toUpperCase()}
+                      </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="truncate font-medium">{user.name}</span>
-                        {user.email && (
+                        <span className="truncate font-medium">{uName}</span>
+                        {u.email && (
                           <span className="text-[10px] text-apple-tertiary-light truncate">
-                            {user.email}
+                            {u.email}
                           </span>
                         )}
                       </div>
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5 shrink-0 text-apple-blue" />}
+                    {isSelected && (
+                      <Check className="w-3.5 h-3.5 shrink-0 text-apple-blue" />
+                    )}
                   </button>
                 );
               })

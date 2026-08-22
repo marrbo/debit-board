@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { 
   FileSpreadsheet, FileText, Search, UserPlus, Check, User, 
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Binoculars
+  Binoculars, ExternalLink,
+  Info
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { useReactToPrint } from 'react-to-print';
@@ -16,11 +17,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import AdvancedSearch from '@/components/AdvancedSearch';
 import PageHeader from '@/components/PageHeader';
-import ProjectSelect from '@/components/ProjectSelect';
-import AssigneeSelect from '@/components/AssigneeSelect'; // Importação adicionada
+import AssigneeSelect from '@/components/AssigneeSelect';
 import { IIssue } from '@/models/Issue';
 import React from 'react';
 
+/**
+ * Renderiza o Avatar do usuário de forma padronizada.
+ */
 function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string; className?: string }) {
   const initial = (name || sub || 'U').charAt(0).toUpperCase();
   const colors = ['bg-blue-600', 'bg-red-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 'bg-pink-600'];
@@ -32,9 +35,9 @@ function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string
   );
 }
 
-// ============================================================
-// 🔥 RELATÓRIO PDF COM TIMBRADO, AGRUPAMENTO E RESUMO EXECUTIVO
-// ============================================================
+/**
+ * Componente do Relatório PDF com agrupamentos e timbrado executivo.
+ */
 const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record<string, string> }) => {
   if (!issues.length) return null;
 
@@ -147,7 +150,7 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
       <table className="w-full text-xs border-collapse border border-gray-200">
         <thead className="bg-gray-100">
           <tr>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[30%]">Arquivo</th>
+            <th className="border border-gray-200 p-2 text-left font-bold w-[30%]">Arquivo / Observação</th>
             <th className="border border-gray-200 p-2 text-left font-bold w-[12%]">Branch</th>
             <th className="border border-gray-200 p-2 text-left font-bold w-[12%]">Status</th>
             <th className="border border-gray-200 p-2 text-left font-bold w-[15%]">Atribuído a</th>
@@ -250,28 +253,21 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
   );
 };
 
-// ============================================================
-// PÁGINA PRINCIPAL DE ISSUES (TEMA APPLE APLICADO)
-// ============================================================
-
+/**
+ * Página principal de exibição de Vulnerabilidades (Observations Feed).
+ */
 export default function IssuesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const [issues, setIssues] = useState<IIssue[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
-  const [filterSeverity, setFilterSeverity] = useState('');
-  const [filterProjectId, setFilterProjectId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [sortBy, setSortBy] = useState<string>('firstSeen');
@@ -284,12 +280,8 @@ export default function IssuesPage() {
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
     const fetchBaseData = async () => {
-      const [usersRes, projectsRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/projects'),
-      ]);
+      const usersRes = await fetch('/api/users');
       if (usersRes.ok) setUsers(await usersRes.json());
-      if (projectsRes.ok) setProjects(await projectsRes.json());
     };
     fetchBaseData();
   }, [session, status]);
@@ -299,12 +291,10 @@ export default function IssuesPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterStatus) params.set('status', filterStatus);
-      if (filterCategory) params.set('category', filterCategory);
-      if (filterBranch) params.set('branch', filterBranch);
-      if (filterSeverity) params.set('severity', filterSeverity);
-      if (filterProjectId !== 'all') params.set('projectId', filterProjectId);
-      if (searchStr) params.set('search', searchStr);
+      
+      if (searchStr) {
+        params.set('search', searchStr);
+      }
       
       params.set('page', pageNum.toString());
       params.set('limit', '20');
@@ -314,8 +304,12 @@ export default function IssuesPage() {
       const data = await res.json();
       setIssues(data.issues);
       setTotalPages(data.totalPages || 1);
-    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
-  }, [filterStatus, filterCategory, filterBranch, filterSeverity, filterProjectId, searchQuery, session, status]);
+    } catch (err: any) { 
+      setError(err.message); 
+    } finally { 
+      setLoading(false); 
+    }
+  }, [searchQuery, session, status]);
 
   useEffect(() => {
     fetchIssues(page);
@@ -323,8 +317,7 @@ export default function IssuesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterStatus, filterCategory, filterBranch, filterSeverity, filterProjectId, searchQuery]);
-
+  }, [searchQuery]);
 
   const usersMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -359,7 +352,7 @@ export default function IssuesPage() {
     });
   }, [issues, sortBy, sortOrder]);
 
-  const updateIssue = async (issueId: string, value: string) => {
+  const updateIssue = async (issueId: string, value: string | null) => {
     try {
       const res = await fetch('/api/observations', {
         method: 'PATCH',
@@ -373,12 +366,9 @@ export default function IssuesPage() {
 
   const fetchAllFilteredIssues = async () => {
     const params = new URLSearchParams();
-    if (filterStatus) params.set('status', filterStatus);
-    if (filterCategory) params.set('category', filterCategory);
-    if (filterBranch) params.set('branch', filterBranch);
-    if (filterSeverity) params.set('severity', filterSeverity);
-    if (searchQuery) params.set('search', searchQuery);
-    if (filterProjectId !== 'all') params.set('projectId', filterProjectId);
+    if (searchQuery) {
+      params.set('search', searchQuery);
+    }
     params.set('all', 'true');
     const res = await fetch(`/api/observations?${params}`);
     if (!res.ok) throw new Error('Erro ao buscar dados completos');
@@ -386,7 +376,7 @@ export default function IssuesPage() {
     return data.issues as IIssue[];
   };
 
-    const handleExportExcel = async () => {
+  const handleExportExcel = async () => {
     if (!confirm('Exportar todos os resultados atuais para Excel?')) return;
     try {
       const fullIssues = await fetchAllFilteredIssues();
@@ -395,13 +385,8 @@ export default function IssuesPage() {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet('Issues');
 
-      // ============================================================
-      // 🍎 NOVO CABEÇALHO ESTILO APPLE E COLUNAS REORDENADAS
-      // ============================================================
-      // 1. Inserir 4 linhas vazias no topo para acomodar o cabeçalho
       ws.spliceRows(1, 4);
 
-      // 2. Configurar Largura das Colunas (ORDEM INVERTIDA: Projeto, Repo, Branch, Arquivo...)
       ws.columns = [
         { header: 'Projeto', key: 'project', width: 20 },
         { header: 'Repositório', key: 'repository', width: 25 },
@@ -415,63 +400,46 @@ export default function IssuesPage() {
         { header: 'Hits', key: 'hitCount', width: 10 },
       ];
 
-      // 3. Inserir o Logo (CORRIGIDO: Remove o prefixo "data:image/png;base64," e usa o nativo do navegador)
-      // 👇 Copie o seu código base64 aqui. A string que você já tem serve perfeitamente.
-      const logoSvg = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQBAMAAAB8P++eAAAAMFBMVEUAAAAAff8Aev8Ae/8Aev9hrf9utP+UyP+52v/o9P8cHB5ISElISEqXl5je3t7////qY+UUAAAACnRSTlMAM2aZzN3f5+/50JrR+gAAAURJREFUSMftVDFSwzAQVOIPeBI/wDF+QJzoA9jHMPQ0/ICOhp6OlibU6R34QJ5AQ0/DE9IFMgMcd5JsS8qAoUqj7fa0vj2d7ixEQEBAwAExGM1lNUutwJGs5tmebixBoVWONYeJp6PQ5XJ32yqHDYfM110g4R5K7SsbbplQmOgpKlzDMUeSjtvKnNiNPngDiNWXHTcmuh44Qfxcr14Rz2EqRGTzLiUnPMOvp7p+2OCCE+Q2B10NgbtwhR814Rm35D10uarGOMMdvvDBI74DTCOXA1djnGGJaz5Y4Y6ccpc33kqIWCsgAlTS5RRRQtkv1A1KfOsy8a21MOq/TNo+oNOOdOC3x/Qx6Wt4+d8n/PNQqJS/jFksHKUZ1Co2Ju3gFvaIZz+vQuEuzcjsUmGb8OMVe3uY8bra5fC6TuLwIwsICDgkvgFF8FxdZN3g9gAAAABJRU5ErkJggg==`;
-      
-      // 🔥 CORREÇÃO CRUCIAL: Extrair apenas a parte base64
+      const logoSvg = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQBAMAAAB8P++eAAAAMFBMVEUAAAAAff8Aev8Ae/8Aev9hrf9utP+UyP+52v/o9P8cHB5ISElISEqXl5je3t7////qY+UUAAAACnRSTlMAM2aZzN3f5+/50JrR+gAAAURJREFUSMftVDFSwzAQVOIPeBI/wDF+QJzoA9jHMPQ0/ICOhp6OlibU6R34QJ5AQ0/DE9IFMgMcd5JsS8qAoUqj7fa0vj2d7ixEQEBAwAExGM1lNUutwJGs5tmebixBoVWONYeJp6PQ5XJ32yqHDYfM110g4R5K7SsllplQmOgpKlzDMUeSjtvKnNiNPngDiNWXHTcmuh44Qfxcr14Rz2EqRGTzLiUnPMOvp7p+2OCCE+Q2B10NgbtwhR814Rm35D10uarGOMMdvvDBI74DTCOXA1djnGGJaz5Y4Y6ccpc33kqIWCsgAlTS5RRRQtkv1A1KfOsy8a21MOq/TNo+oNOOdOC3x/Qx6Wt4+d8n/PNQqJS/jFksHKUZ1Co2Ju3gFvaIZz+vQuEuzcjsUmGb8OMVe3uY8bra5fC6TuLwIwsICDgkvgFF8FxdZN3g9gAAAABJRU5ErkJggg==`;
       const logoBase64 = logoSvg.replace(/^data:image\/\w+;base64,/, '');
-      const imageId = workbook.addImage({
-        base64: logoBase64,
-        extension: 'png'
-      });
+      const imageId = workbook.addImage({ base64: logoBase64, extension: 'png' });
+
       ws.addImage(imageId, {
-        tl: { col: 0, row: 0 }, // Posição: A1
-        ext: { width: 40, height: 40 } // Tamanho do logo
+        tl: { col: 0.1, row: 0.2 },
+        ext: { width: 45, height: 45 },
+        editAs: 'oneCell'
+      });
+      
+      ws.mergeCells('B1:H1');
+      const titleCell = ws.getCell('B1');
+      titleCell.value = 'Debit Board - Executive Report (Issues)';
+      titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: '003366' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+      ws.getRow(1).height = 30;
+
+      ws.mergeCells('B2:H2');
+      const subtitleCell = ws.getCell('B2');
+      subtitleCell.value = 'Relatório Geral de Vulnerabilidades de Projetos';
+      subtitleCell.font = { name: 'Arial', size: 12, italic: true, color: { argb: '666666' } };
+      subtitleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+      ws.getRow(2).height = 20;
+
+      ws.mergeCells('B3:H3');
+      const timestampCell = ws.getCell('B3');
+      timestampCell.value = `Exportado por DebitBoard em ${new Date().toLocaleString()}`;
+      timestampCell.font = { name: 'Arial', size: 10, color: { argb: '999999' } };
+      timestampCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+      const headerRow = ws.getRow(5);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.eachCell(cell => {
+        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
       });
 
-      // 4. Preencher Título e Subtítulo (Mesclando as células da coluna B até J)
-      ws.mergeCells('B1:J1');
-      const titleCell = ws.getCell('B1');
-      titleCell.value = 'Debit Board';
-      titleCell.font = { name: 'Arial', size: 22, bold: true, color: { argb: 'FF007AFF' } }; // Azul Apple
-      titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
-
-      ws.mergeCells('B2:J2');
-      const subCell = ws.getCell('B2');
-      subCell.value = 'Relatório Executivo de Segurança';
-      subCell.font = { name: 'Arial', size: 12, color: { argb: 'FF636366' } }; // Cinza Secundário Apple
-
-      ws.mergeCells('B3:J3');
-      const dateCell = ws.getCell('B3');
-      dateCell.value = `Gerado em: ${new Date().toLocaleString('pt-BR')}`;
-      dateCell.font = { name: 'Arial', size: 10, color: { argb: 'FF8E8E93' } }; // Cinza Terciário Apple
-
-      // 5. Linha de Espaçamento
-      ws.getRow(4).height = 20; 
-      
-      // ============================================================
-      // 🧊 🍎 CONGELAMENTO DAS 5 PRIMEIRAS LINHAS
-      // ============================================================
-      ws.views = [{ state: 'frozen', ySplit: 5 }];
-
-      // 6. Cabeçalho da Tabela (Linha 5 - Colorido e Fixo)
-      const headerRow = ws.getRow(5);
-      // 🔥 Ordem invertida aqui também
-      headerRow.values = ['Projeto', 'Repositório', 'Branch', 'Arquivo', 'Categoria', 'Status', 'Atribuído a', 'Severidade', 'SLA (Horas)', 'Hits'];
-      headerRow.font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF8E8E93' } }; // Cinza Apple
-      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-      headerRow.height = 25;
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E5EA' } }; // Cinza claro Apple para o cabeçalho
-
-      // ============================================================
-      // 📄 INSERÇÃO DOS DADOS (A partir da Linha 6)
-      // ============================================================
-      fullIssues.forEach((issue, index) => {
-        const rowIndex = 6 + index;
-        const row = ws.getRow(rowIndex);
-        // 🔥 Dados reordenados para corresponder à nova ordem das colunas
-        row.values = {
+      fullIssues.forEach(issue => {
+        const row = ws.addRow({
           project: issue.project || '',
           repository: issue.repository || '',
           branch: issue.branch,
@@ -481,217 +449,271 @@ export default function IssuesPage() {
           assignedTo: usersMap[issue.assignedTo || ''] || '',
           severity: issue.severity,
           slaHours: issue.slaHours,
-          hitCount: issue.hitCount,
-        };
+          hitCount: issue.hitCount
+        });
+        row.alignment = { vertical: 'middle' };
+        row.getCell('status').alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell('severity').alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell('hitCount').alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        row.eachCell(cell => {
+          cell.border = { top: {style:'thin', color:{argb:'E5E7EB'}}, left: {style:'thin', color:{argb:'E5E7EB'}}, bottom: {style:'thin', color:{argb:'E5E7EB'}}, right: {style:'thin', color:{argb:'E5E7EB'}} };
+        });
 
-        // 🔥 Linhas com cores alternadas (sutis)
-        if (index % 2 !== 0) {
-          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F7' } }; // Cinza Muito Claro
-        } else {
-          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }; // Branco
+        const statusCell = row.getCell('status');
+        if (issue.status === 'open' || issue.status === 'recurring') {
+          statusCell.font = { color: { argb: '991B1B' }, bold: true };
+          statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEE2E2' } };
+        } else if (issue.status === 'fixed') {
+          statusCell.font = { color: { argb: '065F46' }, bold: true };
+          statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
+        }
+        
+        const sevCell = row.getCell('severity');
+        if (issue.severity === 'critical') {
+          sevCell.font = { color: { argb: '991B1B' }, bold: true };
+          sevCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FECACA' } };
+        } else if (issue.severity === 'high') {
+          sevCell.font = { color: { argb: '9A3412' }, bold: true };
+          sevCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDD5' } };
         }
       });
 
-      // 7. Ativar o Filtro Automático na nova linha de cabeçalho (Linha 5)
-      // A coluna J continua sendo a 10ª (Hits), então A5:J5 continua perfeito.
-      ws.autoFilter = `A5:J5`;
-
-      // ============================================================
-      // ⬇️ GERAR E BAIXAR O ARQUIVO
-      // ============================================================
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `issues_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.href = URL.createObjectURL(blob);
+      link.download = `Observations_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) { 
-      console.error(err);
-      alert('Erro ao exportar Excel: ' + err.message); 
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert('Erro na exportação Excel: ' + err.message);
     }
   };
 
-  const handlePrintPDF = async () => {
+  const handleExportPDF = async () => {
     try {
+      setLoading(true);
       const fullIssues = await fetchAllFilteredIssues();
-      if (!fullIssues || fullIssues.length === 0) return alert('Nenhuma issue para imprimir');
       setReportIssues(fullIssues);
-      setTimeout(() => handlePrint(), 100);
-    } catch (err: any) { alert(err.message); }
+      setTimeout(() => {
+        handlePrint();
+        setTimeout(() => setReportIssues([]), 1000);
+      }, 500);
+    } catch (err: any) {
+      alert('Erro na geração do PDF: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getSortIcon = (field: string) => {
-    if (sortBy !== field) return null;
-    return sortOrder === 'asc' ? <ChevronUp className="w-3 h-3 inline-block ml-1" /> : <ChevronDown className="w-3 h-3 inline-block ml-1" />;
+  const statusColors: Record<string, string> = {
+    open: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
+    recurring: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
+    fixed: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+    wont_fix: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-500/10 dark:text-gray-400 dark:border-gray-500/20'
   };
 
-  if (status === 'loading') return <div className="py-10 text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando...</div>;
-  if (!session) return null;
+  const severityColors: Record<string, string> = {
+    critical: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+    high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+    low: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+  };
+
+  const thClass = "px-3 py-2 border-r text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-apple-border-light/30 transition-colors";
+  const borderColumnHeader = "flex items-center justify-center gap-1";
+
+  if (status === 'loading' || !session) {
+    return <div className="flex h-screen items-center justify-center bg-white dark:bg-[#1C1C1E]">
+      <div className="w-6 h-6 border-2 border-apple-blue border-t-transparent rounded-full animate-spin"></div>
+    </div>;
+  }
 
   return (
-    <div className="w-full space-y-6">
-      <div className="hidden">
-        <div ref={componentRef}>
-          <IssuesReport issues={reportIssues} usersMap={usersMap} />
-        </div>
-      </div>
+    <div className="flex flex-col h-screen overflow-hidden bg-[#F5F5F7] dark:bg-black">
+      <div style={{ display: 'none' }}><div ref={componentRef}><IssuesReport issues={reportIssues} usersMap={usersMap} /></div></div>
+      
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1400px] mx-auto p-6 space-y-6">
+          <PageHeader 
+            title="Observations Feed"
+            subtitle="Central de monitoramento de vulnerabilidades. Identifique, analise e delegue."
+            icon={<Binoculars className="w-6 h-6 text-apple-blue" />}
+            actions={
+              <div className="flex items-center gap-2">
+                <button onClick={handleExportExcel} className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors" title="Exportar Excel">
+                  <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
+                </button>
+                <button onClick={handleExportPDF} className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-red hover:bg-apple-red/10 rounded-md transition-colors" title="Relatório Executivo PDF">
+                  <FileText className="w-4 h-4" /> Exportar PDF
+                </button>
+              </div>
+            }
+          />
 
-      <PageHeader
-        title="Observations Feed"
-        icon={<Binoculars size="36px" />}
-        subtitle="Acompanhe as vulnerabilidades encontradas no seu código."
-        filters={
-          <div className="flex flex-wrap gap-2">
-            <ProjectSelect projects={projects} selectedId={filterProjectId} onChange={setFilterProjectId} placeholder="All Projects (Global)" />
+          <div className="w-full">
+            <AdvancedSearch 
+              onSearch={setSearchQuery} 
+              context="issues" 
+              placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
+            />
           </div>
-        }
-        searchBar={
-          <div className="advanced-search-container">
-            <AdvancedSearch onSearch={setSearchQuery} context="issues" placeholder="Search for issues, e.g. is:unresolved" />
-          </div>
-        }
-      />
 
-      <div className="flex flex-wrap gap-3 justify-end">
-        <button onClick={handleExportExcel} className="flex items-center gap-2 bg-apple-green hover:bg-[#28A745] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
-          <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
-        </button>
-        <button onClick={handlePrintPDF} className="flex items-center gap-2 bg-[#F2F2F7] dark:bg-[#38383A] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-xl text-sm font-medium transition-colors border border-[#E5E5EA] dark:border-transparent">
-          <FileText className="w-4 h-4" /> Imprimir PDF
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-10 text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando Issues...</div>
-      ) : error ? (
-        <div className="bg-[#FFD1D1] dark:bg-[#FF453A]/20 border border-[#FF453A]/40 rounded-xl p-6 text-[#FF453A]">{error}</div>
-      ) : issues.length === 0 ? (
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark shadow-sm">
-          <p className="text-base font-semibold">Nenhuma issue encontrada.</p>
-        </div>
-      ) : (
-        <>
-          {/* 🔥 GRID COMPLETO (overflow-hidden REMOVIDO DAQUI) */}
-          <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none w-full transition-colors duration-200">
-            
-            {/* 🍎 HEADER DA GRADE (rounded-t-2xl ADICIONADO) */}
-            <div className="grid grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] gap-0 text-[10px] 
-            font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider bg-[#F2F2F7] dark:bg-apple-card-dark/60 border-b border-apple-border-light dark:border-apple-border-dark px-4 py-3 items-center hover:cursor-pointer 
-            lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] transition-colors rounded-t-2xl">
-              <div></div>
-              <div onClick={() => handleSort('fileName')} className="flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Issue {getSortIcon('fileName')}</div>
-              <div onClick={() => handleSort('lastSeen')} className="hidden md:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Last Seen {getSortIcon('lastSeen')}</div>
-              <div onClick={() => handleSort('firstSeen')} className="hidden lg:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Age {getSortIcon('firstSeen')}</div>
-              <div onClick={() => handleSort('branch')} className="hidden lg:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Branch {getSortIcon('branch')}</div>
-              <div onClick={() => handleSort('category')} className="hidden lg:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Category {getSortIcon('category')}</div>
-              <div className="text-center hidden md:block">Hits</div>
-              <div onClick={() => handleSort('severity')} className="hidden lg:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">Severity {getSortIcon('severity')}</div>
-              <div onClick={() => handleSort('slaHours')} className="hidden lg:flex items-center gap-1 hover:text-apple-label-light dark:hover:text-apple-label-dark">SLA {getSortIcon('slaHours')}</div>
-              <div className="text-center hover:text-apple-label-light dark:hover:text-apple-label-dark" onClick={() => handleSort('assignedTo')}>Assignee {getSortIcon('assignedTo')}</div>
+          <div className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm overflow-hidden flex flex-col w-full h-[600px]">
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-apple-border-light/20 dark:bg-apple-border-dark/20 sticky top-0 z-10 backdrop-blur-md">
+                  <tr>
+                    <th className={`${thClass} w-[7%] pl-4`} onClick={() => handleSort('status')}>
+                      <div className={borderColumnHeader}>Status {sortBy==='status' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[30%]`} onClick={() => handleSort('fileName')}>
+                      <div className="inline-flex items-center">Arquivo / Observação {sortBy==='fileName' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[25%]`} onClick={() => handleSort('category')}>
+                      <div className="inline-flex items-center">Categoria {sortBy==='category' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[8%]` } onClick={() => handleSort('branch')}>
+                      <div className={borderColumnHeader}>Branch {sortBy==='branch' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[8%]`} onClick={() => handleSort('severity')}>
+                      <div className={borderColumnHeader}>Severidade {sortBy==='severity' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[10%]`} onClick={() => handleSort('slaDueAt')}>
+                      <div className={borderColumnHeader}>Previsão (SLA) {sortBy==='slaDueAt' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[6%]`} onClick={() => handleSort('assignedTo')}>
+                      <div className={borderColumnHeader}>Responsável {sortBy==='assignedTo' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
+                    </th>
+                    <th className={`${thClass} w-[5%] text-right pr-4`}>Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
+                  {loading && issues.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="w-6 h-6 border-2 border-apple-blue border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-xs text-apple-tertiary-light">Carregando observations...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-apple-red text-sm">{error}</td>
+                    </tr>
+                  ) : sortedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-apple-tertiary-light text-sm">Nenhuma vulnerabilidade encontrada.</td>
+                    </tr>
+                  ) : (
+                    sortedItems.map((issue) => {
+                      const isPastDue = issue.slaDueAt && new Date(issue.slaDueAt) < new Date();
+                      
+                      return (
+                        <tr key={issue._id.toString()} className="group hover:bg-apple-border-light/10 dark:hover:bg-apple-border-dark/10 transition-colors">
+                          <td className="px-3 py-3 pl-4 align-middle">
+                            <span className={`flex items-center justify-around px-2 py-0.5 text-[9px] font-bold ${statusColors[issue.status]}`}>
+                              {issue.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle min-w-0">
+                            <div className="flex flex-col gap-0.5 align-middle">
+                              <span className="text-xs font-semibold align-middle text-apple-label-light dark:text-apple-label-dark truncate" title={issue.fileName}>
+                                {issue.fileName}
+                              </span>
+                              <span className="text-[10px] align-middle font-mono text-apple-tertiary-light truncate" title={issue.filePath}>
+                                {issue.filePath}
+                              </span>
+                              <span className="text-[10px] align-middle font-medium text-apple-tertiary-light w-fit">
+                                {issue.hitCount} {issue.hitCount === 1 ? 'hit' : 'hits'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className="text-xs text-wrap-ellipsis text-apple-label-light dark:text-apple-label-dark leading-relaxed block" title={issue.category}>
+                              {issue.category}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className="text-xs flex items-center justify-center font-mono bg-apple-border-light/30 dark:bg-[#2C2C2E] px-1.5 py-0.5 rounded text-apple-tertiary-light whitespace-nowrap">
+                              {issue.branch}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className={`flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold uppercase rounded ${severityColors[issue.severity]}`}>
+                              {issue.severity}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            {issue.slaDueAt ? (
+                              <div className="flex flex-col gap-0.5 items-center">
+                                <span className={`text-[10px] from-neutral-50 font-mono ${isPastDue && (issue.status === 'open' || issue.status === 'recurring') ? 'text-apple-red' : 'text-apple-label-light dark:text-apple-label-dark'}`}>
+                                  {new Date(issue.slaDueAt).toLocaleDateString('pt-BR')}
+                                </span>
+                                {(issue.status === 'open' || issue.status === 'recurring') && (
+                                  <span className={`text-[10px] ${isPastDue ? 'text-apple-red font-bold' : 'text-apple-tertiary-light'}`}>
+                                    {isPastDue ? `Vencido há ${formatDistanceToNow(new Date(issue.slaDueAt), { locale: ptBR, addSuffix: false  })}` : formatDistanceToNow(new Date(issue.slaDueAt), { addSuffix: false, locale: ptBR })}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-apple-tertiary-light">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 flex items-center justify-center align-middle">
+                            <AssigneeSelect 
+                              users={users} 
+                              className="mt-2.5 flex items-center justify-center align-middle"
+                              value={issue.assignedTo} 
+                              onChange={(v) => updateIssue(issue._id.toString(), v)} 
+                            />
+                          </td>
+                          <td className="px-3 py-3 pr-4 align-middle text-right">
+                            <Link 
+                              href={`/observations/${issue._id}`}
+                              title="Ver Detalhes"
+                              className="inline-flex px-2 py-2 rounded-full hover:text-apple-blue border hover:border-blue-500 bg-apple-border-light/30 items-center justify-center text-apple-tertiary-light dark:text-apple-label-dark transition-colors"
+                            >
+                              <Info className="w-5 h-5 font-extralight" />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            {/* 🍎 CORPO DA GRADE */}
-            <div className="divide-y divide-[#E5E5EA] dark:divide-[#38383A] w-full">
-              {sortedItems.map((issue) => {
-                const assignedUser = users.find(u => u.sub === issue.assignedTo);
-                
-                return (
-                  <div 
-                    key={issue._id.toString()} 
-                    /* relative REMOVIDO, last:rounded-b-2xl ADICIONADO */
-                    className="grid grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] gap-0 items-center 
-                    bg-apple-card-light dark:bg-apple-card-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors duration-150 ease-in-out px-4 py-3 group 
-                    lg:grid-cols-[30px_1fr_110px_110px_80px_150px_60px_80px_60px_60px] last:rounded-b-2xl"
+            {!loading && totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-apple-border-light dark:border-apple-border-dark bg-white dark:bg-[#1C1C1E]">
+                <span className="text-xs text-apple-tertiary-light">
+                  Página {page} de {totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="p-1.5 rounded-lg border border-apple-border-light dark:border-apple-border-dark text-apple-tertiary-light hover:text-apple-label-light disabled:opacity-30 transition-colors"
                   >
-                    <div className="flex items-center justify-center">
-                      <input type="checkbox" className="w-3.5 h-3.5 rounded bg-white dark:bg-apple-card-dark border-apple-border-light dark:border-apple-border-dark focus:ring-apple-blue" />
-                    </div>
-
-                    <div className="overflow-hidden pr-2 min-w-0 flex flex-col gap-0.5">
-                      <Link href={`/observations/${issue._id}`} className="text-apple-label-light dark:text-apple-label-dark font-medium text-sm hover:text-apple-blue dark:hover:text-[#0A84FF] transition-colors truncate cursor-pointer">
-                        {issue.fileName}
-                      </Link>
-                      <div className="text-apple-tertiary-light dark:text-apple-tertiary-light text-[10px] font-mono truncate">{issue.filePath}</div>
-                    </div>
-
-                    <div className="hidden md:block text-xs text-apple-secondary-light dark:text-apple-secondary-dark">
-                      {formatDistanceToNow(new Date(issue.lastSeen), { addSuffix: false, locale: ptBR })}
-                    </div>
-
-                    <div className="hidden lg:block text-xs text-apple-secondary-light dark:text-apple-secondary-dark">
-                      {formatDistanceToNow(new Date(issue.firstSeen), { addSuffix: false, locale: ptBR })}
-                    </div>
-
-                    <div className="hidden lg:block text-xs truncate">
-                      <span className="bg-[#F2F2F7] dark:bg-[#38383A] text-apple-secondary-light dark:text-[#E5E5EA] px-2 py-0.5 rounded text-[10px] font-medium border border-[#E5E5EA] dark:border-transparent">
-                        {issue.branch}
-                      </span>
-                    </div>
-
-                    <div className="hidden lg:block text-xs">
-                      <span className="px-2 py-0.5 rounded bg-[#E3F2FD] dark:bg-[#0D47A1]/30 text-[#1565C0] dark:text-[#64B5F6] border border-[#E3F2FD] dark:border-[#0D47A1]/40 truncate max-w-[90px]">
-                        {issue.category}
-                      </span>
-                    </div>
-
-                    <div className="text-center font-mono text-sm text-apple-label-light dark:text-apple-label-dark font-bold hidden md:block">
-                      {issue.hitCount}
-                    </div>
-
-                    <div className="hidden lg:block text-xs">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                        issue.severity === 'critical' ? 'bg-[#FFD1D1] dark:bg-[#FF453A]/40 text-[#FF453A] dark:text-[#FF453A]' :
-                        issue.severity === 'high' ? 'bg-[#FFD1D1] dark:bg-[#FF453A]/40 text-[#FF453A] dark:text-[#FF453A]' :
-                        issue.severity === 'medium' ? 'bg-[#FFD60A]/20 text-[#FFD60A] dark:bg-[#FFD60A]/30 text-[#FFD60A] dark:text-[#FFD60A]' :
-                        'bg-[#F2F2F7] dark:bg-[#38383A] text-apple-tertiary-light dark:text-apple-tertiary-light'
-                      }`}>
-                        {issue.severity}
-                      </span>
-                    </div>
-
-                    <div className="hidden lg:block text-xs text-apple-secondary-light dark:text-apple-secondary-dark text-center">
-                      {issue.slaHours}h
-                    </div>
-
-                    <div className="flex justify-center relative">
-                      <AssigneeSelect
-                        currentAssignee={
-                          assignedUser
-                            ? {
-                                id: assignedUser.sub,
-                                name: assignedUser.name || assignedUser.email,
-                                email: assignedUser.email,
-                                avatarUrl: assignedUser.image || assignedUser.avatarUrl,
-                              }
-                            : null
-                        }
-                        onSelectAssignee={(user) => {
-                          updateIssue(issue._id.toString(), user?.id || '');
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="p-1.5 rounded-lg border border-apple-border-light dark:border-apple-border-dark text-apple-tertiary-light hover:text-apple-label-light disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Paginação */}
-          <div className="flex justify-between items-center">
-            <span className="text-apple-tertiary-light dark:text-apple-tertiary-dark text-sm">Página {page} de {totalPages}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="bg-[#F2F2F7] dark:bg-[#38383A] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] disabled:opacity-50 text-apple-label-light dark:text-apple-label-dark px-3 py-1 rounded-xl flex items-center gap-1 transition-colors border border-[#E5E5EA] dark:border-transparent">
-                <ChevronLeft className="w-4 h-4" /> Anterior
-              </button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="bg-[#F2F2F7] dark:bg-[#38383A] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] disabled:opacity-50 text-apple-label-light dark:text-apple-label-dark px-3 py-1 rounded-xl flex items-center gap-1 transition-colors border border-[#E5E5EA] dark:border-transparent">
-                Próximo <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

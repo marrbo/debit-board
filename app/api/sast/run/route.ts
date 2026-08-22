@@ -54,6 +54,9 @@ export async function POST(req: NextRequest) {
       issueMap.set(key, issue);
     });
 
+    // 🔍 Rastreia todas as chaves encontradas no scan atual para calcular os resolvidos
+    const foundKeys = new Set<string>();
+
     const patternResults = [];
     let totalOccurrences = 0;
     let failedPatterns = 0;
@@ -102,6 +105,7 @@ export async function POST(req: NextRequest) {
 
         for (const item of result.results) {
           const key = `${pattern._id.toString()}|${item.path}`;
+          foundKeys.add(key);
           const existingIssue = issueMap.get(key);
 
           if (existingIssue) {
@@ -126,7 +130,6 @@ export async function POST(req: NextRequest) {
             const now = new Date();
             const slaDueAt = new Date(now.getTime() + (pattern.slaHours || 72) * 3600 * 1000);
 
-            // 🔥 GRAVAÇÃO CORRETA DA SEVERIDADE E SLA
             newIssues.push({
               tenantId,
               scanId: newScan._id,
@@ -167,11 +170,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 🚀 Marca como resolved as issues que existiam anteriormente mas sumiram no scan atual
+    const resolvedUpdates: any[] = [];
+    issueMap.forEach((issue, key) => {
+      if (!foundKeys.has(key)) {
+        resolvedUpdates.push({
+          updateOne: {
+            filter: { _id: issue._id },
+            update: {
+              $set: {
+                status: 'resolved',
+                lastSeen: new Date(),
+              }
+            }
+          }
+        });
+      }
+    });
+
     if (newIssues.length > 0) {
       await Issue.insertMany(newIssues);
     }
     if (updates.length > 0) {
       await Issue.bulkWrite(updates);
+    }
+    if (resolvedUpdates.length > 0) {
+      await Issue.bulkWrite(resolvedUpdates);
     }
 
     newScan.patterns = (patternResults as any);

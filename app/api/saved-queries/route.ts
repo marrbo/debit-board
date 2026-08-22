@@ -69,6 +69,9 @@ export async function PUT(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
+
+    body.tenantId ??= session.user.tenantId;
+
     const { id, name, tenantId, queryString, context, visibility } = body;
 
     if (!id || !name || !queryString) {
