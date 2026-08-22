@@ -514,7 +514,7 @@ export default function DBQLAdvancedSearch({
       });
       if (res.ok) {
         const saved = await res.json();
-        setActiveSavedQuery({ id: saved._id, name: saved.name, queryString: saved.queryString });
+        setActiveSavedQuery({ id: saved._id, name: saved.name, queryString: saved.queryString, visibility: saved.visibility });
         setIsSaveModalOpen(false);
         setSaveName('');
         tempQueryIdRef.current = null;
@@ -680,7 +680,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               </button>
             )}
             {activeSavedQuery && activeSavedQuery.visibility !== 'temporary' && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex ml-5 items-center gap-1.5 border-l border-apple-border-light px-7">
                 <span 
                   className={`w-2 h-2 rounded-full ${isQueryModified ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} 
                   title={isQueryModified ? 'Consulta modificada (alterações não salvas)' : 'Consulta salva e sincronizada'}

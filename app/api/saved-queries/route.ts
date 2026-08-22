@@ -131,7 +131,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID obrigatório.' }, { status: 400 });
     }
 
-    const deleted = await SavedQuery.findOneAndDelete({ _id: id, useriId: session.user.id, tenantId: session.user.tenantId });
+    const deleted = await SavedQuery.findOneAndDelete({ _id: id, sub: session.user.id, tenantId: session.user.tenantId });
     if (!deleted) {
       return NextResponse.json({ error: 'Registro não encontrado.' }, { status: 404 });
     }
