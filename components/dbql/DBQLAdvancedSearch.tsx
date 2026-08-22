@@ -21,6 +21,8 @@ interface AdvancedSearchProps {
   context?: 'issues' | 'stats' | 'projects' | 'repositories';
   userId: string;
   onManageQueries?: () => void;
+  externalQuery?: string;
+  onExternalQueryChange?: (query: string) => void;
 }
 
 const STORAGE_KEY_MODE = 'debitboard_search_mode';
@@ -65,7 +67,9 @@ export default function DBQLAdvancedSearch({
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
   context = 'issues',
   userId = '',
-  onManageQueries
+  onManageQueries,
+  externalQuery,
+  onExternalQueryChange
 }: AdvancedSearchProps) {
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
@@ -106,6 +110,39 @@ export default function DBQLAdvancedSearch({
   useOutsideClick(helpModalRef, () => setIsHelpModalOpen(false));
   useOutsideClick(saveModalRef, () => setIsSaveModalOpen(false));
   useOutsideClick(aiModalRef, () => setIsAiModalOpen(false));
+
+  // Adicionar ref para controlar se a mudança veio de fora
+  const externalQueryRef = useRef<string | null>(null);
+
+  // Efeito para sincronizar com query externa
+  useEffect(() => {
+  if (externalQuery !== undefined) {
+    // Se a query externa for vazia, limpa tudo
+    if (externalQuery === '') {
+      setTags([]);
+      setInputValue('');
+      setActiveSavedQuery(null);
+      tempQueryIdRef.current = null;
+      // Não chama updateAndSearch para evitar loop
+      return;
+    }
+
+    // Se a query externa mudou e é diferente da atual
+    if (externalQuery !== currentQueryString) {
+      if (hasComplexSyntax(externalQuery)) {
+        setMode('advanced');
+        setInputValue(externalQuery);
+        setTags([]);
+      } else {
+        setMode('tags');
+        setTags(parseInputToTags(externalQuery));
+        setInputValue('');
+      }
+      // Atualiza a URL sem disparar nova busca? Vamos chamar updateAndSearch apenas se necessário
+      // mas para evitar loop, não chamamos onSearch aqui, apenas atualizamos o estado.
+    }
+  }
+}, [externalQuery]);
 
   const handleSuggestionSelect = (selectedValue: string) => {
     const tokenData = getEditingToken(inputValue);
@@ -421,7 +458,10 @@ export default function DBQLAdvancedSearch({
     
     window.history.replaceState(null, '', `?${params.toString()}`);
     
-    startTransition(() => { if (onSearch) onSearch(fullQuery); });
+    startTransition(() => {
+      if (onSearch) onSearch(fullQuery);
+      if (onExternalQueryChange) onExternalQueryChange(fullQuery);
+    });
   };
 
   const handleExecuteSearch = () => {
@@ -494,6 +534,7 @@ export default function DBQLAdvancedSearch({
     setSuggestions([]);
     setActiveSavedQuery(null);
     tempQueryIdRef.current = null;
+    // Chama updateAndSearch com string vazia
     updateAndSearch('', mode);
   };
 

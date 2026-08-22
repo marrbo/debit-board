@@ -37,10 +37,19 @@ export interface Settings {
   defaultProject?: string;
   defaultRepository?: string;
   reportTitle?: string;
-  ignoreTlsErrors?: boolean; // <-- NOVO CAMPO
+  ignoreTlsErrors?: boolean;
 }
 
+// Atualização do tipo ChartDataPoint para suportar múltiplos valores (se necessário)
 export interface ChartDataPoint {
   label: string;
   value: number;
+}
+
+// Novos tipos para o gráfico de projetos
+export interface ProjectDataPoint {
+  label: string;
+  total: number;
+  severity: Record<string, number>;
+  status: Record<string, number>;
 }

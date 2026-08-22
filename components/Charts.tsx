@@ -1,7 +1,6 @@
 // components/Charts.tsx
 'use client';
 
-import { SearchItem } from '@/lib/types';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +15,7 @@ import {
 } from 'chart.js';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import { useMemo } from 'react';
+import { ChartDataPoint } from '@/lib/types';
 
 ChartJS.register(
   CategoryScale,
@@ -29,76 +29,152 @@ ChartJS.register(
   Legend
 );
 
-type ChartDataPoint = { label: string; value: number };
+type ChartType = 'bar' | 'line' | 'pie' | 'project' | 'project-detail' | 'stacked-bar';
 
 interface ChartsProps {
-  data: SearchItem[] | ChartDataPoint[];
-  type: 'bar' | 'line' | 'pie' | 'project' | 'project-repo';
+  data?: ChartDataPoint[];
+  datasets?: any[];
+  labels?: string[];
+  type: ChartType;
+  colors?: string[];
+  onSliceClick?: (label: string) => void;
 }
 
-export default function Charts({ data, type }: ChartsProps) {
+export default function Charts({ data, datasets, labels, type, colors, onSliceClick }: ChartsProps) {
   const processed = useMemo(() => {
-    const isSearchItemArray = (arr: any[]): arr is SearchItem[] => {
-      return arr.length > 0 && 'hitCount' in arr[0];
-    };
-
-    if (isSearchItemArray(data)) {
-      if (type === 'project') {
-        const map = new Map<string, number>();
-        data.forEach((item) => {
-          const proj = item.project || 'Sem Projeto';
-          map.set(proj, (map.get(proj) || 0) + (item.hitCount || 0));
-        });
-        return { 
-          type: 'bar' as const, 
-          data: Array.from(map.entries()).map(([l, v]) => ({ label: l, value: v })) 
-        };
-      }
-      return { type: 'bar' as const, data: [] };
-    } else {
-      return { 
-        type: (type === 'line' ? 'line' : type === 'pie' ? 'pie' : 'bar') as 'bar' | 'line' | 'pie', 
-        data: data as ChartDataPoint[] 
+    // Caso múltiplos datasets (linha ou barra empilhada)
+    if (datasets && datasets.length > 0) {
+      return {
+        type: type === 'stacked-bar' ? 'bar' as const : 'line' as const,
+        labels: labels || datasets[0]?.labels || [],
+        datasets: datasets.map(ds => ({
+          ...ds,
+          spanGaps: true,
+          // Para barras empilhadas, garantir stack
+          stack: ds.stack || 'stack0',
+        })),
+        data: [],
       };
     }
-  }, [data, type]);
 
-  const chartData = {
-    labels: processed.data.map(d => d.label),
-    datasets: [
-      {
-        label: processed.type === 'line' ? 'Evolução' : processed.type === 'pie' ? 'Distribuição' : 'Ocorrências',
-        data: processed.data.map(d => d.value),
-        backgroundColor: processed.type === 'pie' 
-          ? ['#007AFF', '#AF52DE', '#FF9500', '#34C759', '#FF3B30', '#FF2D55', '#64D2FF', '#FFCC00', '#5856D6', '#30B0C0']
-          : '#007AFF',
-        borderColor: processed.type === 'pie' ? '#1C1C1E' : '#007AFF',
-        borderWidth: processed.type === 'pie' ? 2 : 2,
-        tension: 0.3,
-      }
-    ]
-  };
+    // Barras coloridas individuais (project-detail)
+    if (data && type === 'project-detail') {
+      return {
+        type: 'bar' as const,
+        labels: data.map(d => d.label),
+        datasets: [{
+          label: 'Ocorrências',
+          data: data.map(d => d.value),
+          backgroundColor: data.map(d => (d as any).color || '#007AFF'),
+          borderColor: data.map(d => (d as any).color || '#007AFF'),
+          borderWidth: 2,
+        }],
+        data: [],
+      };
+    }
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom' as const,
-        labels: { color: '#8E8E93', usePointStyle: true, boxWidth: 8 },
+    // Pie
+    if (data && type === 'pie') {
+      return {
+        type: 'pie' as const,
+        labels: data.map(d => d.label),
+        datasets: [{
+          data: data.map(d => d.value),
+          backgroundColor: colors || ['#007AFF', '#AF52DE', '#FF9500', '#34C759', '#FF3B30', '#FF2D55', '#64D2FF', '#FFCC00', '#5856D6', '#30B0C0'],
+          borderColor: '#1C1C1E',
+          borderWidth: 2,
+        }],
+        data: [],
+      };
+    }
+
+    // Linha simples
+    if (data && type === 'line') {
+      return {
+        type: 'line' as const,
+        labels: data.map(d => d.label),
+        datasets: [{
+          label: 'Evolução',
+          data: data.map(d => d.value),
+          backgroundColor: colors?.[0] || '#007AFF',
+          borderColor: colors?.[0] || '#007AFF',
+          borderWidth: 2,
+          tension: 0.3,
+        }],
+        data: [],
+      };
+    }
+
+    // Fallback barra
+    return {
+      type: 'bar' as const,
+      labels: data?.map(d => d.label) || [],
+      datasets: [{
+        label: 'Ocorrências',
+        data: data?.map(d => d.value) || [],
+        backgroundColor: '#007AFF',
+        borderColor: '#007AFF',
+        borderWidth: 2,
+      }],
+      data: [],
+    };
+  }, [data, datasets, labels, type, colors]);
+
+  const options = useMemo(() => {
+    const base: any = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom' as const,
+          labels: { color: '#8E8E93', usePointStyle: true, boxWidth: 8 },
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+        },
       },
-    },
-    scales: processed.type === 'pie' ? undefined : {
-      y: { beginAtZero: true, grid: { color: '#D1D1D6' }, ticks: { color: '#8E8E93' } },
-      x: { grid: { display: false }, ticks: { color: '#8E8E93' } },
-    },
-  };
+    };
+
+    if (processed.type !== 'pie') {
+      base.scales = {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#D1D1D6' },
+          ticks: { color: '#8E8E93' },
+          stacked: type === 'stacked-bar',
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#8E8E93' },
+          stacked: type === 'stacked-bar',
+        },
+      };
+    }
+
+    if (processed.type === 'pie' && onSliceClick) {
+      base.onHover = (event: any, elements: any) => {
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+      };
+      base.onClick = (event: any, elements: any) => {
+        if (elements.length > 0) {
+          const index = elements[0].index;
+          const label = processed.labels[index];
+          if (label) onSliceClick(label);
+        }
+      };
+    }
+
+    return base;
+  }, [processed, onSliceClick, type]);
 
   if (processed.type === 'line') {
-    return <Line data={chartData} options={options} />;
+    return <Line data={processed} options={options} />;
   }
+
   if (processed.type === 'pie') {
-    return <Pie data={chartData} options={options} />;
+    return <Pie data={processed} options={options} />;
   }
-  return <Bar data={chartData} options={options} />;
+
+  return <Bar data={processed} options={options} />;
 }

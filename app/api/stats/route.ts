@@ -2,10 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Issue } from '@/models/Issue';
-import { SearchRecord } from '@/models/SearchRecord'; // <-- Importado
-import { SASTScan } from '@/models/SASTScan';         // <-- Importado
+import { SearchRecord } from '@/models/SearchRecord';
+import { SASTScan } from '@/models/SASTScan';
 import { getServerAuthSession } from '@/lib/auth';
-import { subDays, format } from 'date-fns';            // <-- Adicionado format
+import { subDays, format } from 'date-fns';
 import { PipelineStage } from 'mongoose';
 import { parseSearchQuery } from '@/lib/searchParser';
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     matchStage = parseSearchQuery(searchQuery, matchStage);
   }
 
-  // ================= KPIs e Gráficos de Issue (Não mexa, estão excelentes) =================
+  // ================= KPIs e Gráficos de Issue =================
   // 1. KPIs Gerais
   const kpiPipeline: PipelineStage[] = [
     { $match: matchStage },
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   const kpiResult = await Issue.aggregate(kpiPipeline);
   const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0 };
 
-  // 2. Severidade
+  // 2. Severidade geral
   const severityPipeline: PipelineStage[] = [
     { $match: matchStage },
     { $group: { _id: "$severity", count: { $sum: 1 } } }
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     value: d.count
   }));
 
-  // 4. Projeto (TOP 10)
+  // 4. Projeto (TOP 10) + status/severidade
   const projectPipeline: PipelineStage[] = [
     { $match: matchStage },
     { $group: { _id: "$project", count: { $sum: 1 } } },
@@ -85,42 +85,134 @@ export async function GET(req: NextRequest) {
     { $limit: 10 }
   ];
   const projectData = await Issue.aggregate(projectPipeline);
-  const projectTotals = projectData.map((d: any) => ({
+
+  const projectStatusPipeline: PipelineStage[] = [
+    { $match: matchStage },
+    { $group: { _id: { project: "$project", status: "$status" }, count: { $sum: 1 } } },
+    { $sort: { "_id.project": 1, "_id.status": 1 } }
+  ];
+  const projectStatusData = await Issue.aggregate(projectStatusPipeline);
+
+  const projectSeverityPipeline: PipelineStage[] = [
+    { $match: matchStage },
+    { $group: { _id: { project: "$project", severity: "$severity" }, count: { $sum: 1 } } },
+    { $sort: { "_id.project": 1, "_id.severity": 1 } }
+  ];
+  const projectSeverityData = await Issue.aggregate(projectSeverityPipeline);
+
+  const projectStatusTotals = projectStatusData.reduce((acc: any, item: any) => {
+    const proj = item._id.project || 'Sem Projeto';
+    const status = item._id.status || 'unknown';
+    if (!acc[proj]) acc[proj] = {};
+    acc[proj][status] = item.count;
+    return acc;
+  }, {});
+
+  const projectSeverityTotals = projectSeverityData.reduce((acc: any, item: any) => {
+    const proj = item._id.project || 'Sem Projeto';
+    const sev = item._id.severity || 'unknown';
+    if (!acc[proj]) acc[proj] = {};
+    acc[proj][sev] = item.count;
+    return acc;
+  }, {});
+
+  const projectTotalsArray = projectData.map((d: any) => ({
     label: d._id || 'Sem Projeto',
-    value: d.count
+    value: d.count,
+    status: projectStatusTotals[d._id || 'Sem Projeto'] || {},
+    severity: projectSeverityTotals[d._id || 'Sem Projeto'] || {}
   }));
 
-  // ================= GRÁFICO DE LINHA (Substituído pela lógica do Dashboard) =================
-  // 🔥 Replicando a lógica do buildDateFilter do Dashboard
-  const buildDateFilter = (field: string) => {
-    let filter: any = { tenantId };
-    if (range === '24h') { filter[field] = { $gte: subDays(new Date(), 1) }; }
-    else if (range === '7d') { filter[field] = { $gte: subDays(new Date(), 7) }; }
-    else if (range === '14d') { filter[field] = { $gte: subDays(new Date(), 14) }; }
-    else if (range === '30d') { filter[field] = { $gte: subDays(new Date(), 30) }; }
-    return filter;
-  };
+  // ================= GRÁFICO DE LINHA (Evolução por Severidade e Status) =================
+  // 🔥 Duas agregações: uma por severidade e outra por status
+  const dateFilter = { $gte: subDays(new Date(), range === '24h' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 : 30) };
 
-  // Buscar SearchRecords e SASTScans no período
-  const searchFilter = buildDateFilter('createdAt');
-  const searchRecords = await SearchRecord.find(searchFilter).lean();
+  // Agregação por severidade
+  const evolutionSeverityPipeline: PipelineStage[] = [
+    { $match: { ...matchStage, firstSeen: dateFilter } },
+    { $group: {
+        _id: {
+          day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
+          severity: "$severity"
+        },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { "_id.day": 1 } }
+  ];
+  const evolutionSeverityData = await Issue.aggregate(evolutionSeverityPipeline);
 
-  const sastFilter = buildDateFilter('scanDate');
-  const sastScans = await SASTScan.find(sastFilter).lean();
+  // Agregação por status
+  const evolutionStatusPipeline: PipelineStage[] = [
+    { $match: { ...matchStage, firstSeen: dateFilter } },
+    { $group: {
+        _id: {
+          day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
+          status: "$status"
+        },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { "_id.day": 1 } }
+  ];
+  const evolutionStatusData = await Issue.aggregate(evolutionStatusPipeline);
 
-  // Consolidar dados por dia
-  const dailyData: Record<string, number> = {};
-  for (const record of searchRecords) {
-    const day = format(new Date(record.createdAt), 'yyyy-MM-dd');
-    dailyData[day] = (dailyData[day] || 0) + (record.totalHits || 0);
+  // Consolidar por dia
+  const days = range === '24h' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 : 30;
+  const today = new Date();
+  const chartData: any = [];
+
+  // Preencher todos os dias do período
+  for (let i = days - 1; i >= 0; i--) {
+    const date = subDays(today, i);
+    const key = format(date, 'yyyy-MM-dd');
+    chartData.push({
+      label: key,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      total: 0,
+      open: 0,
+      recurring: 0,
+      resolved: 0,
+      wontFix: 0
+    });
   }
-  for (const scan of sastScans) {
-    const day = format(new Date(scan.scanDate), 'yyyy-MM-dd');
-    dailyData[day] = (dailyData[day] || 0) + (scan.totalOccurrences || 0);
-  }
 
-  // Converter para o formato esperado pelo front-end
-  const chartData = Object.entries(dailyData).map(([label, value]) => ({ label, value }));
+  // Mapear dias para índices
+  const dayMap = new Map<string, number>();
+  chartData.forEach((item: any, index: number) => dayMap.set(item.label, index));
+
+  // Preencher severidade
+  evolutionSeverityData.forEach((item: any) => {
+    const day = item._id.day;
+    const idx = dayMap.get(day);
+    if (idx !== undefined) {
+      const sev = item._id.severity || 'unknown';
+      chartData[idx][sev] = (chartData[idx][sev] || 0) + item.count;
+      chartData[idx].total += item.count;
+    }
+  });
+
+  // Preencher status
+  evolutionStatusData.forEach((item: any) => {
+    const day = item._id.day;
+    const idx = dayMap.get(day);
+    if (idx !== undefined) {
+      const status = item._id.status || 'unknown';
+      if (status === 'wont_fix') {
+        chartData[idx].wontFix += item.count;
+      } else if (status === 'resolved') {
+        chartData[idx].resolved += item.count;
+      } else if (status === 'open') {
+        chartData[idx].open += item.count;
+      } else if (status === 'recurring') {
+        chartData[idx].recurring += item.count;
+      }
+      // Outros status podem ser ignorados ou adicionados dinamicamente
+    }
+  });
 
   // ================= Retorno Final =================
   return NextResponse.json({
@@ -134,7 +226,7 @@ export async function GET(req: NextRequest) {
     },
     severityTotals,
     categoryTotals,
-    projectTotals,
-    chartData, // <-- Agora alimentado pela lógica do Dashboard
+    projectTotals: projectTotalsArray,
+    chartData,
   });
 }
