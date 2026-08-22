@@ -106,7 +106,7 @@ export default function AssigneeSelect({
 
       {/* Popover Flutuante */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-2xl z-[9999] p-3 flex flex-col gap-3 font-sans">
+        <div className="absolute righ-250 top-full mt-2 w-72 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-2xl z-[9999] p-3 flex flex-col gap-3 font-sans">
           <div className="flex items-center justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-2">
             <span className="text-xs font-bold text-apple-label-light dark:text-apple-label-dark">
               Atribuir Responsável

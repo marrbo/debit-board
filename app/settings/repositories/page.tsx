@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import AdvancedSearch from '@/components/AdvancedSearch';
+import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 
 interface Repository {
   _id: string;
@@ -139,7 +139,11 @@ function RepositoriesContent() {
           </div>
         }
         searchBar={
-          <AdvancedSearch onSearch={setSearchQuery} context="repositories" placeholder="Buscar repositórios (ex: name:backend OR projectId:..." />
+          <DBQLAdvancedSearch 
+            onSearch={setSearchQuery} 
+            userId={session.user.id || ''}
+            context="repositories" 
+            placeholder="Buscar repositórios (ex: name:backend OR projectId:..." />
         }
       />
 

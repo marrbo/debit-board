@@ -1,13 +1,16 @@
-// components/AdvancedSearch.tsx
+// components/dbql/DBQLAdvancedSearch.tsx
 'use client';
 
 import { useState, useRef, useEffect, useMemo, useTransition, CSSProperties } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   Search, X, Code2, HelpCircle, AlertCircle, BookmarkPlus, 
-  Bookmark, Check, Bot, Trash2, Copy
+  Bookmark, Check, Bot, Trash2, Copy,
+  PlayCircleIcon
 } from 'lucide-react';
 import DBQLRichInput from './DBQLRichInput';
+import DBQLHelpModal from './DBQLHelpModal';
+import DBQLSuggestions from './DBQLSuggestions';
 
 /**
  * Propriedades do componente AdvancedSearch.
@@ -16,6 +19,7 @@ interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
   placeholder?: string;
   context?: 'issues' | 'stats' | 'projects' | 'repositories';
+  userId: string;
   onManageQueries?: () => void;
 }
 
@@ -56,10 +60,11 @@ interface ValidationError {
  * Componente de Busca Avançada utilizando DebitBoard Query Language (DBQL).
  * Suporta modo tags, modo DBQL livre, salvamento de consultas e validação ao vivo.
  */
-export default function AdvancedSearch({
+export default function DBQLAdvancedSearch({
   onSearch,
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
   context = 'issues',
+  userId = '',
   onManageQueries
 }: AdvancedSearchProps) {
   const searchParams = useSearchParams();
@@ -82,7 +87,7 @@ export default function AdvancedSearch({
   const [savedQueries, setSavedQueries] = useState<any[]>([]);
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
   const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>({});
-  const [activeSavedQuery, setActiveSavedQuery] = useState<{ id: string; name: string; queryString: string } | null>(null);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<{ id: string; name: string; queryString: string, visibility: 'private' | 'shared' | 'public' | 'temporary' } | null>(null);
   
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState('');
@@ -101,6 +106,27 @@ export default function AdvancedSearch({
   useOutsideClick(helpModalRef, () => setIsHelpModalOpen(false));
   useOutsideClick(saveModalRef, () => setIsSaveModalOpen(false));
   useOutsideClick(aiModalRef, () => setIsAiModalOpen(false));
+
+  const handleSuggestionSelect = (selectedValue: string) => {
+    const tokenData = getEditingToken(inputValue);
+    if (!tokenData) return;
+
+    const formattedValue = selectedValue.includes(' ') ? `"${selectedValue}"` : selectedValue;
+
+    const lastIndex = inputValue.lastIndexOf(tokenData.rawToken);
+    if (lastIndex !== -1) {
+      const before = inputValue.substring(0, lastIndex);
+      // Usamos o tokenData.operator ao invés de fixar ':'
+      const newRawToken = tokenData.rawToken.replace(tokenData.cleanToken, `${tokenData.fieldKey}${tokenData.operator}${formattedValue}`);
+      
+      const newValue = before + newRawToken + ' '; 
+      setInputValue(newValue);
+    }
+    
+    setIsOpen(false);
+    setSuggestions([]);
+    setActiveField(null);
+  };
 
   /**
    * Valida a string DBQL em tempo real procurando por erros de sintaxe (parênteses, aspas ou operadores mal formados).
@@ -125,7 +151,8 @@ export default function AdvancedSearch({
       if (cleanToken !== '') {
         const lower = cleanToken.toLowerCase();
         const isOperator = ['and', 'or', 'not'].includes(lower);
-        const isField = /^!?[a-zA-Z0-9_]+:/i.test(cleanToken);
+        // Atualizado para validar os novos operadores além de ":"
+        const isField = /^!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)/i.test(cleanToken);
         const isParens = /^[\(\)]+$/.test(token);
         
         if (!isOperator && !isField && !isParens) {
@@ -200,10 +227,12 @@ export default function AdvancedSearch({
     return errors.slice(0, 3);
   };
 
-  const hasComplexSyntax = (q: string): boolean => /[\(\)!\*]/.test(q);
+  const hasComplexSyntax = (q: string): boolean => 
+  /[\(\)!\*]|\b(>=|<=|>|<|!=|:|=|and|or|not)\b/i.test(q);
 
   const parseInputToTags = (input: string): string[] => {
-    const regex = /(?:(?:and|or)\s+not\s+|(?:and|or|not)\s+)?!?[a-zA-Z0-9_]+:(?:"[^"]*"|[^\s\(\)]+)/gi;
+    // Adicionado os operadores no Regex
+    const regex = /(?:(?:and|or)\s+not\s+|(?:and|or|not)\s+)?!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)(?:"[^"]*"|[^\s\(\)]+)/gi;
     const matches = input.match(regex) || [];
     return matches.map(m => m.trim());
   };
@@ -212,12 +241,17 @@ export default function AdvancedSearch({
     const tokens = text.split(/(?=\b(?:and|or|not)\b|\s)/i).map(t => t.trim()).filter(Boolean);
     const currentToken = tokens[tokens.length - 1] || '';
     const cleanToken = currentToken.replace(/^[\(!]+|\b(?:and\s+not|or\s+not|not|and|or)\s+/gi, '');
-    if (!cleanToken.includes(':')) return null;
-    const colonIndex = cleanToken.indexOf(':');
-    const fieldKey = cleanToken.substring(0, colonIndex).trim();
-    const rawQuery = cleanToken.substring(colonIndex + 1).trim();
+    
+    // Agora capturamos o operador dinamicamente
+    const match = cleanToken.match(/^([a-zA-Z0-9_]+)(>=|<=|>|<|!=|:|=)(.*)$/);
+    if (!match) return null;
+    
+    const fieldKey = match[1];
+    const operator = match[2];
+    const rawQuery = match[3];
     const query = rawQuery.replace(/^"/, '');
-    return { rawToken: currentToken, cleanToken, fieldKey, query };
+    
+    return { rawToken: currentToken, cleanToken, fieldKey, operator, query };
   };
 
   const fetchSavedQueries = async () => {
@@ -226,13 +260,13 @@ export default function AdvancedSearch({
       if (res.ok) {
         const data = await res.json();
         setSavedQueries(data);
-        const existingTemp = data.find((q: any) => q.isTemporary && q.context === context);
+        const existingTemp = data.find((q: any) => q.visibility === 'temporary');
         if (existingTemp) tempQueryIdRef.current = existingTemp._id;
         
         if (rawUrlQueryId) {
           const matched = data.find((q: any) => q._id === rawUrlQueryId || q.slug === rawUrlQueryId);
           if (matched) {
-            setActiveSavedQuery({ id: matched._id, name: matched.name, queryString: matched.queryString });
+            setActiveSavedQuery({ id: matched._id, name: matched.name, queryString: matched.queryString, visibility: matched.visibility });
             if (hasComplexSyntax(matched.queryString) || urlModeParam === 'a' || urlModeParam === 'advanced') {
               setMode('advanced');
               setInputValue(matched.queryString);
@@ -270,6 +304,19 @@ export default function AdvancedSearch({
     }
 
     setActiveField(tokenData.fieldKey);
+
+    // Hardcode para 'severity' para não depender da API falhar
+    if (tokenData.fieldKey.toLowerCase() === 'severity') {
+      const severities = ['critical', 'high', 'medium', 'low', 'info'];
+      const queryLower = tokenData.query.toLowerCase();
+      // Sugere se começar com a digitação, e remove da lista se já for exatamente o que está digitado
+      const filtered = severities.filter(s => s.startsWith(queryLower) && s !== queryLower);
+      
+      setSuggestions(filtered);
+      setIsOpen(filtered.length > 0);
+      return;
+    }
+
     if (abortControllerRef.current) abortControllerRef.current.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -282,9 +329,18 @@ export default function AdvancedSearch({
         );
         if (res.ok) {
           const data = await res.json();
-          const list = data.suggestions || data.values || [];
-          setSuggestions(list);
-          setIsOpen(list.length > 0);
+          // Remove duplicados absolutos com o Set
+          const list = Array.from(new Set(data.suggestions || data.values || []))
+            .filter((item): item is string => typeof item === 'string');
+          
+          // O "Pulo do Gato": Limitar a 10 itens E remover da lista a palavra que já foi digitada
+          const queryLower = tokenData.query.toLowerCase();
+          const filtered = list
+            .filter(item => item.toLowerCase() !== queryLower)
+            .slice(0, 10);
+
+          setSuggestions(filtered);
+          setIsOpen(filtered.length > 0);
         }
       } catch (err: any) {
         if (err.name !== 'AbortError') {
@@ -327,14 +383,15 @@ export default function AdvancedSearch({
             await fetch('/api/saved-queries', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: tempQueryIdRef.current, name: `Temporária (${context})`, queryString: fullQuery, context, visibility: 'temporary' })
+              body: JSON.stringify({ id: tempQueryIdRef.current, name: `Temporária (${context})`, queryString: fullQuery, context, visibility: 'temporary', userId: userId })
             });
             queryRefId = tempQueryIdRef.current;
           } else {
+            // Alterar o POST do temporário para salvar com visibility correta
             const res = await fetch('/api/saved-queries', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: `Temporária (${context})`, queryString: fullQuery, context, isTemporary: true, visibility: 'private' })
+              body: JSON.stringify({ name: `Temporária (${context})`, queryString: fullQuery, context, visibility: 'temporary', userId: userId })
             });
             if (res.ok) {
               const created = await res.json();
@@ -353,31 +410,52 @@ export default function AdvancedSearch({
     const params = new URLSearchParams(window.location.search);
     if (queryRefId) params.set('q', queryRefId);
     else params.delete('q');
-    params.set('m', modeParamVal);
+    
+    // Aqui nós removemos o parâmetro se não for avançado para manter a URL limpa!
+    if (currentMode === 'advanced') {
+      params.set('m', 'a');
+    } else {
+      params.delete('m');
+    }
     params.delete('mode');
     
     window.history.replaceState(null, '', `?${params.toString()}`);
+    
     startTransition(() => { if (onSearch) onSearch(fullQuery); });
   };
+
+  const handleExecuteSearch = () => {
+  if (syntaxErrors.length > 0) return;
+
+  if (mode === 'advanced') {
+    updateAndSearch(inputValue, mode);
+  } else {
+    const trimmedInput = inputValue.trim();
+    if (trimmedInput) {
+      // Se a string tiver sintaxe avançada, muda para modo advanced
+      if (hasComplexSyntax(trimmedInput)) {
+        setMode('advanced');
+        setInputValue(trimmedInput);
+        updateAndSearch(trimmedInput, 'advanced');
+      } else {
+        // Comportamento normal: adiciona como tag
+        const newTags = [...tags, trimmedInput];
+        setTags(newTags);
+        setInputValue('');
+        updateAndSearch(newTags.join(' '), mode);
+      }
+    } else {
+      // Apenas busca as tags existentes
+      updateAndSearch(tags.join(' '), mode);
+    }
+  }
+  setIsOpen(false);
+};
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (syntaxErrors.length > 0) return;
-
-      if (mode === 'advanced') {
-        updateAndSearch(inputValue, mode);
-      } else {
-        if (inputValue.trim()) {
-          const newTags = [...tags, inputValue.trim()];
-          setTags(newTags);
-          setInputValue('');
-          updateAndSearch(newTags.join(' '), mode);
-        } else {
-          updateAndSearch(tags.join(' '), mode);
-        }
-      }
-      setIsOpen(false);
+      handleExecuteSearch();
     } else if (e.key === 'Backspace' && mode === 'tags' && !inputValue && tags.length > 0) {
       const newTags = tags.slice(0, -1);
       setTags(newTags);
@@ -567,13 +645,41 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 rows={2}
                 className="!bg-transparent !border-none !p-0 shadow-none py-1.5 px-0 z-10" 
               />
+              
+              {/* Adicione o novo dropdown AQUI */}
+              <DBQLSuggestions
+                isOpen={isOpen}
+                suggestions={suggestions}
+                activeField={activeField}
+                onSelect={handleSuggestionSelect}
+                onClose={() => setIsOpen(false)}
+              />
             </div>
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
           <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
-            {activeSavedQuery ? (
+            {(tags.length > 0 || inputValue) && (
+              <div className="flex items-center gap-1.5 mr-5">
+                <button 
+                  type="button" 
+                  onClick={handleExecuteSearch}
+                  disabled={syntaxErrors.length > 0}
+                  className="text-apple-tertiary-light hover:text-apple-green transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-apple-tertiary-light"
+                >
+                  <PlayCircleIcon className="w-3 h-3" />
+                  <span>Executar</span>
+                </button>
+              </div>
+            )}
+            {(tags.length > 0 || inputValue) && (
+              <button type="button" onClick={clearAll} className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1">
+                <X className="w-3 h-3" />
+                <span>Limpar</span>
+              </button>
+            )}
+            {activeSavedQuery && activeSavedQuery.visibility !== 'temporary' && (
               <div className="flex items-center gap-1.5">
                 <span 
                   className={`w-2 h-2 rounded-full ${isQueryModified ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} 
@@ -582,14 +688,6 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <span>Consulta: <strong className="text-apple-label-light dark:text-apple-label-dark">{activeSavedQuery.name}</strong></span>
                 {isQueryModified && <span className="text-amber-500 font-semibold text-[10px]">(modificada)</span>}
               </div>
-            ) : (
-              <span>Modo avançado</span>
-            )}
-            {(tags.length > 0 || inputValue) && (
-              <button type="button" onClick={clearAll} className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1 ml-1">
-                <X className="w-3 h-3" />
-                <span>Limpar</span>
-              </button>
             )}
           </div>
 
@@ -660,7 +758,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         key={q._id}
                         onClick={() => {
                           const targetMode = hasComplexSyntax(q.queryString) ? 'advanced' : 'tags';
-                          setActiveSavedQuery({ id: q._id, name: q.name, queryString: q.queryString });
+                          setActiveSavedQuery({ id: q._id, name: q.name, queryString: q.queryString, visibility: q.visibility || 'private' });
                           if (targetMode === 'advanced') {
                             setMode('advanced');
                             setInputValue(q.queryString);
@@ -715,14 +813,23 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <Bot className="w-4 h-4" />
             </button>
 
-            <button
+            {/* Botão que abre o modal */}
+            <button 
               type="button"
               onClick={() => setIsHelpModalOpen(true)}
+              className="ml-2 p-2 text-gray-400 hover:text-[#007AFF] transition-colors"
               title="Ajuda DBQL"
-              className="p-1.5 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 transition-colors"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-5 h-5" />
             </button>
+
+            {/* Instância do Modal Desacoplado */}
+            <DBQLHelpModal 
+              isOpen={isHelpModalOpen} 
+              onClose={() => setIsHelpModalOpen(false)} 
+              context={context} 
+            />
+            
           </div>
         </div>
       </div>

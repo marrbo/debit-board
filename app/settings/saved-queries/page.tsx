@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Bookmark, Trash2, Edit3, Plus, Play, X } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import DBQLRichInput from '@/components/DBQLRichInput';
+import DBQLRichInput from '@/components/dbql/DBQLRichInput';
 
 interface SavedQueryItem {
   _id: string;

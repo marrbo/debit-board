@@ -1,7 +1,8 @@
-import mongoose, { Schema, Document, ObjectId } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISavedQuery extends Document {
   tenantId: string;
+  sub: string;
   name: string;
   queryString: string;
   context: string;
@@ -10,7 +11,8 @@ export interface ISavedQuery extends Document {
 }
 
 const SavedQuerySchema: Schema = new Schema({
-  tenantId: { type: String, required: true, index: true },
+  tenantId: { type: String, required: true, index: true, ref: 'Tenant' },
+  sub: { type: String, required: true, index: true, ref: 'User' },
   name: { type: String, required: true },
   queryString: { type: String, required: true },
   context: { type: String, default: 'issues' },

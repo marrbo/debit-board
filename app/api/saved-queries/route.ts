@@ -10,16 +10,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userId = session.user.id; // sub do OpenID
+  const tenantId = session.user.tenantId;
+
   try {
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const context = searchParams.get('context') || '';
 
-    const query: any = { tenantId: session.user.tenantId };
-    if (context) query.context = context;
+    // Monta a condição com $or
+    const filter: any = {
+      $or: [
+        // 1. Queries do próprio usuário no seu tenant (todas as visibilidades)
+        { tenantId: tenantId, sub: userId },
+        // 2. Queries públicas (qualquer tenant/user)
+        { visibility: 'public' },
+        // 3. Queries compartilhadas no mesmo tenant
+        { tenantId: tenantId, visibility: 'shared' },
+        // 4. Queries temporárias no mesmo tenant
+        // { tenantId: tenantId, visibility: 'temporary' }
+      ]
+    };
 
-    const queries = await SavedQuery.find(query).sort({ createdAt: -1 }).lean();
+    // Se houver filtro por contexto, adiciona à raiz (aplica a todos os documentos)
+    if (context) filter.context = context;
+
+    const queries = await SavedQuery.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
     return NextResponse.json(queries);
+
   } catch (error: any) {
     console.error('❌ Erro ao buscar SavedQueries:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -36,8 +57,7 @@ export async function POST(req: NextRequest) {
     await connectToDatabase();
     
     const body = await req.json();
-    
-    const { name, tenantId, queryString, context, visibility } = body;
+    const { name, tenantId, sub: userId, queryString, context, visibility } = body;
 
     if (!name || !queryString) {
       return NextResponse.json({ error: 'Nome e query são obrigatórios.' }, { status: 400 });
@@ -46,7 +66,8 @@ export async function POST(req: NextRequest) {
     
 
     const newSavedQuery = await SavedQuery.create({
-      tenantId,
+      tenantId: tenantId || session.user.tenantId,
+      sub: userId || session.user.id,
       name,
       queryString,
       context: context || 'issues',
@@ -72,14 +93,14 @@ export async function PUT(req: NextRequest) {
 
     body.tenantId ??= session.user.tenantId;
 
-    const { id, name, tenantId, queryString, context, visibility } = body;
+    const { id, name, sub, tenantId, queryString, context, visibility } = body;
 
     if (!id || !name || !queryString) {
       return NextResponse.json({ error: 'ID, nome e query são obrigatórios.' }, { status: 400 });
     }
 
     const updated = await SavedQuery.findOneAndUpdate(
-      { _id: id, tenantId },
+      { _id: id, tenantId, sub: session.user.id },
       { name, queryString, context: context || 'issues', visibility },
       { new: true }
     );
@@ -110,7 +131,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID obrigatório.' }, { status: 400 });
     }
 
-    const deleted = await SavedQuery.findOneAndDelete({ _id: id, tenantId: session.user.tenantId });
+    const deleted = await SavedQuery.findOneAndDelete({ _id: id, useriId: session.user.id, tenantId: session.user.tenantId });
     if (!deleted) {
       return NextResponse.json({ error: 'Registro não encontrado.' }, { status: 404 });
     }

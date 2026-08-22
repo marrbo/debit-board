@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RefreshCw, ListTree } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import AdvancedSearch from '@/components/AdvancedSearch';
+import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 
 interface Project {
   _id: string;
@@ -126,7 +126,11 @@ export default function ProjectsPage() {
           </div>
         }
         searchBar={
-          <AdvancedSearch onSearch={setSearchQuery} context="projects" placeholder="Buscar projetos (ex: name:Portal)" />
+          <DBQLAdvancedSearch 
+            onSearch={setSearchQuery} 
+            userId={session.user.id || ''}
+            context="projects" 
+            placeholder="Buscar projetos (ex: name:Portal)" />
         }
       />
 

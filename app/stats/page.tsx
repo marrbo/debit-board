@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Charts from '@/components/Charts';
 import PageHeader from '@/components/PageHeader';
-import AdvancedSearch from '@/components/AdvancedSearch';
+import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import { ChartDataPoint } from '@/lib/types';
 import { BarChart3 } from 'lucide-react';
 
@@ -62,7 +62,10 @@ export default function StatsPage() {
         icon={<BarChart3 size="36px" />}
         subtitle="Visão geral das issues de segurança do seu Tenant."
         searchBar={
-          <AdvancedSearch onSearch={setSearchQuery} placeholder="Search stats, e.g. severity:critical OR project:my-api" context="issues"/>
+          <DBQLAdvancedSearch 
+            onSearch={setSearchQuery} 
+            userId={session?.user.id || ''}
+            placeholder="Search stats, e.g. severity:critical OR project:my-api" context="issues"/>
         }
       />
 

@@ -6,16 +6,16 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  FileSpreadsheet, FileText, Search, UserPlus, Check, User, 
+  FileSpreadsheet, FileText,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Binoculars, ExternalLink,
+  Binoculars,
   Info
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { useReactToPrint } from 'react-to-print';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import AdvancedSearch from '@/components/AdvancedSearch';
+import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import PageHeader from '@/components/PageHeader';
 import AssigneeSelect from '@/components/AssigneeSelect';
 import { IIssue } from '@/models/Issue';
@@ -554,8 +554,9 @@ export default function IssuesPage() {
           />
 
           <div className="w-full">
-            <AdvancedSearch 
+            <DBQLAdvancedSearch 
               onSearch={setSearchQuery} 
+              userId={session.user.id || ''}
               context="issues" 
               placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
             />
@@ -675,9 +676,9 @@ export default function IssuesPage() {
                             <Link 
                               href={`/observations/${issue._id}`}
                               title="Ver Detalhes"
-                              className="inline-flex px-2 py-2 rounded-full hover:text-apple-blue border hover:border-blue-500 bg-apple-border-light/30 items-center justify-center text-apple-tertiary-light dark:text-apple-label-dark transition-colors"
+                              className="inline-flex p-2 rounded-full hover:text-apple-blue border hover:border-blue-500 bg-apple-border-light/30 items-center justify-center text-apple-tertiary-light dark:text-apple-label-dark transition-colors"
                             >
-                              <Info className="w-5 h-5 font-extralight" />
+                              <Info className="w-4 h-4 font-extralight" />
                             </Link>
                           </td>
                         </tr>
