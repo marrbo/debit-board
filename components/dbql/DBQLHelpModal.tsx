@@ -19,7 +19,7 @@ const contextPropertiesMapping: Record<string, { prop: string; desc: string; ex:
     { prop: 'branch', desc: 'Branch do repositório', ex: 'branch:main' },
     { prop: 'project', desc: 'Nome do projeto', ex: 'project:GEPIN_AS' },
     { prop: 'repository', desc: 'Repositório', ex: 'repository:repo-name' },
-    { prop: 'status', desc: 'Status da issue (open, fixed, etc.)', ex: 'status:open' },
+    { prop: 'status', desc: 'Status da issue (open, resolved, etc.)', ex: 'status:open' },
     { prop: 'is', desc: 'Estado especial', ex: 'is:unresolved' },
   ],
   // Exemplo de como escalar para outros contextos futuramente:

@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       open: statsMap['open'] || 0,
       recurring: statsMap['recurring'] || 0,
       overdue: overdueCount,
-      fixed: statsMap['fixed'] || 0,
+      resolved: statsMap['resolved'] || 0,
       wont_fix: statsMap['wont_fix'] || 0,
     }
   });

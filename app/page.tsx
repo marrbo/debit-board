@@ -14,7 +14,7 @@ export default function Dashboard() {
     issuesStats: {
       open: number;
       recurring: number;
-      fixed: number;
+      resolved: number;
       overdue: number;
       wont_fix: number;
     };
@@ -23,7 +23,7 @@ export default function Dashboard() {
     totalRecords: 0,
     totalHits: 0,
     uniqueGerencia: 0,
-    issuesStats: { open: 0, recurring: 0, fixed: 0, wont_fix: 0, overdue: 0 },
+    issuesStats: { open: 0, recurring: 0, resolved: 0, wont_fix: 0, overdue: 0 },
   });
   const [period, setPeriod] = useState('7d');
   const [startDate, setStartDate] = useState('');
@@ -113,7 +113,7 @@ export default function Dashboard() {
             </div>
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 text-center shadow-sm transition-colors">
               <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase font-bold">Corrigidas</p>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.issuesStats.fixed}</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.issuesStats.resolved}</p>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/30 border border-gray-200 dark:border-slate-600/40 rounded-xl p-4 text-center shadow-sm transition-colors">
               <p className="text-xs text-gray-500 dark:text-slate-400 uppercase font-bold">Não Corrigir</p>

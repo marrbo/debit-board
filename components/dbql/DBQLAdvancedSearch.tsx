@@ -593,7 +593,7 @@ Abaixo está a documentação técnica oficial da sintaxe DBQL para você seguir
 - branch: Nome do branch (ex: branch:main)
 - project: Nome do projeto (ex: project:GEPIN_AS)
 - repository: Nome do repositório (ex: repository:my-backend-api)
-- status: Status atual (open, fixed, recurring, wont_fix)
+- status: Status atual (new, open, resolved, recurring, wont_fix)
 - is: Filtros especiais (ex: is:unresolved)
 - fileName: Nome do arquivo, suporta curingas (*) -> Ex: fileName:*Controller.cs
 

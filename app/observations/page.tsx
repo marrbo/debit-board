@@ -65,7 +65,7 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
 
   const totalIssues = issues.length;
   const totalOpen = issues.filter(i => i.status === 'open' || i.status === 'recurring').length;
-  const totalFixed = issues.filter(i => i.status === 'fixed').length;
+  const totalFixed = issues.filter(i => i.status === 'resolved').length;
   const totalWontFix = issues.filter(i => i.status === 'wont_fix').length;
   const categoryTotals = issues.reduce((acc, i) => {
     acc[i.category] = (acc[i.category] || 0) + 1;
@@ -213,7 +213,7 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
                                       <td className="border border-gray-200 p-2 align-middle">
                                         <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
                                           issue.status === 'open' || issue.status === 'recurring' ? 'bg-red-100 text-red-800' :
-                                          issue.status === 'fixed' ? 'bg-emerald-100 text-emerald-800' :
+                                          issue.status === 'resolved' ? 'bg-emerald-100 text-emerald-800' :
                                           'bg-gray-100 text-gray-800'
                                         }`}>
                                           {issue.status}
@@ -461,10 +461,10 @@ export default function IssuesPage() {
         });
 
         const statusCell = row.getCell('status');
-        if (issue.status === 'open' || issue.status === 'recurring') {
+        if (issue.status === 'new' || issue.status === 'open' || issue.status === 'recurring') {
           statusCell.font = { color: { argb: '991B1B' }, bold: true };
           statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEE2E2' } };
-        } else if (issue.status === 'fixed') {
+        } else if (issue.status === 'resolved') {
           statusCell.font = { color: { argb: '065F46' }, bold: true };
           statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
         }
@@ -511,7 +511,7 @@ export default function IssuesPage() {
   const statusColors: Record<string, string> = {
     open: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
     recurring: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
-    fixed: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+    resolved: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
     wont_fix: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-500/10 dark:text-gray-400 dark:border-gray-500/20'
   };
 

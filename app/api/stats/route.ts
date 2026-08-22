@@ -46,13 +46,13 @@ export async function GET(req: NextRequest) {
       total: { $sum: 1 },
       open: { $sum: { $cond: [{ $eq: ["$status", "open"] }, 1, 0] } },
       recurring: { $sum: { $cond: [{ $eq: ["$status", "recurring"] }, 1, 0] } },
-      fixed: { $sum: { $cond: [{ $eq: ["$status", "fixed"] }, 1, 0] } },
+      resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
       wontFix: { $sum: { $cond: [{ $eq: ["$status", "wont_fix"] }, 1, 0] } },
     }}
   ];
 
   const kpiResult = await Issue.aggregate(kpiPipeline);
-  const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, fixed: 0, wontFix: 0 };
+  const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0 };
 
   // 2. Severidade
   const severityPipeline: PipelineStage[] = [
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
       total: kpi.total,
       open: kpi.open,
       recurring: kpi.recurring,
-      fixed: kpi.fixed,
+      resolved: kpi.resolved,
       wontFix: kpi.wontFix,
       accepted: kpi.open + kpi.recurring,
     },

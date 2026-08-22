@@ -267,7 +267,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
           </span>
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
             issue.status === 'open' || issue.status === 'recurring' ? 'bg-apple-blue/10 text-apple-blue border border-apple-blue/20' :
-            issue.status === 'fixed' ? 'bg-apple-green/10 text-apple-green border border-apple-green/20' :
+            issue.status === 'resolved' ? 'bg-apple-green/10 text-apple-green border border-apple-green/20' :
             'bg-apple-tertiary-light/10 text-apple-tertiary-light border border-apple-border-light'
           }`}>
             {issue.status.toUpperCase()}

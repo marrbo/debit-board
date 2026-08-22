@@ -15,7 +15,7 @@ export interface IIssue extends Document {
   hitCount: number;
   severity: 'low' | 'medium' | 'high' | 'critical';
   slaHours: number;
-  status: 'open' | 'fixed' | 'recurring' | 'wont_fix';
+  status: 'new' | 'open' | 'resolved' | 'recurring' | 'wont_fix';
   firstSeen: Date;
   lastSeen: Date;
   resolvedAt?: Date;
@@ -40,7 +40,7 @@ const IssueSchema = new Schema<IIssue>({
   hitCount: { type: Number, default: 0 },
   severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], required: true },
   slaHours: { type: Number, required: true },
-  status: { type: String, enum: ['open', 'fixed', 'recurring', 'wont_fix'], default: 'open' },
+  status: { type: String, enum: ['open', 'resolved', 'recurring', 'wont_fix'], default: 'open' },
   firstSeen: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
   resolvedAt: Date,

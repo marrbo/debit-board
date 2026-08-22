@@ -81,7 +81,7 @@ export default function StatsPage() {
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
           <p className="text-[10px] uppercase font-semibold text-apple-green tracking-wider">Corrigidas</p>
-          <p className="text-2xl font-bold text-apple-green mt-1">{stats.kpi.fixed}</p>
+          <p className="text-2xl font-bold text-apple-green mt-1">{stats.kpi.resolved}</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
           <p className="text-[10px] uppercase font-semibold text-apple-orange tracking-wider">Recorrentes</p>
