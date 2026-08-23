@@ -116,19 +116,10 @@ export default function DBQLAdvancedSearch({
 
   // Efeito para sincronizar com query externa
   useEffect(() => {
-  if (externalQuery !== undefined) {
-    // Se a query externa for vazia, limpa tudo
-    if (externalQuery === '') {
-      setTags([]);
-      setInputValue('');
-      setActiveSavedQuery(null);
-      tempQueryIdRef.current = null;
-      // Não chama updateAndSearch para evitar loop
-      return;
-    }
+    if (externalQuery !== undefined && externalQuery !== externalQueryRef.current) {
+      externalQueryRef.current = externalQuery;
 
-    // Se a query externa mudou e é diferente da atual
-    if (externalQuery !== currentQueryString) {
+      // Atualiza os campos internos SEM alterar activeSavedQuery
       if (hasComplexSyntax(externalQuery)) {
         setMode('advanced');
         setInputValue(externalQuery);
@@ -138,11 +129,8 @@ export default function DBQLAdvancedSearch({
         setTags(parseInputToTags(externalQuery));
         setInputValue('');
       }
-      // Atualiza a URL sem disparar nova busca? Vamos chamar updateAndSearch apenas se necessário
-      // mas para evitar loop, não chamamos onSearch aqui, apenas atualizamos o estado.
     }
-  }
-}, [externalQuery]);
+  }, [externalQuery]);
 
   const handleSuggestionSelect = (selectedValue: string) => {
     const tokenData = getEditingToken(inputValue);
@@ -299,11 +287,19 @@ export default function DBQLAdvancedSearch({
         setSavedQueries(data);
         const existingTemp = data.find((q: any) => q.visibility === 'temporary');
         if (existingTemp) tempQueryIdRef.current = existingTemp._id;
-        
-        if (rawUrlQueryId) {
+
+        // Só carrega da URL se externalQuery NÃO estiver definido
+        if (rawUrlQueryId && !externalQueryRef.current) {
           const matched = data.find((q: any) => q._id === rawUrlQueryId || q.slug === rawUrlQueryId);
           if (matched) {
-            setActiveSavedQuery({ id: matched._id, name: matched.name, queryString: matched.queryString, visibility: matched.visibility });
+            // Preserva o ID original para permitir sobrescrita
+            setActiveSavedQuery({ 
+              id: matched._id, 
+              name: matched.name, 
+              queryString: matched.queryString, 
+              visibility: matched.visibility 
+            });
+
             if (hasComplexSyntax(matched.queryString) || urlModeParam === 'a' || urlModeParam === 'advanced') {
               setMode('advanced');
               setInputValue(matched.queryString);

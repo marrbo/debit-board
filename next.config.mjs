@@ -1,16 +1,17 @@
-/** @type {import('next').NextConfig} */
+// next.config.mjs
 import { codecovWebpackPlugin } from "@codecov/webpack-plugin";
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // Allows Mongoose/MongoDB to run on the Node.js server
+    // Permite Mongoose/MongoDB rodar no servidor Node.js (Next.js 15+ recomenda 'serverExternalPackages')
     serverComponentsExternalPackages: ['mongoose', 'mongodb'],
   },
   webpack: (config, { dev }) => {
     if (dev) {
       config.devtool = 'source-map'; // garante source maps detalhados
     }
-    // Ignore Node.js modules that cause conflicts in Edge/Middleware
+    // Ignora módulos Node.js que causam conflitos no Edge/Middleware
     config.resolve.fallback = {
       ...config.resolve.fallback,
       net: false,
@@ -19,7 +20,7 @@ const nextConfig = {
       'node:diagnostics_channel': false,
     };
 
-    // Add Codecov plugin
+    // Adiciona plugin do Codecov
     config.plugins.push(
       codecovWebpackPlugin({
         enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
@@ -33,5 +34,5 @@ const nextConfig = {
   },
 };
 
-// Use ES module export (instead of module.exports)
+// Exportação ES Module
 export default nextConfig;

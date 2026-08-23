@@ -179,7 +179,7 @@ export default function Filters({
             onChange={(e) => setGroupBy(e.target.value)}
             className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
           >
-            <option value="project-repo">Projeto → Repositório</option>
+            <option value="project-detail">Projeto → Repositório</option>
             <option value="gerencia-nucleo">Gerência → Núcleo</option>
             <option value="project">Apenas Projeto</option>
             <option value="repo">Apenas Repositório</option>

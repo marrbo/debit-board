@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     dailyData[day] = (dailyData[day] || 0) + (scan.totalOccurrences || 0);
   }
 
-  // KPIs de Issues (Abertas, Recorrentes, Corrigidas, Wont fix)
+  // KPIs de Issues (Abertas, Recorrentes, Resolvidas, Não Corrigir)
   const issuesStats = await Issue.aggregate([
     { $match: { tenantId: tenantId } },
     { $group: { _id: "$status", count: { $sum: 1 } } }

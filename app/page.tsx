@@ -112,7 +112,7 @@ export default function Dashboard() {
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{data.issuesStats.recurring}</p>
             </div>
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 text-center shadow-sm transition-colors">
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase font-bold">Corrigidas</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase font-bold">Resolvidas</p>
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.issuesStats.resolved}</p>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/30 border border-gray-200 dark:border-slate-600/40 rounded-xl p-4 text-center shadow-sm transition-colors">
@@ -124,7 +124,7 @@ export default function Dashboard() {
           {/* Gráficos */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 shadow-sm transition-colors">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Evolução de Ocorrências</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Evolução: Novas ocorrências</h3>
               <div className="h-64">
                 <Charts data={chartData} type="line" />
               </div>

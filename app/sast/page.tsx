@@ -5,6 +5,7 @@ import { useState, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { Shield, Play, FileText, CheckCircle, XCircle } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import PageHeader from '@/components/PageHeader';
 
 const SASTReport = ({ result }: { result: any }) => {
   if (!result) return null;
@@ -114,6 +115,11 @@ export default function SASTPage() {
   if (!azureSettings || !azureSettings.instanceUrl) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6">
+        <PageHeader 
+            title="SAST Scanner"
+            subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
+            icon={<Shield className="w-6 h-6 text-apple-blue" />}
+          />
         <div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6 text-red-300">
           <p className="font-medium">Acesso negado ao Scanner SAST.</p>
           <p className="text-sm mt-1">O Tenant associado não possui configurações do Azure. Contate o Administrador.</p>
@@ -123,22 +129,20 @@ export default function SASTPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="w-full mx-auto space-y-6">
+      <PageHeader 
+        title="SAST Scanner"
+        subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
+        icon={<Shield className="w-6 h-6 text-apple-blue" />}
+      />
       <div className="hidden">
-        <div ref={componentRef}>
-          <SASTReport result={result} />
-        </div>
+      <div ref={componentRef}>
+        <SASTReport result={result} />
+      </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Shield className="w-5 h-5 text-blue-400" />
-          Scanner SAST Automático
-        </h2>
-        <p className="text-slate-300 text-sm mt-1">
-          Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns.
-        </p>
-
+        
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-4">
             <button

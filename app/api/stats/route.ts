@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       recurring: { $sum: { $cond: [{ $eq: ["$status", "recurring"] }, 1, 0] } },
       resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
       wontFix: { $sum: { $cond: [{ $eq: ["$status", "wont_fix"] }, 1, 0] } },
+      expiredSLA: { $sum: { $cond: [{ $lt: ["$slaDueAt", new Date()] }, 1, 0] } }
     }}
   ];
 
@@ -176,7 +177,8 @@ export async function GET(req: NextRequest) {
       open: 0,
       recurring: 0,
       resolved: 0,
-      wontFix: 0
+      wontFix: 0,
+      expiredSLA: 0
     });
   }
 
@@ -209,6 +211,8 @@ export async function GET(req: NextRequest) {
         chartData[idx].open += item.count;
       } else if (status === 'recurring') {
         chartData[idx].recurring += item.count;
+      } else if (status === 'recurring') {
+        chartData[idx].expiredSLA += item.count;
       }
       // Outros status podem ser ignorados ou adicionados dinamicamente
     }
@@ -223,6 +227,7 @@ export async function GET(req: NextRequest) {
       resolved: kpi.resolved,
       wontFix: kpi.wontFix,
       accepted: kpi.open + kpi.recurring,
+      expiredSLA: kpi.expiredSLA
     },
     severityTotals,
     categoryTotals,

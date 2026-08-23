@@ -26,7 +26,7 @@ export default function AzureSearchCodePage() {
   const [selectedGerencia, setSelectedGerencia] = useState('');
   const [selectedNucleo, setSelectedNucleo] = useState('');
   const [selectedRepo, setSelectedRepo] = useState('');
-  const [groupBy, setGroupBy] = useState('project-repo');
+  const [groupBy, setGroupBy] = useState('project-detail');
 
   // ⏳ Estado de carregamento da sessão
   if (status === 'loading') {
@@ -233,7 +233,7 @@ export default function AzureSearchCodePage() {
             Projeto x Repositórios x Ocorrências
           </h2>
           <div className="h-64">
-            <Charts data={filteredItems} type="project-repo" />
+            <Charts data={filteredItems} type="project-detail" />
           </div>
         </div>
       </div>

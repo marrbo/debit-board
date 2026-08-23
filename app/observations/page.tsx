@@ -114,7 +114,7 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
           <p className="text-xl font-bold text-red-600">{totalOpen}</p>
         </div>
         <div className="border border-gray-200 bg-emerald-50 p-3 rounded">
-          <p className="text-xs text-emerald-700 uppercase font-bold">Corrigidas</p>
+          <p className="text-xs text-emerald-700 uppercase font-bold">Resolvidas</p>
           <p className="text-xl font-bold text-emerald-600">{totalFixed}</p>
         </div>
         <div className="border border-gray-200 bg-gray-50 p-3 rounded">
@@ -532,11 +532,11 @@ export default function IssuesPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#F5F5F7] dark:bg-black">
+    <div className="flex flex-col h-screen overflow-hidden bg-apple-bg-light dark:bg-apple-bg-dark">
       <div style={{ display: 'none' }}><div ref={componentRef}><IssuesReport issues={reportIssues} usersMap={usersMap} /></div></div>
       
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[1400px] mx-auto p-6 space-y-6">
+        <div className="w-full mx-auto p-8 space-y-6">
           <PageHeader 
             title="Observations Feed"
             subtitle="Central de monitoramento de vulnerabilidades. Identifique, analise e delegue."

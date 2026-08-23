@@ -1,7 +1,7 @@
 // app/stats/page.tsx
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -12,11 +12,8 @@ import PageHeader from '@/components/PageHeader';
 import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import { BarChart3, X, Maximize2, XCircle } from 'lucide-react';
 
-/**
- * Interface que define a estrutura de cada ponto diário retornado pela API /api/stats.
- */
 interface DailyStats {
-  label: string;        // data no formato yyyy-MM-dd
+  label: string;
   critical: number;
   high: number;
   medium: number;
@@ -28,17 +25,8 @@ interface DailyStats {
   wontFix: number;
 }
 
-/**
- * Interface que define a estrutura dos dados completos retornados pela API.
- */
 interface StatsData {
-  kpi: {
-    total: number;
-    accepted: number;
-    resolved: number;
-    recurring: number;
-    wontFix: number;
-  };
+  kpi: { total: number; accepted: number; resolved: number; recurring: number; wontFix: number; expiredSLA: number };
   severityTotals: Record<string, number>;
   categoryTotals: { label: string; value: number }[];
   projectTotals: {
@@ -50,19 +38,10 @@ interface StatsData {
   chartData: DailyStats[];
 }
 
-/**
- * Página de Estatísticas (Stats & Usage)
- * - Exibe KPIs, severidade, categorias e projetos.
- * - Gráfico de evolução com alternância por severidade ou status.
- * - Gráfico de projetos com barras empilhadas por status/severidade.
- * - Clique em categoria adiciona filtro DBQL com botão de limpar.
- * - Cada gráfico possui botão de expandir.
- */
 export default function StatsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // ================= ESTADO =================
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +52,9 @@ export default function StatsPage() {
   const [evolutionViewMode, setEvolutionViewMode] = useState<'severity' | 'status'>('severity');
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
 
-  // ================= FETCH DE DADOS =================
+  // Armazena a query original (antes do filtro do gráfico)
+  const originalQueryRef = useRef<string>('');
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -103,14 +84,8 @@ export default function StatsPage() {
   }, [externalQuery]);
 
   // ================= DADOS DA EVOLUÇÃO =================
-  const chartData = stats?.chartData || [];
+  const chartData = stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [];
 
-  /**
-   * Calcula a média móvel de uma série de valores.
-   * @param values - Array de números.
-   * @param windowSize - Tamanho da janela (padrão 3).
-   * @returns Array com a média móvel.
-   */
   const movingAverage = (values: number[], windowSize = 3): number[] => {
     if (!values.length) return [];
     return values.map((_, i) => {
@@ -121,11 +96,6 @@ export default function StatsPage() {
     });
   };
 
-  /**
-   * Monta os datasets do gráfico de evolução com base no modo selecionado.
-   * - Modo 'severity': linhas por severidade + mediana total.
-   * - Modo 'status': linhas por status + mediana total.
-   */
   const evolutionData = useMemo(() => {
     if (!chartData.length) return { labels: [], datasets: [] };
 
@@ -136,13 +106,13 @@ export default function StatsPage() {
     const datasets: any[] = [];
 
     if (evolutionViewMode === 'severity') {
-      // Dados por severidade (reais)
+      // Corrigido: as const garante que key seja literal
       const severities = [
         { key: 'critical', label: 'Crítico', color: '#FF3B30' },
         { key: 'high', label: 'Alto', color: '#FF9500' },
         { key: 'medium', label: 'Médio', color: '#FFCC00' },
         { key: 'low', label: 'Baixo', color: '#007AFF' },
-      ];
+      ] as const;
 
       severities.forEach(({ key, label, color }) => {
         datasets.push({
@@ -158,13 +128,12 @@ export default function StatsPage() {
         });
       });
     } else {
-      // Dados por status (reais)
       const statuses = [
-        { key: 'open', label: 'Open', color: '#007AFF' },
+        { key: 'open', label: 'Aberta', color: '#007AFF' },
         { key: 'recurring', label: 'Recorrente', color: '#FF9500' },
-        { key: 'resolved', label: 'Resolvido', color: '#34C759' },
-        { key: 'wontFix', label: 'Wont Fix', color: '#FF3B30' },
-      ];
+        { key: 'resolved', label: 'Resolvida', color: '#34C759' },
+        { key: 'wontFix', label: 'Não Corrigir', color: '#FF3B30' },
+      ] as const;
 
       statuses.forEach(({ key, label, color }) => {
         datasets.push({
@@ -181,7 +150,6 @@ export default function StatsPage() {
       });
     }
 
-    // Adiciona a mediana total (única linha tracejada)
     datasets.push({
       label: 'Mediana (Total)',
       data: medianTotal,
@@ -253,21 +221,30 @@ export default function StatsPage() {
   // ================= HANDLERS =================
   const handleSliceClick = (label: string) => {
     const cleanLabel = label.replace(/"/g, '');
-    const currentQuery = searchQuery || '';
-    const newQuery = currentQuery
-      ? `${currentQuery} AND category:"${cleanLabel}"`
-      : `category:"${cleanLabel}"`;
+
+    if (lastCategory) clearCategoryFilter();
+
+    originalQueryRef.current = searchQuery;
+
+    const currentQuery = searchQuery;
+    let newQuery: string;
+    if (currentQuery.trim()) {
+      newQuery = `(${currentQuery}) AND category:"${cleanLabel}"`;
+    } else {
+      newQuery = `category:"${cleanLabel}"`;
+    }
+
     setExternalQuery(newQuery);
     setLastCategory(cleanLabel);
   };
 
   const clearCategoryFilter = () => {
     if (!lastCategory) return;
-    const queryWithoutCategory = externalQuery
-      .replace(/\s*AND\s+category:"[^"]*"/i, '')
-      .replace(/^category:"[^"]*"/i, '');
-    setExternalQuery(queryWithoutCategory.trim());
+
+    const original = originalQueryRef.current;
+    setExternalQuery(original);
     setLastCategory(null);
+    originalQueryRef.current = '';
   };
 
   // ================= RENDERIZAÇÃO =================
@@ -297,7 +274,7 @@ export default function StatsPage() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Stats & Usage"
-        icon={<BarChart3 size="36px" />}
+        icon={<BarChart3 className="w-6 h-6 text-apple-blue" />}
         subtitle="Visão geral das issues de segurança do seu Tenant."
         searchBar={
           <div className="relative">
@@ -323,55 +300,59 @@ export default function StatsPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 text-center gap-4">
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
-          <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light tracking-wider">Total Issues</p>
-          <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{stats!.kpi.total}</p>
+          <p className="text-3xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{stats!.kpi.total}</p>
+          <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light tracking-wider">Ocorrências</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
-          <p className="text-[10px] uppercase font-semibold text-apple-blue tracking-wider">Em andamento</p>
-          <p className="text-2xl font-bold text-apple-blue mt-1">{stats!.kpi.accepted}</p>
+          <p className="text-3xl font-bold text-apple-blue mt-1">{stats!.kpi.accepted}</p>
+          <p className="text-[10px] uppercase font-semibold text-apple-blue tracking-wider">Abertas</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
-          <p className="text-[10px] uppercase font-semibold text-apple-green tracking-wider">Corrigidas</p>
-          <p className="text-2xl font-bold text-apple-green mt-1">{stats!.kpi.resolved}</p>
+          <p className="text-3xl font-bold text-apple-green mt-1">{stats!.kpi.resolved}</p>
+          <p className="text-[10px] uppercase font-semibold text-apple-green tracking-wider">Resolvidas</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
+          <p className="text-3xl font-bold text-apple-orange mt-1">{stats!.kpi.recurring}</p>
           <p className="text-[10px] uppercase font-semibold text-apple-orange tracking-wider">Recorrentes</p>
-          <p className="text-2xl font-bold text-apple-orange mt-1">{stats!.kpi.recurring}</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
+          <p className="text-3xl font-bold text-purple-600 mt-1">{stats!.kpi.expiredSLA}</p>
+          <p className="text-[10px] uppercase font-semibold text-purple-600 tracking-wider">SLA Vencido</p>
+        </div>
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
+          <p className="text-3xl font-bold text-apple-tertiary-light mt-1">{stats!.kpi.wontFix}</p>
           <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light tracking-wider">Não Corrigir</p>
-          <p className="text-2xl font-bold text-apple-tertiary-light mt-1">{stats!.kpi.wontFix}</p>
         </div>
       </div>
 
       {/* Severidade */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 border-[#FF3B30] transition-colors">
-          <p className="text-[10px] uppercase font-bold text-apple-red">Crítico</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 text-center gap-4">
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-red dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.critical || 0}</p>
+          <p className="text-[10px] uppercase font-bold text-apple-red">Crítico</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 border-[#FF9500] transition-colors">
-          <p className="text-[10px] uppercase font-bold text-apple-orange">Alto</p>
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-orange dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.high || 0}</p>
+          <p className="text-[10px] uppercase font-bold text-apple-orange">Alto</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 border-[#FFCC00] transition-colors">
-          <p className="text-[10px] uppercase font-bold text-apple-yellow">Médio</p>
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-yellow dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4  transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.medium || 0}</p>
+          <p className="text-[10px] uppercase font-bold text-apple-yellow">Médio</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 border-apple-blue transition-colors">
-          <p className="text-[10px] uppercase font-bold text-apple-blue">Baixo</p>
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-blue dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.low || 0}</p>
+          <p className="text-[10px] uppercase font-bold text-apple-blue">Baixo</p> 
         </div>
       </div>
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Evolução com slider */}
+        {/* Evolução */}
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Evolução de Ocorrências</h3>
+            <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Evolução: Novas ocorrências</h3>
             <button
               onClick={() => setExpandedChart('evolution')}
               className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors"
@@ -380,7 +361,6 @@ export default function StatsPage() {
               <Maximize2 className="w-4 h-4" />
             </button>
           </div>
-          {/* Slider para alternar entre Severidade e Status */}
           <div className="flex items-center justify-end mb-3">
             <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
               <div
@@ -432,7 +412,7 @@ export default function StatsPage() {
           )}
         </ChartCard>
 
-        {/* Projetos com barras empilhadas */}
+        {/* Projetos */}
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Total por Projeto (TOP 10)</h3>
