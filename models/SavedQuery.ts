@@ -15,7 +15,7 @@ const SavedQuerySchema: Schema = new Schema({
   sub: { type: String, required: true, index: true, ref: 'User' },
   name: { type: String, required: true },
   queryString: { type: String, required: true },
-  context: { type: String, default: 'issues' },
+  context: { type: String, default: 'observations' },
   visibility: { 
     type: String, 
     enum: ['private', 'shared', 'public', 'temporary'], 

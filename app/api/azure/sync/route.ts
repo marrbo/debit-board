@@ -29,8 +29,12 @@ export async function POST(req: NextRequest) {
 
   try {
     // 2. Configurar conexão com Azure DevOps
-    const authHandler = getPersonalAccessTokenHandler(pat);
-    const connection = new azdev.WebApi(instanceUrl, authHandler);
+    const urlWithCollection = `${instanceUrl}/tfs/${azureCollection}/`;
+    
+    // TODO: Veriricar instanceUrl se termina com / ou se possui /tfs/ ou /tfs ou tfs
+    
+    const authHandler = getPersonalAccessTokenHandler(pat, true);
+    const connection = new azdev.WebApi(urlWithCollection, authHandler, { ignoreSslError: tenant.azureSettings.ignoreTlsErrors });
     const gitApi = await connection.getGitApi();
     const coreApi = await connection.getCoreApi();
 

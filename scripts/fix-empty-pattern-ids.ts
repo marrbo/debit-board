@@ -1,32 +1,32 @@
 // scripts/fix-empty-pattern-ids.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 
 async function fixEmptyPatternIds() {
   console.log('🚀 Conectando ao MongoDB para limpeza de dados...');
   await connectToDatabase();
 
-  // 🔥 Busca APENAS as issues onde o patternId é uma string vazia.
+  // 🔥 Busca APENAS as observations onde o patternId é uma string vazia.
   // Isso evita o erro de CastError que o updateMany causava.
-  const issuesToFix = await Issue.find({
+  const observationsToFix = await Observation.find({
     patternId: { $type: 'string', $eq: "" }
   });
 
-  console.log(`🔍 Encontradas ${issuesToFix.length} issues com patternId como string vazia.`);
+  console.log(`🔍 Encontradas ${observationsToFix.length} observations com patternId como string vazia.`);
 
-  if (issuesToFix.length === 0) {
+  if (observationsToFix.length === 0) {
     console.log('✅ Nenhuma issue com string vazia encontrada. Você está pronto para rodar a migração principal!');
     return;
   }
 
   let resolvedCount = 0;
-  for (const issue of issuesToFix) {
+  for (const issue of observationsToFix) {
     // 🔥 Substitui a string vazia por null, que é o ObjectId vazio válido para o Mongoose.
     issue.patternId = null;
     await issue.save();
     resolvedCount++;
   }
-  console.log(`✅ ${resolvedCount} issues corrigidas com sucesso.`);
+  console.log(`✅ ${resolvedCount} observations corrigidas com sucesso.`);
   console.log('🎉 Limpeza concluída!');
 }
 

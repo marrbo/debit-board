@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Shield } from 'lucide-react';
+import { ShieldKeyhole } from 'lucide-react';
 
 // Componente interno que usa useSearchParams (precisa do Suspense)
 function LoginErrorHandler() {
@@ -56,7 +56,7 @@ export default function LoginPage() {
           onClick={handleSSOLogin}
           className="w-full bg-blue-600 hover:bg-blue-500 text-apple-bg-light dark:text-apple-bg-light font-medium py-2.5 rounded-lg transition-all shadow-md shadow-blue-900/40 flex justify-center items-center gap-2"
         >
-          <Shield className="w-4 h-4" />
+          <ShieldKeyhole className="w-4 h-4" />
           Entrar com SSO Corporativo
         </button>
 

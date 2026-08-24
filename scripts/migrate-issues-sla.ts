@@ -1,28 +1,28 @@
-// scripts/migrate-issues-sla.ts
+// scripts/migrate-observations-sla.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 import { VulnerabilityPattern } from '../models/VulnerabilityPattern';
 
-async function migrateIssuesSLA() {
+async function migrateObservationsSLA() {
   console.log('🚀 Conectando ao MongoDB...');
   await connectToDatabase();
 
-  console.log('🔍 Buscando Issues existentes...');
-  const issues = await Issue.find({});
-  console.log(`📊 Encontradas ${issues.length} Issues.`);
+  console.log('🔍 Buscando Observations existentes...');
+  const observations = await Observation.find({});
+  console.log(`📊 Encontradas ${observations.length} Observations.`);
 
-  if (issues.length === 0) {
+  if (observations.length === 0) {
     console.log('✅ Nenhuma Issue para atualizar. Encerrando.');
     process.exit(0);
   }
 
-  console.log('🔄 Processando Issues...');
+  console.log('🔄 Processando Observations...');
   
   const updates: any[] = [];
   let skipped = 0;
   let updated = 0;
 
-  for (const issue of issues) {
+  for (const issue of observations) {
     try {
       // Busca o padrão de vulnerabilidade correspondente a esta Issue
       const pattern = await VulnerabilityPattern.findById(issue.patternId).lean();
@@ -60,22 +60,22 @@ async function migrateIssuesSLA() {
   }
 
   if (updates.length > 0) {
-    console.log(`📝 Aplicando atualizações em lote (${updates.length} Issues)...`);
-    const result = await Issue.bulkWrite(updates);
-    console.log(`✅ ${result.modifiedCount} Issues atualizadas com sucesso.`);
+    console.log(`📝 Aplicando atualizações em lote (${updates.length} Observations)...`);
+    const result = await Observation.bulkWrite(updates);
+    console.log(`✅ ${result.modifiedCount} Observations atualizadas com sucesso.`);
   } else {
     console.log('⚠️ Nenhuma atualização realizada.');
   }
 
   if (skipped > 0) {
-    console.log(`⚠️ ${skipped} Issues foram ignoradas (padrão de vulnerabilidade não encontrado).`);
+    console.log(`⚠️ ${skipped} Observations foram ignoradas (padrão de vulnerabilidade não encontrado).`);
   }
 
   console.log('🎉 Migração concluída!');
   process.exit(0);
 }
 
-migrateIssuesSLA().catch((error) => {
+migrateObservationsSLA().catch((error) => {
   console.error('❌ Erro fatal durante a migração:', error);
   process.exit(1);
 });

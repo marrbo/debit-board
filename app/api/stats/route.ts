@@ -1,7 +1,7 @@
 // app/api/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { SearchRecord } from '@/models/SearchRecord';
 import { SASTScan } from '@/models/SASTScan';
 import { getServerAuthSession } from '@/lib/auth';
@@ -48,11 +48,11 @@ export async function GET(req: NextRequest) {
       recurring: { $sum: { $cond: [{ $eq: ["$status", "recurring"] }, 1, 0] } },
       resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
       wontFix: { $sum: { $cond: [{ $eq: ["$status", "wont_fix"] }, 1, 0] } },
-      expiredSLA: { $sum: { $cond: [{ $lt: ["$slaDueAt", new Date()] }, 1, 0] } }
+      expired: { $sum: { $cond: [{ $lt: ["$slaDueAt", new Date()] }, 1, 0] } }
     }}
   ];
 
-  const kpiResult = await Issue.aggregate(kpiPipeline);
+  const kpiResult = await Observation.aggregate(kpiPipeline);
   const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0 };
 
   // 2. Severidade geral
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     { $match: matchStage },
     { $group: { _id: "$severity", count: { $sum: 1 } } }
   ];
-  const severityData = await Issue.aggregate(severityPipeline);
+  const severityData = await Observation.aggregate(severityPipeline);
   const severityTotals: Record<string, number> = {};
   severityData.forEach((d: any) => {
     severityTotals[d._id || 'unknown'] = d.count;
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     { $group: { _id: "$category", count: { $sum: 1 } } },
     { $sort: { count: -1 } }
   ];
-  const categoryData = await Issue.aggregate(categoryPipeline);
+  const categoryData = await Observation.aggregate(categoryPipeline);
   const categoryTotals = categoryData.map((d: any) => ({
     label: d._id || 'Sem Categoria',
     value: d.count
@@ -85,21 +85,21 @@ export async function GET(req: NextRequest) {
     { $sort: { count: -1 } },
     { $limit: 10 }
   ];
-  const projectData = await Issue.aggregate(projectPipeline);
+  const projectData = await Observation.aggregate(projectPipeline);
 
   const projectStatusPipeline: PipelineStage[] = [
     { $match: matchStage },
     { $group: { _id: { project: "$project", status: "$status" }, count: { $sum: 1 } } },
     { $sort: { "_id.project": 1, "_id.status": 1 } }
   ];
-  const projectStatusData = await Issue.aggregate(projectStatusPipeline);
+  const projectStatusData = await Observation.aggregate(projectStatusPipeline);
 
   const projectSeverityPipeline: PipelineStage[] = [
     { $match: matchStage },
     { $group: { _id: { project: "$project", severity: "$severity" }, count: { $sum: 1 } } },
     { $sort: { "_id.project": 1, "_id.severity": 1 } }
   ];
-  const projectSeverityData = await Issue.aggregate(projectSeverityPipeline);
+  const projectSeverityData = await Observation.aggregate(projectSeverityPipeline);
 
   const projectStatusTotals = projectStatusData.reduce((acc: any, item: any) => {
     const proj = item._id.project || 'Sem Projeto';
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
     },
     { $sort: { "_id.day": 1 } }
   ];
-  const evolutionSeverityData = await Issue.aggregate(evolutionSeverityPipeline);
+  const evolutionSeverityData = await Observation.aggregate(evolutionSeverityPipeline);
 
   // Agregação por status
   const evolutionStatusPipeline: PipelineStage[] = [
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
     },
     { $sort: { "_id.day": 1 } }
   ];
-  const evolutionStatusData = await Issue.aggregate(evolutionStatusPipeline);
+  const evolutionStatusData = await Observation.aggregate(evolutionStatusPipeline);
 
   // Consolidar por dia
   const days = range === '24h' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 : 30;
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
       recurring: 0,
       resolved: 0,
       wontFix: 0,
-      expiredSLA: 0
+      expired: 0
     });
   }
 
@@ -212,7 +212,7 @@ export async function GET(req: NextRequest) {
       } else if (status === 'recurring') {
         chartData[idx].recurring += item.count;
       } else if (status === 'recurring') {
-        chartData[idx].expiredSLA += item.count;
+        chartData[idx].expired += item.count;
       }
       // Outros status podem ser ignorados ou adicionados dinamicamente
     }
@@ -227,7 +227,7 @@ export async function GET(req: NextRequest) {
       resolved: kpi.resolved,
       wontFix: kpi.wontFix,
       accepted: kpi.open + kpi.recurring,
-      expiredSLA: kpi.expiredSLA
+      expired: kpi.expired
     },
     severityTotals,
     categoryTotals,

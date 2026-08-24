@@ -1,7 +1,7 @@
 // app/api/observation-filters/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { getServerAuthSession } from '@/lib/auth';
 import { PipelineStage } from 'mongoose';
 
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     { $limit: 15 }
   ];
 
-  const results = await Issue.aggregate(pipeline);
+  const results = await Observation.aggregate(pipeline);
   const suggestions = results.map((r: any) => r.value).filter(Boolean);
   
   return NextResponse.json({ suggestions });

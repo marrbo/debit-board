@@ -1,18 +1,18 @@
 // scripts/update-wont-fix-to-open.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 
 async function migrateWontFixToOpen() {
   console.log('🚀 Conectando ao MongoDB...');
   await connectToDatabase();
 
-  console.log('🔄 Atualizando issues com status "wont_fix" para "open"...');
-  const result = await Issue.updateMany(
+  console.log('🔄 Atualizando observations com status "wont_fix" para "open"...');
+  const result = await Observation.updateMany(
     { status: 'wont_fix' },
     { $set: { status: 'open' } }
   );
 
-  console.log(`✅ ${result.modifiedCount} issues atualizadas.`);
+  console.log(`✅ ${result.modifiedCount} observations atualizadas.`);
   console.log('🎉 Migração finalizada!');
 }
 

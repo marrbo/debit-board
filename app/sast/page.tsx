@@ -3,7 +3,7 @@
 
 import { useState, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { Shield, Play, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Play, FileText, CheckCircle, XCircle, ShieldKeyhole } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import PageHeader from '@/components/PageHeader';
 
@@ -118,7 +118,7 @@ export default function SASTPage() {
         <PageHeader 
             title="SAST Scanner"
             subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
-            icon={<Shield className="w-6 h-6 text-apple-blue" />}
+            icon={<ShieldKeyhole className="w-6 h-6 text-apple-blue" />}
           />
         <div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6 text-red-300">
           <p className="font-medium">Acesso negado ao Scanner SAST.</p>
@@ -132,8 +132,8 @@ export default function SASTPage() {
     <div className="w-full mx-auto space-y-6">
       <PageHeader 
         title="SAST Scanner"
-        subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
-        icon={<Shield className="w-6 h-6 text-apple-blue" />}
+        subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns ( branches main ou master )."
+        icon={<ShieldKeyhole className="w-10 h-10 text-apple-blue" />}
       />
       <div className="hidden">
       <div ref={componentRef}>

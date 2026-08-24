@@ -9,7 +9,8 @@ import {
   FileSpreadsheet, FileText,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Binoculars,
-  Info
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { useReactToPrint } from 'react-to-print';
@@ -18,7 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import PageHeader from '@/components/PageHeader';
 import AssigneeSelect from '@/components/AssigneeSelect';
-import { IIssue } from '@/models/Issue';
+import { IObservation } from '@/models/Issue';
 import React from 'react';
 
 /**
@@ -38,12 +39,12 @@ function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string
 /**
  * Componente do Relatório PDF com agrupamentos e timbrado executivo.
  */
-const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record<string, string> }) => {
-  if (!issues.length) return null;
+const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
+  if (!observations.length) return null;
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-  const sortedIssues = [...issues].sort((a, b) => {
+  const sortedObservations = [...observations].sort((a, b) => {
     if (a.category !== b.category) return a.category.localeCompare(b.category);
     if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '');
     if ((a.repository || '') !== (b.repository || '')) return (a.repository || '').localeCompare(b.repository || '');
@@ -52,28 +53,28 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
     return a.fileName.localeCompare(b.fileName);
   });
 
-  const groupBy = (arr: IIssue[], key: keyof IIssue) => {
+  const groupBy = (arr: IObservation[], key: keyof IObservation) => {
     return arr.reduce((acc, item) => {
       const groupKey = String(item[key] || 'Sem ' + key);
       if (!acc[groupKey]) acc[groupKey] = [];
       acc[groupKey].push(item);
       return acc;
-    }, {} as Record<string, IIssue[]>);
+    }, {} as Record<string, IObservation[]>);
   };
 
-  const categoryGroups = groupBy(sortedIssues, 'category');
+  const categoryGroups = groupBy(sortedObservations, 'category');
 
-  const totalIssues = issues.length;
-  const totalOpen = issues.filter(i => i.status === 'open' || i.status === 'recurring').length;
-  const totalFixed = issues.filter(i => i.status === 'resolved').length;
-  const totalWontFix = issues.filter(i => i.status === 'wont_fix').length;
-  const categoryTotals = issues.reduce((acc, i) => {
+  const totalObservations = observations.length;
+  const totalOpen = observations.filter(i => i.status === 'open' || i.status === 'recurring').length;
+  const totalFixed = observations.filter(i => i.status === 'resolved').length;
+  const totalWontFix = observations.filter(i => i.status === 'wont_fix').length;
+  const categoryTotals = observations.reduce((acc, i) => {
     acc[i.category] = (acc[i.category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   const topCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  const severityTotals = issues.reduce((acc, i) => {
+  const severityTotals = observations.reduce((acc, i) => {
     acc[i.severity] = (acc[i.severity] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -107,7 +108,7 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-sm">
         <div className="border border-gray-200 bg-gray-50 p-3 rounded">
           <p className="text-xs text-gray-500 uppercase font-bold">Total</p>
-          <p className="text-xl font-bold text-gray-900">{totalIssues}</p>
+          <p className="text-xl font-bold text-gray-900">{totalObservations}</p>
         </div>
         <div className="border border-gray-200 bg-red-50 p-3 rounded">
           <p className="text-xs text-red-700 uppercase font-bold">Em aberto</p>
@@ -256,11 +257,11 @@ const IssuesReport = ({ issues, usersMap }: { issues: IIssue[]; usersMap: Record
 /**
  * Página principal de exibição de Vulnerabilidades (Observations Feed).
  */
-export default function IssuesPage() {
+export default function ObservationsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [issues, setIssues] = useState<IIssue[]>([]);
+  const [observations, setObservations] = useState<IObservation[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -274,8 +275,8 @@ export default function IssuesPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const componentRef = useRef<HTMLDivElement>(null);
-  const [reportIssues, setReportIssues] = useState<IIssue[]>([]);
-  const handlePrint = useReactToPrint({ contentRef: componentRef, documentTitle: 'Relatorio_Issues' });
+  const [reportObservations, setReportObservations] = useState<IObservation[]>([]);
+  const handlePrint = useReactToPrint({ contentRef: componentRef, documentTitle: 'Relatorio_Observations' });
 
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
@@ -286,7 +287,7 @@ export default function IssuesPage() {
     fetchBaseData();
   }, [session, status]);
 
-  const fetchIssues = useCallback(async (pageNum: number, searchStr: string = searchQuery) => {
+  const fetchObservations = useCallback(async (pageNum: number, searchStr: string = searchQuery) => {
     if (status !== 'authenticated' || !session) return;
     setLoading(true);
     try {
@@ -302,7 +303,7 @@ export default function IssuesPage() {
       const res = await fetch(`/api/observations?${params}`);
       if (!res.ok) throw new Error('Erro ao carregar Observations');
       const data = await res.json();
-      setIssues(data.issues);
+      setObservations(data.observations);
       setTotalPages(data.totalPages || 1);
     } catch (err: any) { 
       setError(err.message); 
@@ -312,8 +313,8 @@ export default function IssuesPage() {
   }, [searchQuery, session, status]);
 
   useEffect(() => {
-    fetchIssues(page);
-  }, [fetchIssues, page]);
+    fetchObservations(page);
+  }, [fetchObservations, page]);
 
   useEffect(() => {
     setPage(1);
@@ -335,10 +336,10 @@ export default function IssuesPage() {
   };
 
   const sortedItems = useMemo(() => {
-    const items = [...issues];
+    const items = [...observations];
     return items.sort((a, b) => {
-      let valA: any = a[sortBy as keyof IIssue] || '';
-      let valB: any = b[sortBy as keyof IIssue] || '';
+      let valA: any = a[sortBy as keyof IObservation] || '';
+      let valB: any = b[sortBy as keyof IObservation] || '';
       if (sortBy === 'firstSeen' || sortBy === 'lastSeen' || sortBy === 'slaDueAt') {
         valA = new Date(valA).getTime();
         valB = new Date(valB).getTime();
@@ -350,7 +351,7 @@ export default function IssuesPage() {
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [issues, sortBy, sortOrder]);
+  }, [observations, sortBy, sortOrder]);
 
   const updateIssue = async (issueId: string, value: string | null) => {
     try {
@@ -360,11 +361,11 @@ export default function IssuesPage() {
         body: JSON.stringify({ issueId, assignedTo: value || null }),
       });
       if (!res.ok) throw new Error('Erro ao atualizar');
-      fetchIssues(page);
+      fetchObservations(page);
     } catch (err: any) { alert(err.message); }
   };
 
-  const fetchAllFilteredIssues = async () => {
+  const fetchAllFilteredObservations = async () => {
     const params = new URLSearchParams();
     if (searchQuery) {
       params.set('search', searchQuery);
@@ -373,17 +374,17 @@ export default function IssuesPage() {
     const res = await fetch(`/api/observations?${params}`);
     if (!res.ok) throw new Error('Erro ao buscar dados completos');
     const data = await res.json();
-    return data.issues as IIssue[];
+    return data.observations as IObservation[];
   };
 
   const handleExportExcel = async () => {
     if (!confirm('Exportar todos os resultados atuais para Excel?')) return;
     try {
-      const fullIssues = await fetchAllFilteredIssues();
-      if (!fullIssues || fullIssues.length === 0) return alert('Nenhuma issue para exportar');
+      const fullObservations = await fetchAllFilteredObservations();
+      if (!fullObservations || fullObservations.length === 0) return alert('Nenhuma issue para exportar');
       
       const workbook = new ExcelJS.Workbook();
-      const ws = workbook.addWorksheet('Issues');
+      const ws = workbook.addWorksheet('Observations');
 
       ws.spliceRows(1, 4);
 
@@ -412,7 +413,7 @@ export default function IssuesPage() {
       
       ws.mergeCells('B1:H1');
       const titleCell = ws.getCell('B1');
-      titleCell.value = 'Debit Board - Executive Report (Issues)';
+      titleCell.value = 'Debit Board - Executive Report (Observations)';
       titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: '003366' } };
       titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
       ws.getRow(1).height = 30;
@@ -438,7 +439,7 @@ export default function IssuesPage() {
         cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
       });
 
-      fullIssues.forEach(issue => {
+      fullObservations.forEach(issue => {
         const row = ws.addRow({
           project: issue.project || '',
           repository: issue.repository || '',
@@ -495,11 +496,11 @@ export default function IssuesPage() {
   const handleExportPDF = async () => {
     try {
       setLoading(true);
-      const fullIssues = await fetchAllFilteredIssues();
-      setReportIssues(fullIssues);
+      const fullObservations = await fetchAllFilteredObservations();
+      setReportObservations(fullObservations);
       setTimeout(() => {
         handlePrint();
-        setTimeout(() => setReportIssues([]), 1000);
+        setTimeout(() => setReportObservations([]), 1000);
       }, 500);
     } catch (err: any) {
       alert('Erro na geração do PDF: ' + err.message);
@@ -533,14 +534,14 @@ export default function IssuesPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-apple-bg-light dark:bg-apple-bg-dark">
-      <div style={{ display: 'none' }}><div ref={componentRef}><IssuesReport issues={reportIssues} usersMap={usersMap} /></div></div>
+      <div style={{ display: 'none' }}><div ref={componentRef}><ObservationsReport observations={reportObservations} usersMap={usersMap} /></div></div>
       
       <div className="flex-1 overflow-y-auto">
         <div className="w-full mx-auto p-8 space-y-6">
           <PageHeader 
             title="Observations Feed"
             subtitle="Central de monitoramento de vulnerabilidades. Identifique, analise e delegue."
-            icon={<Binoculars className="w-6 h-6 text-apple-blue" />}
+            icon={<Binoculars className="w-10 h-10 text-apple-blue" />}
             actions={
               <div className="flex items-center gap-2">
                 <button onClick={handleExportExcel} className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors" title="Exportar Excel">
@@ -557,7 +558,7 @@ export default function IssuesPage() {
             <DBQLAdvancedSearch 
               onSearch={setSearchQuery} 
               userId={session.user.id || ''}
-              context="issues" 
+              context="observations" 
               placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
             />
           </div>
@@ -592,7 +593,7 @@ export default function IssuesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
-                  {loading && issues.length === 0 ? (
+                  {loading && observations.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -623,7 +624,14 @@ export default function IssuesPage() {
                           <td className="px-3 py-3 align-middle min-w-0">
                             <div className="flex flex-col gap-0.5 align-middle">
                               <span className="text-xs font-semibold align-middle text-apple-label-light dark:text-apple-label-dark truncate" title={issue.fileName}>
-                                {issue.fileName}
+                                <Link 
+                                  href={`/observations/${issue._id}`}
+                                  title="Ver Detalhes"
+                                  className="inline-flex hover:text-apple-blue hover:border-b-blue-500 items-center justify-center transition-colors"
+                                >
+                                  {issue.fileName} <ExternalLink className="w-3 h-3 ml-1" />
+                                </Link>
+                                
                               </span>
                               <span className="text-[10px] align-middle font-mono text-apple-tertiary-light truncate" title={issue.filePath}>
                                 {issue.filePath}
@@ -676,9 +684,9 @@ export default function IssuesPage() {
                             <Link 
                               href={`/observations/${issue._id}`}
                               title="Ver Detalhes"
-                              className="inline-flex p-2 rounded-full hover:text-apple-blue border hover:border-blue-500 bg-apple-border-light/30 items-center justify-center text-apple-tertiary-light dark:text-apple-label-dark transition-colors"
+                              className="inline-flex w-8 h-8 p-2 rounded-lg hover:text-apple-blue border hover:border-blue-500 bg-apple-border-light/30 items-center justify-center text-apple-tertiary-light dark:text-apple-label-dark transition-colors"
                             >
-                              <Info className="w-4 h-4 font-extralight" />
+                              <ExternalLink className="w-4 h-4 font-extralight" />
                             </Link>
                           </td>
                         </tr>

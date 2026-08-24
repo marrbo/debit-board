@@ -1,7 +1,7 @@
 // models/Issue.ts
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IIssue extends Document {
+export interface IObservation extends Document {
   tenantId: string;
   scanId: mongoose.Types.ObjectId;
   patternId?: mongoose.Types.ObjectId;
@@ -15,7 +15,7 @@ export interface IIssue extends Document {
   hitCount: number;
   severity: 'low' | 'medium' | 'high' | 'critical';
   slaHours: number;
-  status: 'new' | 'open' | 'resolved' | 'recurring' | 'wont_fix';
+  status: 'new' | 'open' | 'resolved' | 'recurring' | 'wont_fix' | 'expired';
   firstSeen: Date;
   lastSeen: Date;
   resolvedAt?: Date;
@@ -26,7 +26,7 @@ export interface IIssue extends Document {
   hits?: { charOffset: number; length: number }[];
 }
 
-const IssueSchema = new Schema<IIssue>({
+const ObservationSchema = new Schema<IObservation>({
   tenantId: { type: String, required: true, ref: 'Tenant' },
   scanId: { type: Schema.Types.ObjectId, ref: 'SASTScan', required: true },
   patternId: { type: Schema.Types.ObjectId, ref: 'VulnerabilityPattern' },
@@ -40,7 +40,7 @@ const IssueSchema = new Schema<IIssue>({
   hitCount: { type: Number, default: 0 },
   severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], required: true },
   slaHours: { type: Number, required: true },
-  status: { type: String, enum: ['open', 'resolved', 'recurring', 'wont_fix'], default: 'open' },
+  status: { type: String, enum: ['open', 'resolved', 'recurring', 'wont_fix', 'expired'], default: 'open' },
   firstSeen: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
   resolvedAt: Date,
@@ -51,8 +51,19 @@ const IssueSchema = new Schema<IIssue>({
   hits: [{ charOffset: Number, length: Number }],
 });
 
-IssueSchema.index({ tenantId: 1, filePath: 1, patternId: 1 });
-IssueSchema.index({ tenantId: 1, status: 1 });
-IssueSchema.index({ tenantId: 1, assignedTo: 1 });
+ObservationSchema.virtual('computedStatus').get(function() {
+  if (!this.slaDueAt) return this.status;
+  const now = new Date();
+  this.status = now >= this.slaDueAt ? 'expired' : this.status;
+  return this.status;
+});
 
-export const Issue = mongoose.models.Issue || mongoose.model<IIssue>('Issue', IssueSchema);
+ObservationSchema.index({ tenantId: 1, filePath: 1, patternId: 1 });
+ObservationSchema.index({ tenantId: 1, status: 1 });
+ObservationSchema.index({ tenantId: 1, assignedTo: 1 });
+
+// Para que o virtual apareça nos resultados JSON
+ObservationSchema.set('toJSON', { virtuals: true });
+ObservationSchema.set('toObject', { virtuals: true });
+
+export const Observation = mongoose.models.Observation || mongoose.model<IObservation>('Observation', ObservationSchema);

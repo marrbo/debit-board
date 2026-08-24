@@ -1,6 +1,6 @@
 // scripts/clear-data.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 import { Project } from '../models/Project';
 import { Team } from '../models/Team';
 
@@ -10,10 +10,10 @@ async function clearData() {
 
   console.log('🧹 Limpando coleções...');
 
-  // 1. Issues
-  const issuesCount = await Issue.countDocuments();
-  await Issue.deleteMany({});
-  console.log(`✅ ${issuesCount} issues removidas.`);
+  // 1. Observations
+  const observationsCount = await Observation.countDocuments();
+  await Observation.deleteMany({});
+  console.log(`✅ ${observationsCount} observations removidas.`);
 
   // 2. Projects (Repositories)
   const projectsCount = await Project.countDocuments();

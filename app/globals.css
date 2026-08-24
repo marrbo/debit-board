@@ -59,7 +59,7 @@
 }
 
 /* ==============================================================
-   CORREÇÃO DA PÁGINA DE ISSUES (LEGIBILIDADE NO TEMA CLARO)
+   CORREÇÃO DA PÁGINA DE Observations (LEGIBILIDADE NO TEMA CLARO)
    ============================================================== */
 
 /* 1. Corrigindo o fundo da "Barra de Busca Avançada" */
@@ -76,7 +76,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* 2. Ajuste do Cabeçalho e Linhas da Grid das Issues */
+/* 2. Ajuste do Cabeçalho e Linhas da Grid das Observations */
 .issue-grid-header {
   @apply bg-[#F2F2F7] dark:bg-apple-card-dark/60 text-[--color-tertiary-label] dark:text-[--color-tertiary-label] font-semibold text-[11px] uppercase tracking-wider border-b border-apple-border-light dark:border-apple-border-dark px-4 py-3 transition-colors;
 }

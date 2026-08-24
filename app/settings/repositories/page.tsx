@@ -143,7 +143,7 @@ function RepositoriesContent() {
             onSearch={setSearchQuery} 
             userId={session.user.id || ''}
             context="repositories" 
-            placeholder="Buscar repositórios (ex: name:backend OR projectId:..." />
+            placeholder="Buscar repositórios (ex: name:repo-backend OR projectId:..." />
         }
       />
 

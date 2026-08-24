@@ -6,7 +6,7 @@ import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { SASTScan } from '@/models/SASTScan';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { executeSearch } from '@/lib/azureSearch';
 import mongoose from 'mongoose';
 import { SearchItem, SearchResponse } from '@/lib/types';
@@ -43,15 +43,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum pattern SAST ativo.' }, { status: 400 });
     }
 
-    const existingIssues = await Issue.find({
+    const existingObservations = await Observation.find({
       tenantId,
-      status: { $in: ['open', 'recurring'] }
+      status: { $in: ['open', 'recurring', 'wont_fix', 'expired'] }
     }).lean();
 
-    const issueMap = new Map<string, any>();
-    existingIssues.forEach(issue => {
-      const key = `${issue.patternId}|${issue.filePath}`;
-      issueMap.set(key, issue);
+    const observationMap = new Map<string, any>();
+    existingObservations.forEach(observation => {
+      const key = `${observation.patternId}|${observation.filePath}`;
+      observationMap.set(key, observation);
     });
 
     // 🔍 Rastreia todas as chaves encontradas no scan atual para calcular os resolvidos
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const patternResults = [];
     let totalOccurrences = 0;
     let failedPatterns = 0;
-    const newIssues: any[] = [];
+    const newObservations: any[] = [];
     const updates: any[] = [];
 
     const newScan = new SASTScan({
@@ -92,6 +92,12 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        // como o Azure não possui filtro de branch no Search Code
+        // Então, filtramos aqui
+        result.results = result.results.filter(
+          (item: SearchItem) => ['main', 'master'].includes(item.branch)
+        );
+
         patternResults.push({
           patternId: pattern._id.toString(),
           query: pattern.queryPattern,
@@ -101,12 +107,13 @@ export async function POST(req: NextRequest) {
           results: result.results,
           hitCount: result.hitCount,
         });
+        
         totalOccurrences += result.hitCount;
 
         for (const item of result.results) {
           const key = `${pattern._id.toString()}|${item.path}`;
           foundKeys.add(key);
-          const existingIssue = issueMap.get(key);
+          const existingIssue = observationMap.get(key);
 
           if (existingIssue) {
             updates.push({
@@ -130,7 +137,7 @@ export async function POST(req: NextRequest) {
             const now = new Date();
             const slaDueAt = new Date(now.getTime() + (pattern.slaHours || 72) * 3600 * 1000);
 
-            newIssues.push({
+            newObservations.push({
               tenantId,
               scanId: newScan._id,
               patternId: pattern._id.toString(),
@@ -170,9 +177,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 🚀 Marca como resolved as issues que existiam anteriormente mas sumiram no scan atual
+    // 🚀 Marca como resolved as observations que existiam anteriormente mas sumiram no scan atual
     const resolvedUpdates: any[] = [];
-    issueMap.forEach((issue, key) => {
+    observationMap.forEach((issue, key) => {
       if (!foundKeys.has(key)) {
         resolvedUpdates.push({
           updateOne: {
@@ -188,14 +195,14 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    if (newIssues.length > 0) {
-      await Issue.insertMany(newIssues);
+    if (newObservations.length > 0) {
+      await Observation.insertMany(newObservations);
     }
     if (updates.length > 0) {
-      await Issue.bulkWrite(updates);
+      await Observation.bulkWrite(updates);
     }
     if (resolvedUpdates.length > 0) {
-      await Issue.bulkWrite(resolvedUpdates);
+      await Observation.bulkWrite(resolvedUpdates);
     }
 
     newScan.patterns = (patternResults as any);

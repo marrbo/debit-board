@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 // 🔥 Importações do Markdown
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { IIssue } from '@/models/Issue';
+import { IObservation } from '@/models/Issue';
 
 export default function IssueDetailPage({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();
@@ -64,7 +64,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   // =========================================================================
   // 🔥 1. Função de Busca do Código (Azure) - Isolada e com Timeout de 15s
   // =========================================================================
-  const fetchSnippet = async (issue: IIssue) => {
+  const fetchSnippet = async (issue: IObservation) => {
     if (!issue || !params.id) return;
 
     setLoadingSnippets(true);
@@ -120,7 +120,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
         
         let foundIssue = null;
         if (data._id) foundIssue = data;
-        else if (data.issues && Array.isArray(data.issues)) foundIssue = data.issues.find((i: any) => i._id === params.id);
+        else if (data.observations && Array.isArray(data.observations)) foundIssue = data.observations.find((i: any) => i._id === params.id);
         
         if (!foundIssue) throw new Error('Issue não encontrada.');
         setIssue(foundIssue);
@@ -155,7 +155,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   if (!issue) return <div className="text-center py-12 text-apple-tertiary-light">Issue não encontrada.</div>;
 
   const pattern = issue.patternId || null;
-  const azureUrl = `${session?.user?.azureSettings?.instanceUrl || ''}/tfs/${session?.user?.azureSettings?.azureCollection || ''}/${issue.project}/_git/${issue.repository}?path=${issue.filePath}&_a=contents`;
+  const azureUrl = `${session?.user?.azureSettings?.instanceUrl || ''}/tfs/${session?.user?.azureSettings?.azureCollection || ''}/${issue.project}/_git/${issue.repository}?path=${issue.filePath}&version=GB${issue.branch}&_a=contents`;
 
   const renderSnippetContent = () => {
     if (loadingSnippets) {
@@ -314,7 +314,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
                     <BookOpen className="w-5 h-5 text-apple-blue mb-2 " />
                     <div className="prose prose-slate dark:prose-invert max-w-none scroll-my-20 min-h-[350px] max-h-[550px] overflow-auto p-3">
                         <Markdown remarkPlugins={[remarkGfm]}>
-                            {/*pattern?.description ||*/ "Não há descrição cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
+                            {pattern?.description || "Não há descrição cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
                         </Markdown>
                     </div>
                 </div>
@@ -325,7 +325,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
                     <BookOpen className="w-5 h-5 text-apple-green mb-2" />
                     <div className="prose prose-slate dark:prose-invert max-w-none scroll-my-20 min-h-[362px] max-h-[550px] overflow-auto p-3">
                         <Markdown remarkPlugins={[remarkGfm]}>
-                            {/*pattern?.recommendation || */"Não há recomendação cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
+                            {pattern?.recommendation || "Não há recomendação cadastrada no sistema para este padrão. O administrador pode cadastrar uma recomendação no módulo de Padrões SAST."}
                         </Markdown>
                     </div>
                 </div>

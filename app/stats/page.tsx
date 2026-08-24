@@ -26,7 +26,7 @@ interface DailyStats {
 }
 
 interface StatsData {
-  kpi: { total: number; accepted: number; resolved: number; recurring: number; wontFix: number; expiredSLA: number };
+  kpi: { total: number; accepted: number; resolved: number; recurring: number; wontFix: number; expired: number };
   severityTotals: Record<string, number>;
   categoryTotals: { label: string; value: number }[];
   projectTotals: {
@@ -56,7 +56,10 @@ export default function StatsPage() {
   const originalQueryRef = useRef<string>('');
 
   const fetchData = async () => {
-    setLoading(true);
+    if (externalQuery === undefined) {
+      setLoading(true);
+    }
+    
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
@@ -73,15 +76,20 @@ export default function StatsPage() {
   };
 
   useEffect(() => {
-    if (status !== 'authenticated' || !session) return;
-    fetchData();
+    if (status !== 'authenticated' || !session) { 
+      router.push('/login');
+      return;
+    };
   }, [searchQuery, session, status]);
 
   useEffect(() => {
     if (externalQuery !== undefined) {
       setSearchQuery(externalQuery);
     }
-  }, [externalQuery]);
+    
+    fetchData();
+    
+  }, [externalQuery, searchQuery, session, status]);
 
   // ================= DADOS DA EVOLUÇÃO =================
   const chartData = stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [];
@@ -274,15 +282,15 @@ export default function StatsPage() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Stats & Usage"
-        icon={<BarChart3 className="w-6 h-6 text-apple-blue" />}
-        subtitle="Visão geral das issues de segurança do seu Tenant."
+        icon={<BarChart3 className="w-10 h-10 text-apple-blue" />}
+        subtitle="Visão geral das observations de segurança do seu Tenant."
         searchBar={
           <div className="relative">
             <DBQLAdvancedSearch
               onSearch={setSearchQuery}
               userId={session?.user.id || ''}
               placeholder="Search stats, e.g. severity:critical OR project:my-api"
-              context="issues"
+              context="observations"
               externalQuery={externalQuery}
               onExternalQueryChange={(q) => setExternalQuery(q)}
             />
@@ -318,7 +326,7 @@ export default function StatsPage() {
           <p className="text-[10px] uppercase font-semibold text-apple-orange tracking-wider">Recorrentes</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
-          <p className="text-3xl font-bold text-purple-600 mt-1">{stats!.kpi.expiredSLA}</p>
+          <p className="text-3xl font-bold text-purple-600 mt-1">{stats!.kpi.expired}</p>
           <p className="text-[10px] uppercase font-semibold text-purple-600 tracking-wider">SLA Vencido</p>
         </div>
         <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors">
@@ -341,7 +349,13 @@ export default function StatsPage() {
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.medium || 0}</p>
           <p className="text-[10px] uppercase font-bold text-apple-yellow">Médio</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-blue dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l *:'''
+        ].  GTC2\
+        
+        
+      
+      \\
+      -popoopii65ert44543223-apple-blue dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none 'fz border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.low || 0}</p>
           <p className="text-[10px] uppercase font-bold text-apple-blue">Baixo</p> 
         </div>

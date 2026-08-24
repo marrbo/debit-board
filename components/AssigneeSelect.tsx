@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Check, User } from "lucide-react";
+import { Search, Check, User, SearchCode } from "lucide-react";
 
 interface AssigneeSelectProps {
   users: any[];
@@ -123,7 +123,7 @@ export default function AssigneeSelect({
           </div>
 
           <div className="relative flex items-center">
-            <Search className="w-3.5 h-3.5 absolute left-3 text-apple-tertiary-light pointer-events-none" />
+            <SearchCode className="w-3.5 h-3.5 absolute left-3 text-apple-tertiary-light pointer-events-none" />
             <input
               type="text"
               value={searchQuery}

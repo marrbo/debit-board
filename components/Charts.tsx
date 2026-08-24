@@ -82,7 +82,9 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
           data: data.map(d => d.value),
           backgroundColor: colors || ['#007AFF', '#AF52DE', '#FF9500', '#34C759', '#FF3B30', '#FF2D55', '#64D2FF', '#FFCC00', '#5856D6', '#30B0C0'],
           borderColor: '#1C1C1E',
-          borderWidth: 2,
+          borderWidth: 1,
+          hoverOffset: 20,
+          hoverBorderWidth: 0,
         }],
         data: [],
       };

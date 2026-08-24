@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PlayCircle, History, Shield } from 'lucide-react';
+import { PlayCircle, History, ShieldKeyhole } from 'lucide-react';
 
 export default function SASTLayout({
   children,
@@ -22,7 +22,7 @@ export default function SASTLayout({
       {/* Sub-Sidebar do SAST */}
       <div className="w-full md:w-48 shrink-0 space-y-1">
         <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-2 pb-4 flex items-center gap-2">
-          <Shield className="w-4 h-4" /> SAST Scanner
+          <ShieldKeyhole className="w-4 h-4" /> SAST Scanner
         </h2>
         {menuItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');

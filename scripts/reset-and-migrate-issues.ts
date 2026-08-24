@@ -1,5 +1,5 @@
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 import { VulnerabilityPattern } from '../models/VulnerabilityPattern';
 import mongoose from 'mongoose';
 
@@ -9,7 +9,7 @@ async function runMigration() {
 
   // 🔥 CORREÇÃO CRUCIAL: Utilizamos $where (JavaScript nativo do Mongo)
   // Isso impede que o Mongoose tente fazer o "Cast" do "null" para ObjectId e quebre a query.
-  const issues = await Issue.find({
+  const observations = await Observation.find({
     $where: function() {
       return this.patternId === null || 
              this.patternId === "null" || 
@@ -18,16 +18,16 @@ async function runMigration() {
     }
   });
 
-  console.log(`🔍 Encontradas ${issues.length} issues sem padrão válido. Tentando vincular...`);
+  console.log(`🔍 Encontradas ${observations.length} observations sem padrão válido. Tentando vincular...`);
 
-  if (issues.length === 0) {
+  if (observations.length === 0) {
     console.log('✅ Nenhuma issue precisa ser atualizada.');
     return;
   }
 
   const bulkOps: mongoose.AnyBulkWriteOperation<any>[] = [];
 
-  for (const issue of issues) {
+  for (const issue of observations) {
     // Busca padrão pela categoria ignorando maiúsculas/minúsculas (case-insensitive)
     const pattern = await VulnerabilityPattern.findOne({
       category: { $regex: new RegExp('^' + issue.category + '$', 'i') }
@@ -46,9 +46,9 @@ async function runMigration() {
   }
 
   if (bulkOps.length > 0) {
-    console.log(`🚀 Executando atualização em lote para ${bulkOps.length} issues...`);
-    const result = await Issue.bulkWrite(bulkOps);
-    console.log(`✅ ${result.modifiedCount} issues atualizadas com sucesso.`);
+    console.log(`🚀 Executando atualização em lote para ${bulkOps.length} observations...`);
+    const result = await Observation.bulkWrite(bulkOps);
+    console.log(`✅ ${result.modifiedCount} observations atualizadas com sucesso.`);
   }
 
   console.log('🎉 Migração concluída!');

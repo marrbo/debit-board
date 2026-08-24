@@ -1,7 +1,7 @@
 // app/api/observations/[id]/snippet/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { Tenant } from '@/models/Tenant';
 import { getServerAuthSession } from '@/lib/auth';
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   await connectToDatabase();
   // 🔥 Popula o padrão para trazer os dados mais atualizados
-  const issue = await Issue.findById(params.id).populate('patternId'); 
+  const issue = await Observation.findById(params.id).populate('patternId'); 
   if (!issue || issue.tenantId !== session.user.tenantId) {
     return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
   }
@@ -147,7 +147,7 @@ export async function PATCH(
     await connectToDatabase();
 
     // Garante que a observação pertence ao tenant do usuário logado
-    const updatedObservation = await Issue.findOneAndUpdate(
+    const updatedObservation = await Observation.findOneAndUpdate(
       { _id: id, tenantId: session.user.tenantId },
       { $set: { assigneeId: assigneeId || null } },
       { new: true }

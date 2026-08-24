@@ -1,19 +1,19 @@
-// scripts/clear-issues.ts
+// scripts/clear-observations.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Issue } from '../models/Issue';
+import { Observation } from '../models/Issue';
 
-async function clearIssues() {
+async function clearObservations() {
   console.log('🚀 Conectando ao MongoDB...');
   await connectToDatabase();
 
-  console.log('🗑️ Removendo todas as issues do banco de dados...');
-  const result = await Issue.deleteMany({});
+  console.log('🗑️ Removendo todas as observations do banco de dados...');
+  const result = await Observation.deleteMany({});
   
-  console.log(`✅ ${result.deletedCount} issues removidas com sucesso!`);
+  console.log(`✅ ${result.deletedCount} observations removidas com sucesso!`);
   process.exit(0);
 }
 
-clearIssues().catch((error) => {
-  console.error('❌ Erro ao limpar issues:', error);
+clearObservations().catch((error) => {
+  console.error('❌ Erro ao limpar observations:', error);
   process.exit(1);
 });

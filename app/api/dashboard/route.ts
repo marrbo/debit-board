@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { SearchRecord } from '@/models/SearchRecord';
 import { SASTScan } from '@/models/SASTScan';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { getServerAuthSession } from '@/lib/auth';
 import { subDays, startOfDay, endOfDay, format } from 'date-fns';
 
@@ -49,25 +49,25 @@ export async function GET(req: NextRequest) {
     dailyData[day] = (dailyData[day] || 0) + (scan.totalOccurrences || 0);
   }
 
-  // KPIs de Issues (Abertas, Recorrentes, Resolvidas, Não Corrigir)
-  const issuesStats = await Issue.aggregate([
+  // KPIs de Observations (Abertas, Recorrentes, Resolvidas, Não Corrigir)
+  const observationsStats = await Observation.aggregate([
     { $match: { tenantId: tenantId } },
     { $group: { _id: "$status", count: { $sum: 1 } } }
   ]);
 
-  const statsMap = issuesStats.reduce((acc: Record<string, number>, curr: any) => {
+  const statsMap = observationsStats.reduce((acc: Record<string, number>, curr: any) => {
     acc[curr._id] = curr.count;
     return acc;
   }, {} as Record<string, number>);
 
-  const overdueCount = await Issue.countDocuments({
+  const overdueCount = await Observation.countDocuments({
     tenantId: tenantId,
     status: { $in: ['open', 'recurring'] },
     slaDueAt: { $lt: new Date() }
   });
 
   if (overdueCount > 0) {
-    await Issue.updateMany({
+    await Observation.updateMany({
       tenantId: tenantId,
       status: { $in: ['open', 'recurring'] },
       slaDueAt: { $lt: new Date() }
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     totalHits: searchRecords.reduce((sum, r) => sum + (r.totalHits || 0), 0) +
                sastScans.reduce((sum, s) => sum + (s.totalOccurrences || 0), 0),
     uniqueGerencia: new Set(searchRecords.map(r => r.gerencia).filter(Boolean)).size,
-    issuesStats: {
+    observationsStats: {
       open: statsMap['open'] || 0,
       recurring: statsMap['recurring'] || 0,
       overdue: overdueCount,

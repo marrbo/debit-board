@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { redirect, usePathname } from 'next/navigation';
-import { settingsMenuItems } from '@/lib/settingsMenu';
+import { adminMenuItems, settingsMenuItems } from '@/lib/settingsMenu';
 import { useSession } from 'next-auth/react';
 
 export default function SettingsLayout({
@@ -14,14 +14,18 @@ export default function SettingsLayout({
   const pathname = usePathname();
   const { data: session } = useSession();
 
+  const isAdmin = (!session || session?.user?.isAdmin || false);
+
+  const settingsMenu = isAdmin ? adminMenuItems : settingsMenuItems;
+
   return (
     <div className="flex flex-col md:flex-row w-full p-8 gap-6 mx-auto transition-colors duration-200">
       {/* Sub-Sidebar de Settings */}
       <div className="w-full md:w-48 shrink-0 space-y-1">
         <h2 className="text-xs font-bold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider px-3 pt-2 pb-4">Organization</h2>
-        {settingsMenuItems.map((item) => {
+        {settingsMenu.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          const isAdmin = !session || session.user?.email === process.env.ADMIN_EMAIL;
+          
           return (
             <Link
               key={item.href}

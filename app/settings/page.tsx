@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Cog } from 'lucide-react';
 import { settingsMenuItems } from '@/lib/settingsMenu';
 
 export default function SettingsDashboardPage() {
@@ -24,7 +24,10 @@ export default function SettingsDashboardPage() {
 
   return (
     <div className="w-full space-y-6 mx-auto">
-      <PageHeader title="Settings" subtitle="Gerencie seu tenant e integrações." />
+      <PageHeader 
+        title="Settings" 
+        icon={<Cog className="w-6 h-6 text-apple-blue" />}
+        subtitle="Gerencie seu tenant e integrações." />
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {settingsMenuItems.map((item) => (

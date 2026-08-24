@@ -27,7 +27,7 @@ export default function SavedQueriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [queryString, setQueryString] = useState('');
-  const [context, setContext] = useState('issues');
+  const [context, setContext] = useState('observations');
   const [visibility, setVisibility] = useState<SavedQueryItem['visibility']>('private');
 
   const fetchQueries = async () => {
@@ -60,7 +60,7 @@ export default function SavedQueriesPage() {
     setEditingId(null);
     setName('');
     setQueryString('');
-    setContext('issues');
+    setContext('observations');
     setVisibility('private');
     setIsModalOpen(true);
   };
@@ -78,7 +78,7 @@ export default function SavedQueriesPage() {
     setEditingId(q._id);
     setName(q.name);
     setQueryString(q.queryString);
-    setContext(q.context || 'issues');
+    setContext(q.context || 'observations');
     setVisibility(q.visibility || 'private');
     setIsModalOpen(true);
   };
@@ -261,7 +261,7 @@ export default function SavedQueriesPage() {
                   onChange={(e) => setContext(e.target.value)} 
                   className="w-full"
                 >
-                  <option value="issues">Issues</option>
+                  <option value="observations">Observations</option>
                   <option value="projects">Projetos</option>
                   <option value="repositories">Repositórios</option>
                   <option value="stats">Estatísticas</option>

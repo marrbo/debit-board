@@ -1,7 +1,7 @@
 // app/api/observations/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Issue } from '@/models/Issue';
+import { Observation } from '@/models/Issue';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern'; 
 import { getServerAuthSession } from '@/lib/auth';
 
@@ -190,7 +190,7 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get('all') === 'true';
 
     if (id) {
-      let issue = await Issue.findById(id).lean();
+      let issue = await Observation.findById(id).lean();
       if (!issue || issue.tenantId !== session.user.tenantId) {
         return NextResponse.json({ error: 'Issue não encontrada.' }, { status: 404 });
       }
@@ -237,22 +237,22 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     if (all) {
-      const allIssues = await Issue.find(query).sort({ firstSeen: -1 }).lean();
-      return NextResponse.json({ issues: allIssues });
+      const allObservations = await Observation.find(query).sort({ firstSeen: -1 }).lean();
+      return NextResponse.json({ observations: allObservations });
     }
 
-    const [issues, total] = await Promise.all([
-      Issue.find(query).sort({ firstSeen: -1 }).skip(skip).limit(limit).lean(),
-      Issue.countDocuments(query)
+    const [observations, total] = await Promise.all([
+      Observation.find(query).sort({ firstSeen: -1 }).skip(skip).limit(limit).lean(),
+      Observation.countDocuments(query)
     ]);
 
     return NextResponse.json({
-      issues,
+      observations: observations,
       totalPages: Math.ceil(total / limit),
     });
 
   } catch (error: any) {
-    console.error('❌ Erro fatal na API de Issues:', error.message);
+    console.error('❌ Erro fatal na API de Observations:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

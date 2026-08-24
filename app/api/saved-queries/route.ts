@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       sub: userId || session.user.id,
       name,
       queryString,
-      context: context || 'issues',
+      context: context || 'observations',
       visibility
     });
 
@@ -101,7 +101,7 @@ export async function PUT(req: NextRequest) {
 
     const updated = await SavedQuery.findOneAndUpdate(
       { _id: id, tenantId, sub: session.user.id },
-      { name, queryString, context: context || 'issues', visibility },
+      { name, queryString, context: context || 'observations', visibility },
       { new: true }
     );
 

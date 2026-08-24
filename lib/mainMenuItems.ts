@@ -1,8 +1,8 @@
 // lib/mainMenuItems.ts
 import { 
   BarChart3, 
-  Shield, 
-  Search, 
+  ShieldKeyhole, 
+  SearchCode, 
   BookOpen, 
   Settings,
   LucideIcon,
@@ -19,8 +19,8 @@ export interface MenuItem {
 export const topNavItems: MenuItem[] = [
   { href: '/stats', label: 'Stats', icon: BarChart3 },
   { href: '/observations', label: 'Observations', icon: Binoculars },
-  { href: '/sast', label: 'SAST', icon: Shield },
-  { href: '/azure-search-code', label: 'Search', icon: Search },
+  { href: '/sast', label: 'SAST', icon: ShieldKeyhole },
+  { href: '/azure-search-code', label: 'Search', icon: SearchCode },
 ];
 
 // Itens da base (Wiki e Settings, logo acima do botão Account)

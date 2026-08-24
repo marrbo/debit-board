@@ -23,21 +23,21 @@ export async function middleware(request: NextRequest) {
   // FLUXO DO ADMIN
   if (isAdmin) {
     // Admin pode ver o Dashboard!
-    if (pathname === '/') return NextResponse.next();
+    if (pathname === '/stats') return NextResponse.next();
 
     // Admin bloqueado do Setup, vai para o Admin
-    if (pathname.startsWith('/setup')) {
-      return NextResponse.redirect(new URL('/admin', request.url));
+    if (pathname.startsWith('/settings/profile/user')) {
+      return NextResponse.redirect(new URL('/settings/admin', request.url));
     }
     return NextResponse.next();
   }
 
   // FLUXO DO USUÁRIO COMUM
   const isOnboardingCompleted = token?.onboardingCompleted === true;
-  const isOnSetupPage = pathname.startsWith("/setup");
+  const isOnSetupPage = pathname.startsWith("/settings/profile/user");
 
   if (!isOnboardingCompleted) {
-    if (!isOnSetupPage) return NextResponse.redirect(new URL('/setup', request.url));
+    if (!isOnSetupPage) return NextResponse.redirect(new URL('/settings/profile/user', request.url));
     return NextResponse.next();
   }
 

@@ -8,12 +8,12 @@ import Link from 'next/link';
 interface DBQLHelpModalProps {
   isOpen: boolean;
   onClose: () => void;
-  context?: 'issues' | 'users' | 'projects' | string; // Adicione novos models aqui
+  context?: 'observations' | 'users' | 'projects' | string; // Adicione novos models aqui
 }
 
 // Dicionário dinâmico que mapeia o contexto para os campos do Model
 const contextPropertiesMapping: Record<string, { prop: string; desc: string; ex: string }[]> = {
-  issues: [
+  observations: [
     { prop: 'category', desc: 'Categoria da vulnerabilidade', ex: 'category:"Broken Access Control"' },
     { prop: 'severity', desc: 'Severidade (critical, high, medium, low)', ex: 'severity:critical' },
     { prop: 'branch', desc: 'Branch do repositório', ex: 'branch:main' },
@@ -44,7 +44,7 @@ const operators = [
   { op: '*', desc: 'Curinga (Wildcard)', ex: 'fileName:*Controller.cs' },
 ];
 
-export default function DBQLHelpModal({ isOpen, onClose, context = 'issues' }: DBQLHelpModalProps) {
+export default function DBQLHelpModal({ isOpen, onClose, context = 'observations' }: DBQLHelpModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Fecha o modal ao pressionar ESC
