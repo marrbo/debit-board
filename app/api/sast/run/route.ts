@@ -6,7 +6,7 @@ import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { SASTScan } from '@/models/SASTScan';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { executeSearch } from '@/lib/azureSearch';
 import mongoose from 'mongoose';
 import { SearchItem, SearchResponse } from '@/lib/types';

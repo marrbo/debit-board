@@ -1,9 +1,12 @@
 // app/api/observations/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern'; 
 import { getServerAuthSession } from '@/lib/auth';
+import '@/utils/mongooseExtensions';
+import { ObjectId } from 'mongoose';
+
 
 // 🛠️ Função auxiliar para converter um termo individual (ex: branch:main ou !fileName:*Test*) em objeto do MongoDB
 function buildMongoCondition(isNot: boolean, key: string, rawValue: string): any {
@@ -195,11 +198,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Issue não encontrada.' }, { status: 404 });
       }
 
-      if (issue.patternId && typeof issue.patternId === 'string' && issue.patternId.length > 0) {
-        const pattern = await VulnerabilityPattern.findById(issue.patternId).lean();
-        issue.patternId = pattern || null; 
+      if (issue.patternId && issue?.patternId?.isValidAndNotNull() ) {
+        const pattern = await VulnerabilityPattern.findById<ObjectId>(issue.patternId).lean();
+        issue.pattern = pattern || null; 
       } else {
-        issue.patternId = null;
+        issue.pattern = null;
       }
       return NextResponse.json(issue);
     }

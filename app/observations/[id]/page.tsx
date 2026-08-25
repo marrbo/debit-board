@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 // 🔥 Importações do Markdown
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { IObservation } from '@/models/Issue';
+import { IObservation } from '@/models/Observation';
 
 export default function IssueDetailPage({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();

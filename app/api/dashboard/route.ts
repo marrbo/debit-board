@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { SearchRecord } from '@/models/SearchRecord';
 import { SASTScan } from '@/models/SASTScan';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { getServerAuthSession } from '@/lib/auth';
 import { subDays, startOfDay, endOfDay, format } from 'date-fns';
 

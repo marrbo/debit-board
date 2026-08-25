@@ -1,6 +1,6 @@
 // scripts/clear-data.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Observation } from '../models/Issue';
+import { Observation } from '../models/Observation';
 import { Project } from '../models/Project';
 import { Team } from '../models/Team';
 

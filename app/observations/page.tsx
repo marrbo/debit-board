@@ -19,7 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import PageHeader from '@/components/PageHeader';
 import AssigneeSelect from '@/components/AssigneeSelect';
-import { IObservation } from '@/models/Issue';
+import { IObservation } from '@/models/Observation';
 import React from 'react';
 
 /**

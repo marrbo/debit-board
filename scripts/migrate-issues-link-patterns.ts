@@ -1,6 +1,6 @@
 // scripts/migrate-observations-link-patterns.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Observation } from '../models/Issue';
+import { Observation } from '../models/Observation';
 import { VulnerabilityPattern } from '../models/VulnerabilityPattern';
 
 async function migrateIssuePatterns() {

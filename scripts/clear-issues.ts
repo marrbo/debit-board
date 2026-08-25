@@ -1,6 +1,6 @@
 // scripts/clear-observations.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Observation } from '../models/Issue';
+import { Observation } from '../models/Observation';
 
 async function clearObservations() {
   console.log('🚀 Conectando ao MongoDB...');

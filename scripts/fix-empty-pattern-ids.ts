@@ -1,6 +1,6 @@
 // scripts/fix-empty-pattern-ids.ts
 import { connectToDatabase } from '../lib/mongodb';
-import { Observation } from '../models/Issue';
+import { Observation } from '../models/Observation';
 
 async function fixEmptyPatternIds() {
   console.log('🚀 Conectando ao MongoDB para limpeza de dados...');

@@ -1,7 +1,7 @@
 // app/api/observation-filters/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { getServerAuthSession } from '@/lib/auth';
 import { PipelineStage } from 'mongoose';
 

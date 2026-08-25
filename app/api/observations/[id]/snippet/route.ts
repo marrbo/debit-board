@@ -1,7 +1,7 @@
 // app/api/observations/[id]/snippet/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { Tenant } from '@/models/Tenant';
 import { getServerAuthSession } from '@/lib/auth';

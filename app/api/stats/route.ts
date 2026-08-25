@@ -1,7 +1,7 @@
 // app/api/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Observation } from '@/models/Issue';
+import { Observation } from '@/models/Observation';
 import { SearchRecord } from '@/models/SearchRecord';
 import { SASTScan } from '@/models/SASTScan';
 import { getServerAuthSession } from '@/lib/auth';
@@ -211,7 +211,7 @@ export async function GET(req: NextRequest) {
         chartData[idx].open += item.count;
       } else if (status === 'recurring') {
         chartData[idx].recurring += item.count;
-      } else if (status === 'recurring') {
+      } else if (status === 'expired') {
         chartData[idx].expired += item.count;
       }
       // Outros status podem ser ignorados ou adicionados dinamicamente
