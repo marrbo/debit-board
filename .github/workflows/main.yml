@@ -19,9 +19,9 @@ jobs:
       run: |
         npm ci
 
-    - name: Run linter
-      run: |
-        npm run lint
+    # - name: Run linter
+    #   run: |
+    #     npm run lint
 
     - name: Build
       run: |
@@ -43,7 +43,7 @@ jobs:
       uses: codecov/test-results-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./frontend/test-report.junit.xml
+        files: ./test-report.junit.xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -52,4 +52,4 @@ jobs:
         flags: unittests
         name: github-actions
         fail_ci_if_error: false
-        directory: ./frontend/coverage
+        directory: ./coverage

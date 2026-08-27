@@ -16,6 +16,7 @@
     "azure-devops-node-api": "^15.1.2",
     "chart.js": "^4.4.0",
     "date-fns": "^4.4.0",
+    "eslint-config-next": "^16.3.3",
     "exceljs": "^3.10.0",
     "lucide-react": "^1.33.0",
     "mongodb": "^7.5.0",
