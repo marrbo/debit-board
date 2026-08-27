@@ -1,12 +1,11 @@
 // app/stats/page.tsx
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { subDays } from 'date-fns';
 import Charts from '@/components/Charts';
 import PageHeader from '@/components/PageHeader';
 import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
@@ -46,20 +45,21 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [externalQuery, setExternalQuery] = useState('');
   const [lastCategory, setLastCategory] = useState<string | null>(null);
   const [projectViewMode, setProjectViewMode] = useState<'status' | 'severity'>('status');
   const [evolutionViewMode, setEvolutionViewMode] = useState<'severity' | 'status'>('severity');
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
 
-  // Armazena a query original (antes do filtro do gráfico)
+  // Ref para rastrear a última query buscada (evita buscas duplicadas)
+  const lastSearchQueryRef = useRef<string>('');
+  // Ref para guardar a query original antes do filtro de categoria
   const originalQueryRef = useRef<string>('');
 
-  const fetchData = async () => {
-    if (externalQuery === undefined) {
-      setLoading(true);
-    }
-    
+  // Callback de busca estável
+  const fetchData = useCallback(async () => {
+    if (status !== 'authenticated' || !session) return;
+
+    setLoading(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
@@ -73,23 +73,20 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (status !== 'authenticated' || !session) { 
-      router.push('/login');
-      return;
-    };
   }, [searchQuery, session, status]);
 
+  // Handler de busca (usado pelo DBQLAdvancedSearch)
+  const handleSearch = useCallback((newQuery: string) => {
+    setSearchQuery(newQuery);
+    lastSearchQueryRef.current = newQuery;
+  }, []);
+
+  // Buscar dados sempre que searchQuery mudar
   useEffect(() => {
-    if (externalQuery !== undefined) {
-      setSearchQuery(externalQuery);
+    if (status === 'authenticated') {
+      fetchData();
     }
-    
-    fetchData();
-    
-  }, [externalQuery, searchQuery, session, status]);
+  }, [searchQuery, fetchData, session, status]);
 
   // ================= DADOS DA EVOLUÇÃO =================
   const chartData = stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [];
@@ -114,7 +111,6 @@ export default function StatsPage() {
     const datasets: any[] = [];
 
     if (evolutionViewMode === 'severity') {
-      // Corrigido: as const garante que key seja literal
       const severities = [
         { key: 'critical', label: 'Crítico', color: '#FF3B30' },
         { key: 'high', label: 'Alto', color: '#FF9500' },
@@ -242,17 +238,19 @@ export default function StatsPage() {
       newQuery = `category:"${cleanLabel}"`;
     }
 
-    setExternalQuery(newQuery);
+    setSearchQuery(newQuery);
     setLastCategory(cleanLabel);
+    lastSearchQueryRef.current = newQuery;
   };
 
   const clearCategoryFilter = () => {
     if (!lastCategory) return;
 
     const original = originalQueryRef.current;
-    setExternalQuery(original);
+    setSearchQuery(original);
     setLastCategory(null);
     originalQueryRef.current = '';
+    lastSearchQueryRef.current = original;
   };
 
   // ================= RENDERIZAÇÃO =================
@@ -287,12 +285,10 @@ export default function StatsPage() {
         searchBar={
           <div className="relative">
             <DBQLAdvancedSearch
-              onSearch={setSearchQuery}
+              onSearch={handleSearch}
               userId={session?.user.id || ''}
               placeholder="Search stats, e.g. severity:critical OR project:my-api"
               context="observations"
-              externalQuery={externalQuery}
-              onExternalQueryChange={(q) => setExternalQuery(q)}
             />
             {lastCategory && (
               <button
@@ -345,19 +341,13 @@ export default function StatsPage() {
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.high || 0}</p>
           <p className="text-[10px] uppercase font-bold text-apple-orange">Alto</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-yellow dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4  transition-colors">
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-yellow dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.medium || 0}</p>
           <p className="text-[10px] uppercase font-bold text-apple-yellow">Médio</p>
         </div>
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l *:'''
-        ].  GTC2\
-        
-        
-      
-      \\
-      -popoopii65ert44543223-apple-blue dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none 'fz border-l-4 transition-colors">
+        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-l-apple-blue dark:border-apple-border-dark rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none border-l-4 transition-colors">
           <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{severityTotals.low || 0}</p>
-          <p className="text-[10px] uppercase font-bold text-apple-blue">Baixo</p> 
+          <p className="text-[10px] uppercase font-bold text-apple-blue">Baixo</p>
         </div>
       </div>
 

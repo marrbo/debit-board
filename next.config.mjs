@@ -7,6 +7,16 @@ const nextConfig = {
     // Permite Mongoose/MongoDB rodar no servidor Node.js (Next.js 15+ recomenda 'serverExternalPackages')
     serverComponentsExternalPackages: ['mongoose', 'mongodb'],
   },
+  async headers() {
+    return [
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       config.devtool = 'source-map'; // garante source maps detalhados

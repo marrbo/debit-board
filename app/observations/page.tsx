@@ -6,10 +6,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  FileSpreadsheet, FileText,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Binoculars,
-  Info,
   ExternalLink
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
@@ -21,242 +19,9 @@ import PageHeader from '@/components/PageHeader';
 import AssigneeSelect from '@/components/AssigneeSelect';
 import { IObservation } from '@/models/Observation';
 import React from 'react';
+import { ObservationsReport } from './components';
+import ExportSplitButton from '@/components/ExportSplitButton';
 
-/**
- * Renderiza o Avatar do usuário de forma padronizada.
- */
-export function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string; className?: string }) {
-  const initial = (name || sub || 'U').charAt(0).toUpperCase();
-  const colors = ['bg-blue-600', 'bg-red-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 'bg-pink-600'];
-  const colorIndex = (sub || name || '').length % colors.length;
-  return (
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${colors[colorIndex]} ${className}`}>
-      {initial}
-    </div>
-  );
-}
-
-/**
- * Componente do Relatório PDF com agrupamentos e timbrado executivo.
- */
-export const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
-  if (!observations.length) return null;
-
-  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-
-  const sortedObservations = [...observations].sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category);
-    if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '');
-    if ((a.repository || '') !== (b.repository || '')) return (a.repository || '').localeCompare(b.repository || '');
-    const diff = (severityOrder[a.severity] || 9) - (severityOrder[b.severity] || 9);
-    if (diff !== 0) return diff;
-    return a.fileName.localeCompare(b.fileName);
-  });
-
-  const groupBy = (arr: IObservation[], key: keyof IObservation) => {
-    return arr.reduce((acc, item) => {
-      const groupKey = String(item[key] || 'Sem ' + key);
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(item);
-      return acc;
-    }, {} as Record<string, IObservation[]>);
-  };
-
-  const categoryGroups = groupBy(sortedObservations, 'category');
-
-  const totalObservations = observations.length;
-  const totalOpen = observations.filter(i => i.status === 'open' || i.status === 'recurring').length;
-  const totalFixed = observations.filter(i => i.status === 'resolved').length;
-  const totalWontFix = observations.filter(i => i.status === 'wont_fix').length;
-  const categoryTotals = observations.reduce((acc, i) => {
-    acc[i.category] = (acc[i.category] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const topCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-  const severityTotals = observations.reduce((acc, i) => {
-    acc[i.severity] = (acc[i.severity] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  return (
-    <div className="bg-white text-black print:p-4" style={{ fontFamily: 'Arial, sans-serif' }}>
-      <style>
-        {`
-          @page { size: A4 landscape; margin: 1cm; }
-          @media print { body { margin: 0; padding: 0; } }
-          .row-item { page-break-inside: avoid; }
-        `}
-      </style>
-
-      <div className="flex items-center gap-4 mb-6 border-b-2 border-gray-300 pb-4">
-        <div className="p-2 bg-blue-600 rounded-lg text-white shrink-0">
-          <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-            <path d="M12 26 C4 26 2 20 2 20 C2 20 4 14 12 14 C18 14 20 20 20 20 C20 20 18 26 12 26 Z" fill="#ffffff" opacity="0.8"/>
-            <path d="M28 26 C36 26 38 20 38 20 C38 20 36 14 28 14 C22 14 20 20 20 20 C20 20 22 26 28 26 Z" fill="#ffffff" opacity="0.8"/>
-            <circle cx="12" cy="20" r="4" fill="#1e293b" stroke="#fff" strokeWidth="2"/>
-            <circle cx="28" cy="20" r="4" fill="#1e293b" stroke="#fff" strokeWidth="2"/>
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-blue-700">Debit Board</h1>
-          <p className="text-gray-500 text-sm">Relatório Executivo de Segurança</p>
-          <p className="text-xs text-gray-400 mt-1">Gerado em: {new Date().toLocaleString()}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-sm">
-        <div className="border border-gray-200 bg-gray-50 p-3 rounded">
-          <p className="text-xs text-gray-500 uppercase font-bold">Total</p>
-          <p className="text-xl font-bold text-gray-900">{totalObservations}</p>
-        </div>
-        <div className="border border-gray-200 bg-red-50 p-3 rounded">
-          <p className="text-xs text-red-700 uppercase font-bold">Em aberto</p>
-          <p className="text-xl font-bold text-red-600">{totalOpen}</p>
-        </div>
-        <div className="border border-gray-200 bg-emerald-50 p-3 rounded">
-          <p className="text-xs text-emerald-700 uppercase font-bold">Resolvidas</p>
-          <p className="text-xl font-bold text-emerald-600">{totalFixed}</p>
-        </div>
-        <div className="border border-gray-200 bg-gray-50 p-3 rounded">
-          <p className="text-xs text-gray-500 uppercase font-bold">Não corrigir</p>
-          <p className="text-xl font-bold text-gray-900">{totalWontFix}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-6 mb-6 text-sm">
-        <div>
-          <p className="text-xs text-gray-500 uppercase font-bold mb-1">Top Categorias</p>
-          <div className="flex flex-wrap gap-2">
-            {topCategories.map(([cat, count]) => (
-              <span key={cat} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">{cat} ({count})</span>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 uppercase font-bold mb-1">Severidade</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(severityTotals).map(([sev, count]) => (
-              <span key={sev} className={`px-2 py-1 rounded text-xs uppercase font-bold ${
-                sev === 'critical' ? 'bg-red-100 text-red-800' :
-                sev === 'high' ? 'bg-orange-100 text-orange-800' :
-                sev === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>{sev} ({count})</span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <table className="w-full text-xs border-collapse border border-gray-200">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[30%]">Arquivo / Observação</th>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[12%]">Branch</th>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[12%]">Status</th>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[15%]">Atribuído a</th>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[10%]">Severidade</th>
-            <th className="border border-gray-200 p-2 text-left font-bold w-[8%]">SLA</th>
-            <th className="border border-gray-200 p-2 text-center font-bold w-[8%]">Hits</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.keys(categoryGroups).sort().map((cat) => {
-            const projectGroups = groupBy(categoryGroups[cat], 'project');
-            return (
-              <React.Fragment key={cat}>
-                <tr className="bg-gray-200/80 border-b border-gray-300">
-                  <td colSpan={7} className="p-2 pl-4 font-bold text-gray-800 text-sm border-r border-gray-300">
-                    📁 Categoria: {cat}
-                  </td>
-                </tr>
-                {Object.keys(projectGroups).sort().map((proj) => {
-                  const repoGroups = groupBy(projectGroups[proj], 'repository');
-                  return (
-                    <React.Fragment key={proj}>
-                      <tr className="bg-gray-100/70">
-                        <td colSpan={7} className="p-2 pl-8 font-semibold text-gray-700 text-xs border-r border-gray-300">
-                          📂 Projeto: {proj || 'Sem Projeto'}
-                        </td>
-                      </tr>
-                      {Object.keys(repoGroups).sort().map((repo) => {
-                        const severityGroups = groupBy(repoGroups[repo], 'severity');
-                        return (
-                          <React.Fragment key={repo}>
-                            <tr className="bg-gray-50/60">
-                              <td colSpan={7} className="p-2 pl-12 font-medium text-gray-600 text-xs border-r border-gray-300">
-                                📦 Repositório: {repo || 'Sem Repositório'}
-                              </td>
-                            </tr>
-                            {Object.keys(severityGroups).sort((a, b) => (severityOrder[a] || 9) - (severityOrder[b] || 9)).map((sev) => {
-                              const items = severityGroups[sev];
-                              return (
-                                <React.Fragment key={sev}>
-                                  <tr>
-                                    <td colSpan={7} className="p-2 pl-16 font-medium text-gray-500 text-[10px] border-r border-gray-300">
-                                      <span className={`px-2 py-0.5 rounded ${
-                                        sev === 'critical' ? 'bg-red-200 text-red-800' :
-                                        sev === 'high' ? 'bg-orange-200 text-orange-800' :
-                                        sev === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                                        'bg-blue-200 text-blue-800'
-                                      }`}>
-                                        ⚠️ Severidade: {sev.toUpperCase()}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                  {items.map((issue) => (
-                                    <tr key={issue._id.toString()} className="border-b border-gray-100 hover:bg-gray-50 row-item">
-                                      <td className="border border-gray-200 p-2 pl-20 align-top">
-                                        <div className="font-bold text-[11px]">{issue.fileName}</div>
-                                        <div className="text-[9px] text-gray-500 mt-0.5">{issue.filePath}</div>
-                                      </td>
-                                      <td className="border border-gray-200 p-2 align-middle">{issue.branch}</td>
-                                      <td className="border border-gray-200 p-2 align-middle">
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                          issue.status === 'open' || issue.status === 'recurring' ? 'bg-red-100 text-red-800' :
-                                          issue.status === 'resolved' ? 'bg-emerald-100 text-emerald-800' :
-                                          'bg-gray-100 text-gray-800'
-                                        }`}>
-                                          {issue.status}
-                                        </span>
-                                      </td>
-                                      <td className="border border-gray-200 p-2 align-middle">{usersMap[issue.assignedTo || ''] || '—'}</td>
-                                      <td className="border border-gray-200 p-2 align-middle">
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                          issue.severity === 'critical' ? 'bg-red-200 text-red-800' :
-                                          issue.severity === 'high' ? 'bg-orange-200 text-orange-800' :
-                                          issue.severity === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                                          'bg-blue-200 text-blue-800'
-                                        }`}>
-                                          {issue.severity}
-                                        </span>
-                                      </td>
-                                      <td className="border border-gray-200 p-2 align-middle">{issue.slaHours}h</td>
-                                      <td className="border border-gray-200 p-2 text-center align-middle font-bold">{issue.hitCount}</td>
-                                    </tr>
-                                  ))}
-                                </React.Fragment>
-                              );
-                            })}
-                          </React.Fragment>
-                        );
-                      })}
-                    </React.Fragment>
-                  );
-                })}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-      <p className="text-xs text-gray-400 mt-4 text-center">Relatório gerado automaticamente.</p>
-    </div>
-  );
-};
-
-/**
- * Página principal de exibição de Vulnerabilidades (Observations Feed).
- */
 export default function ObservationsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -268,38 +33,48 @@ export default function ObservationsPage() {
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
   const [searchQuery, setSearchQuery] = useState('');
-
-  // NOVO: estado para controlar visibilidade do AdvancedSearch
-  const [showSearch, setShowSearch] = useState(true);
 
   const [sortBy, setSortBy] = useState<string>('firstSeen');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const componentRef = useRef<HTMLDivElement>(null);
   const [reportObservations, setReportObservations] = useState<IObservation[]>([]);
-  const handlePrint = useReactToPrint({ contentRef: componentRef, documentTitle: 'Relatorio_Observations' });
+  
+  const handlePrint = useReactToPrint({ 
+    contentRef: componentRef, 
+    documentTitle: 'Relatorio_Observations',
+    onAfterPrint: () => {
+      setReportObservations([]); 
+      setLoading(false);
+    }
+  });
 
+  // Ref para rastrear a última query buscada (apenas informativo)
+  const lastSearchQueryRef = useRef<string | null>(null);
+
+  // Carregar usuários (uma vez)
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
     const fetchBaseData = async () => {
-      const usersRes = await fetch('/api/users');
-      if (usersRes.ok) setUsers(await usersRes.json());
+      try {
+        const usersRes = await fetch('/api/users');
+        if (usersRes.ok) setUsers(await usersRes.json());
+      } catch (err) {
+        console.error("Erro ao carregar usuários:", err);
+      }
     };
     fetchBaseData();
   }, [session, status]);
 
-  const fetchObservations = useCallback(async (pageNum: number, searchStr: string = searchQuery) => {
+  // Callback de busca (estável)
+  const fetchObservations = useCallback(async (pageNum: number, searchStr: string) => {
     if (status !== 'authenticated' || !session) return;
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      
-      if (searchStr) {
-        params.set('search', searchStr);
-      }
-      
+      if (searchStr) params.set('search', searchStr);
       params.set('page', pageNum.toString());
       params.set('limit', '20');
 
@@ -308,27 +83,34 @@ export default function ObservationsPage() {
       const data = await res.json();
       setObservations(data.observations);
       setTotalPages(data.totalPages || 1);
+      lastSearchQueryRef.current = searchStr;
     } catch (err: any) { 
       setError(err.message); 
     } finally { 
       setLoading(false); 
     }
-  }, [searchQuery, session, status]);
+  }, [session, status]);
 
-  useEffect(() => {
-    fetchObservations(page);
-  }, [fetchObservations, page]);
-
-  useEffect(() => {
+  // Handler de busca (usado pelo DBQLAdvancedSearch)
+  const handleSearch = useCallback((newQuery: string) => {
+    setSearchQuery(newQuery);
     setPage(1);
-  }, [searchQuery]);
+    lastSearchQueryRef.current = newQuery;
+  }, []);
 
+  // Buscar sempre que page ou searchQuery mudar
+  useEffect(() => {
+    fetchObservations(page, searchQuery);
+  }, [page, searchQuery, fetchObservations]);
+
+  // Mapa de usuários para exibição
   const usersMap = useMemo(() => {
     const map: Record<string, string> = {};
     users.forEach(u => { map[u.sub] = u.name || u.email; });
     return map;
   }, [users]);
 
+  // Ordenação
   const handleSort = (field: string) => {
     if (sortBy === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -341,22 +123,37 @@ export default function ObservationsPage() {
   const sortedItems = useMemo(() => {
     const items = [...observations];
     return items.sort((a, b) => {
-      let valA: any = a[sortBy as keyof IObservation] || '';
-      let valB: any = b[sortBy as keyof IObservation] || '';
+      let valA: any = a[sortBy as keyof IObservation];
+      let valB: any = b[sortBy as keyof IObservation];
+
+      if (valA === null || valA === undefined) valA = '';
+      if (valB === null || valB === undefined) valB = '';
+
       if (sortBy === 'firstSeen' || sortBy === 'lastSeen' || sortBy === 'slaDueAt') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      } else {
-        valA = valA.toString().toLowerCase();
-        valB = valB.toString().toLowerCase();
+        const timeA = valA ? new Date(valA).getTime() : 0;
+        const timeB = valB ? new Date(valB).getTime() : 0;
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      } 
+      
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortOrder === 'asc' ? valA - valB : valB - valA;
       }
+
+      valA = valA.toString().toLowerCase();
+      valB = valB.toString().toLowerCase();
+
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
   }, [observations, sortBy, sortOrder]);
 
+  // Atualizar responsável (otimista)
   const updateIssue = async (issueId: string, value: string | null) => {
+    setObservations(prev => prev.map(obs => 
+      obs._id.toString() === issueId ? { ...obs, assignedTo: value || undefined } as IObservation : obs
+    ));
+
     try {
       const res = await fetch('/api/observations', {
         method: 'PATCH',
@@ -364,15 +161,16 @@ export default function ObservationsPage() {
         body: JSON.stringify({ issueId, assignedTo: value || null }),
       });
       if (!res.ok) throw new Error('Erro ao atualizar');
-      fetchObservations(page);
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { 
+      alert(err.message); 
+      fetchObservations(page, searchQuery);
+    }
   };
 
+  // Buscar todas as observações filtradas (para exportação)
   const fetchAllFilteredObservations = async () => {
     const params = new URLSearchParams();
-    if (searchQuery) {
-      params.set('search', searchQuery);
-    }
+    if (searchQuery) params.set('search', searchQuery);
     params.set('all', 'true');
     const res = await fetch(`/api/observations?${params}`);
     if (!res.ok) throw new Error('Erro ao buscar dados completos');
@@ -380,9 +178,7 @@ export default function ObservationsPage() {
     return data.observations as IObservation[];
   };
 
-  // =========================================================================
-  // 🔥 FUNÇÃO DE EXPORTAÇÃO EXCEL CORRIGIDA
-  // =========================================================================
+  // Exportar Excel
   const handleExportExcel = async () => {
     if (!confirm('Exportar todos os resultados atuais para Excel?')) return;
     try {
@@ -392,7 +188,6 @@ export default function ObservationsPage() {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet('Observations');
 
-      // Definir colunas sem headers (apenas chaves e larguras)
       ws.columns = [
         { key: 'project', width: 20 },
         { key: 'repository', width: 25 },
@@ -404,13 +199,11 @@ export default function ObservationsPage() {
         { key: 'severity', width: 15 },
         { key: 'slaHours', width: 15 },
         { key: 'hitCount', width: 10 },
-        { key: 'justificativa', width: 30 },  // Nova coluna
+        { key: 'justificativa', width: 30 }, 
       ];
 
-      // Congelar as primeiras 5 linhas
       ws.views = [{ state: 'frozen', ySplit: 5 }];
 
-      // Linha 1: Título (mesclado A1:K1)
       ws.mergeCells('A1:K1');
       const titleCell = ws.getCell('A1');
       titleCell.value = 'Debit Board - Executive Report (Observations)';
@@ -418,7 +211,6 @@ export default function ObservationsPage() {
       titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
       ws.getRow(1).height = 30;
 
-      // Linha 2: Subtítulo (mesclado A2:K2)
       ws.mergeCells('A2:K2');
       const subtitleCell = ws.getCell('A2');
       subtitleCell.value = 'Relatório Geral de Vulnerabilidades de Projetos';
@@ -426,23 +218,19 @@ export default function ObservationsPage() {
       subtitleCell.alignment = { vertical: 'middle', horizontal: 'left' };
       ws.getRow(2).height = 20;
 
-      // Linha 3: Timestamp (mesclado A3:K3)
       ws.mergeCells('A3:K3');
       const timestampCell = ws.getCell('A3');
       timestampCell.value = `Exportado por DebitBoard em ${new Date().toLocaleString()}`;
       timestampCell.font = { name: 'Arial', size: 10, color: { argb: '999999' } };
       timestampCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
-      // Linha 4: linha em branco (separador)
       ws.getRow(4).height = 10;
 
-      // Linha 5: Cabeçalho da tabela (com filtros)
       const headerRow = ws.getRow(5);
       headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 };
       headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Preencher cabeçalhos manualmente
       const headers = [
         'Projeto', 'Repositório', 'Branch', 'Arquivo', 'Categoria',
         'Status', 'Azure', 'Severidade', 'SLA (Horas)', 'Hits', 'Justificativa'
@@ -453,10 +241,8 @@ export default function ObservationsPage() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
-      // Aplicar filtro automático na linha 5 (A5:K5)
       ws.autoFilter = { from: 'A5', to: 'K5' };
 
-      // Totais à direita (colunas L e M) – não sobrescrevem o cabeçalho
       const totalObservations = fullObservations.length;
       const totalOpen = fullObservations.filter(i => i.status === 'open' || i.status === 'recurring').length;
       const totalResolved = fullObservations.filter(i => i.status === 'resolved').length;
@@ -471,12 +257,10 @@ export default function ObservationsPage() {
       ws.getCell('L4').value = 'Projetos:';
       ws.getCell('M4').value = totalProjects;
 
-      // Preencher dados a partir da linha 6
       fullObservations.forEach((issue, index) => {
         const rowNumber = 6 + index;
         const row = ws.getRow(rowNumber);
 
-        // Construir URL do Azure (mesma lógica da página de detalhes)
         const azureSettings = session?.user?.azureSettings;
         const instanceUrl = azureSettings?.instanceUrl || '';
         const azureCollection = azureSettings?.azureCollection || '';
@@ -492,22 +276,18 @@ export default function ObservationsPage() {
         row.getCell('severity').value = issue.severity;
         row.getCell('slaHours').value = issue.slaHours;
         row.getCell('hitCount').value = issue.hitCount;
-        // Coluna Justificativa permanece vazia (preenchimento manual)
         row.getCell('justificativa').value = '';
 
-        // Ajustes de alinhamento
         row.alignment = { vertical: 'middle' };
         row.getCell('status').alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell('severity').alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell('hitCount').alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell('azureLink').alignment = { horizontal: 'center', vertical: 'middle' };
 
-        // Bordas
         row.eachCell(cell => {
           cell.border = { top: { style: 'thin', color: { argb: 'E5E7EB' } }, left: { style: 'thin', color: { argb: 'E5E7EB' } }, bottom: { style: 'thin', color: { argb: 'E5E7EB' } }, right: { style: 'thin', color: { argb: 'E5E7EB' } } };
         });
 
-        // Cores de status
         const statusCell = row.getCell('status');
         if (issue.status === 'new' || issue.status === 'open' || issue.status === 'recurring') {
           statusCell.font = { color: { argb: '991B1B' }, bold: true };
@@ -517,7 +297,6 @@ export default function ObservationsPage() {
           statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
         }
 
-        // Cores de severidade
         const sevCell = row.getCell('severity');
         if (issue.severity === 'critical') {
           sevCell.font = { color: { argb: '991B1B' }, bold: true };
@@ -528,7 +307,6 @@ export default function ObservationsPage() {
         }
       });
 
-      // Gerar arquivo
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
@@ -542,18 +320,20 @@ export default function ObservationsPage() {
     }
   };
 
+  // Exportar PDF (dispara impressão quando reportObservations é preenchido)
+  useEffect(() => {
+    if (reportObservations.length > 0) {
+      handlePrint();
+    }
+  }, [reportObservations, handlePrint]);
+
   const handleExportPDF = async () => {
     try {
       setLoading(true);
       const fullObservations = await fetchAllFilteredObservations();
-      setReportObservations(fullObservations);
-      setTimeout(() => {
-        handlePrint();
-        setTimeout(() => setReportObservations([]), 1000);
-      }, 500);
+      setReportObservations(fullObservations); 
     } catch (err: any) {
       alert('Erro na geração do PDF: ' + err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -593,72 +373,45 @@ export default function ObservationsPage() {
             icon={<Binoculars className="w-10 h-10 text-apple-blue" />}
             actions={
               <div className="flex items-center gap-2">
-                <button onClick={handleExportExcel} className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors" title="Exportar Excel">
-                  <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
-                </button>
-                <button onClick={handleExportPDF} className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-red hover:bg-apple-red/10 rounded-md transition-colors" title="Relatório Executivo PDF">
-                  <FileText className="w-4 h-4" /> Exportar PDF
-                </button>
+                <ExportSplitButton
+                  onExportPDF={handleExportPDF}
+                  onExportExcel={handleExportExcel}
+                />
               </div>
             }
           />
-
-          {/* NOVO BLOCO: Botão toggle + AdvancedSearch */}
-          <div className="w-full">
-            <div className="flex items-center justify-end mb-1">
-              <button
-                onClick={() => setShowSearch(!showSearch)}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors"
-                title={showSearch ? 'Ocultar busca' : 'Mostrar busca'}
-              >
-                {showSearch ? (
-                  <>
-                    <ChevronDown className="w-3 h-3" />
-                    Ocultar busca
-                  </>
-                ) : (
-                  <>
-                    <ChevronUp className="w-3 h-3" />
-                    Mostrar busca
-                  </>
-                )}
-              </button>
-            </div>
-
-            {showSearch && (
-              <DBQLAdvancedSearch 
-                onSearch={setSearchQuery} 
-                userId={session.user.id || ''}
-                context="observations" 
-                placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
-              />
-            )}
-          </div>
+          
+          <DBQLAdvancedSearch 
+            onSearch={handleSearch}
+            userId={session.user.id || ''}
+            context="observations" 
+            placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
+          />
 
           <div className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm overflow-hidden flex flex-col w-full h-[600px]">
             <div className="flex-1 overflow-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-apple-border-light/20 dark:bg-apple-border-dark/20 sticky top-0 z-10 backdrop-blur-md">
                   <tr>
-                    <th className={`${thClass} w-[7%] pl-4`} onClick={() => handleSort('status')}>
+                    <th data-testid="header-status" className={`${thClass} w-[7%] pl-4`} onClick={() => handleSort('status')}>
                       <div className={borderColumnHeader}>Status {sortBy==='status' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[30%]`} onClick={() => handleSort('fileName')}>
+                    <th data-testid="header-fileName" className={`${thClass} w-[30%]`} onClick={() => handleSort('fileName')}>
                       <div className="inline-flex items-center">Arquivo / Observação {sortBy==='fileName' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[25%]`} onClick={() => handleSort('category')}>
+                    <th data-testid="header-category" className={`${thClass} w-[25%]`} onClick={() => handleSort('category')}>
                       <div className="inline-flex items-center">Categoria {sortBy==='category' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[8%]` } onClick={() => handleSort('branch')}>
+                    <th data-testid="header-branch" className={`${thClass} w-[8%]` } onClick={() => handleSort('branch')}>
                       <div className={borderColumnHeader}>Branch {sortBy==='branch' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[8%]`} onClick={() => handleSort('severity')}>
+                    <th data-testid="header-severity" className={`${thClass} w-[8%]`} onClick={() => handleSort('severity')}>
                       <div className={borderColumnHeader}>Severidade {sortBy==='severity' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[10%]`} onClick={() => handleSort('slaDueAt')}>
+                    <th data-testid="header-slaDueAt" className={`${thClass} w-[10%]`} onClick={() => handleSort('slaDueAt')}>
                       <div className={borderColumnHeader}>Previsão (SLA) {sortBy==='slaDueAt' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
-                    <th className={`${thClass} w-[6%]`} onClick={() => handleSort('assignedTo')}>
+                    <th data-testid="header-assignedTo" className={`${thClass} w-[6%]`} onClick={() => handleSort('assignedTo')}>
                       <div className={borderColumnHeader}>Responsável {sortBy==='assignedTo' && (sortOrder==='asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
                     </th>
                     <th className={`${thClass} w-[5%] text-right pr-4`}>Ação</th>
@@ -703,7 +456,6 @@ export default function ObservationsPage() {
                                 >
                                   {issue.fileName} <ExternalLink className="w-3 h-3 ml-1" />
                                 </Link>
-                                
                               </span>
                               <span className="text-[10px] align-middle font-mono text-apple-tertiary-light truncate" title={issue.filePath}>
                                 {issue.filePath}
@@ -714,7 +466,7 @@ export default function ObservationsPage() {
                             </div>
                           </td>
                           <td className="px-3 py-3 align-middle">
-                            <span className="text-xs text-wrap-ellipsis text-apple-label-light dark:text-apple-label-dark leading-relaxed block" title={issue.category}>
+                            <span className="text-xs truncate text-apple-label-light dark:text-apple-label-dark leading-relaxed block" title={issue.category}>
                               {issue.category}
                             </span>
                           </td>
@@ -779,7 +531,7 @@ export default function ObservationsPage() {
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
                     aria-label="Página anterior"
-                    className="..."
+                    className="p-1 rounded hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -787,7 +539,7 @@ export default function ObservationsPage() {
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
                     aria-label="Próxima página"
-                    className="..."
+                    className="p-1 rounded hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>

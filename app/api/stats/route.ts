@@ -23,24 +23,37 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId');
   const searchQuery = searchParams.get('search') || '';
 
-  let matchStage: any = { tenantId };
+  // 🔒 Sempre começa com tenantId
+  let baseMatch: any = { tenantId };
 
-  if (range === '7d') matchStage.firstSeen = { $gte: subDays(new Date(), 7) };
-  else if (range === '14d') matchStage.firstSeen = { $gte: subDays(new Date(), 14) };
-  else if (range === '30d') matchStage.firstSeen = { $gte: subDays(new Date(), 30) };
+  // Filtro de período
+  if (range === '7d') baseMatch.firstSeen = { $gte: subDays(new Date(), 7) };
+  else if (range === '14d') baseMatch.firstSeen = { $gte: subDays(new Date(), 14) };
+  else if (range === '30d') baseMatch.firstSeen = { $gte: subDays(new Date(), 30) };
 
+  // Filtro de projeto
   if (projectId && projectId !== 'all') {
-    matchStage.project = projectId;
+    baseMatch.project = projectId;
   }
 
+  // Aplicar searchQuery
   if (searchQuery) {
-    matchStage = parseSearchQuery(searchQuery, matchStage);
+    const parsedMatch = parseSearchQuery(searchQuery, {}); // passa um objeto vazio
+    // Se parseSearchQuery retornar algo, combinamos com $and
+    baseMatch = {
+      $and: [
+        baseMatch,
+        parsedMatch
+      ]
+    };
   }
 
   // ================= KPIs e Gráficos de Issue =================
-  // 1. KPIs Gerais
+  // ... (restante do código permanece igual, mas usa baseMatch)
+
+  // As agregações abaixo usam baseMatch
   const kpiPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { 
       _id: null,
       total: { $sum: 1 },
@@ -55,9 +68,9 @@ export async function GET(req: NextRequest) {
   const kpiResult = await Observation.aggregate(kpiPipeline);
   const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0 };
 
-  // 2. Severidade geral
+  // Severidade
   const severityPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { _id: "$severity", count: { $sum: 1 } } }
   ];
   const severityData = await Observation.aggregate(severityPipeline);
@@ -66,9 +79,9 @@ export async function GET(req: NextRequest) {
     severityTotals[d._id || 'unknown'] = d.count;
   });
 
-  // 3. Categoria
+  // Categoria
   const categoryPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { _id: "$category", count: { $sum: 1 } } },
     { $sort: { count: -1 } }
   ];
@@ -78,24 +91,26 @@ export async function GET(req: NextRequest) {
     value: d.count
   }));
 
-  // 4. Projeto (TOP 10) + status/severidade
+  // Projetos (TOP 10)
   const projectPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { _id: "$project", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 10 }
   ];
   const projectData = await Observation.aggregate(projectPipeline);
 
+  // Status por projeto
   const projectStatusPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { _id: { project: "$project", status: "$status" }, count: { $sum: 1 } } },
     { $sort: { "_id.project": 1, "_id.status": 1 } }
   ];
   const projectStatusData = await Observation.aggregate(projectStatusPipeline);
 
+  // Severidade por projeto
   const projectSeverityPipeline: PipelineStage[] = [
-    { $match: matchStage },
+    { $match: baseMatch },
     { $group: { _id: { project: "$project", severity: "$severity" }, count: { $sum: 1 } } },
     { $sort: { "_id.project": 1, "_id.severity": 1 } }
   ];
@@ -124,13 +139,11 @@ export async function GET(req: NextRequest) {
     severity: projectSeverityTotals[d._id || 'Sem Projeto'] || {}
   }));
 
-  // ================= GRÁFICO DE LINHA (Evolução por Severidade e Status) =================
-  // 🔥 Duas agregações: uma por severidade e outra por status
+  // Gráfico de evolução
   const dateFilter = { $gte: subDays(new Date(), range === '24h' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 : 30) };
 
-  // Agregação por severidade
   const evolutionSeverityPipeline: PipelineStage[] = [
-    { $match: { ...matchStage, firstSeen: dateFilter } },
+    { $match: { ...baseMatch, firstSeen: dateFilter } },
     { $group: {
         _id: {
           day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
@@ -143,9 +156,8 @@ export async function GET(req: NextRequest) {
   ];
   const evolutionSeverityData = await Observation.aggregate(evolutionSeverityPipeline);
 
-  // Agregação por status
   const evolutionStatusPipeline: PipelineStage[] = [
-    { $match: { ...matchStage, firstSeen: dateFilter } },
+    { $match: { ...baseMatch, firstSeen: dateFilter } },
     { $group: {
         _id: {
           day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
@@ -158,12 +170,10 @@ export async function GET(req: NextRequest) {
   ];
   const evolutionStatusData = await Observation.aggregate(evolutionStatusPipeline);
 
-  // Consolidar por dia
   const days = range === '24h' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 : 30;
   const today = new Date();
   const chartData: any = [];
 
-  // Preencher todos os dias do período
   for (let i = days - 1; i >= 0; i--) {
     const date = subDays(today, i);
     const key = format(date, 'yyyy-MM-dd');
@@ -182,11 +192,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Mapear dias para índices
   const dayMap = new Map<string, number>();
   chartData.forEach((item: any, index: number) => dayMap.set(item.label, index));
 
-  // Preencher severidade
   evolutionSeverityData.forEach((item: any) => {
     const day = item._id.day;
     const idx = dayMap.get(day);
@@ -197,28 +205,19 @@ export async function GET(req: NextRequest) {
     }
   });
 
-  // Preencher status
   evolutionStatusData.forEach((item: any) => {
     const day = item._id.day;
     const idx = dayMap.get(day);
     if (idx !== undefined) {
       const status = item._id.status || 'unknown';
-      if (status === 'wont_fix') {
-        chartData[idx].wontFix += item.count;
-      } else if (status === 'resolved') {
-        chartData[idx].resolved += item.count;
-      } else if (status === 'open') {
-        chartData[idx].open += item.count;
-      } else if (status === 'recurring') {
-        chartData[idx].recurring += item.count;
-      } else if (status === 'expired') {
-        chartData[idx].expired += item.count;
-      }
-      // Outros status podem ser ignorados ou adicionados dinamicamente
+      if (status === 'wont_fix') chartData[idx].wontFix += item.count;
+      else if (status === 'resolved') chartData[idx].resolved += item.count;
+      else if (status === 'open') chartData[idx].open += item.count;
+      else if (status === 'recurring') chartData[idx].recurring += item.count;
+      else if (status === 'expired') chartData[idx].expired += item.count;
     }
   });
 
-  // ================= Retorno Final =================
   return NextResponse.json({
     kpi: {
       total: kpi.total,

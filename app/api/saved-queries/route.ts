@@ -39,7 +39,11 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json(queries);
+    return NextResponse.json(queries, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-validate, max-age=0',
+      },
+    });
 
   } catch (error: any) {
     console.error('❌ Erro ao buscar SavedQueries:', error.message);

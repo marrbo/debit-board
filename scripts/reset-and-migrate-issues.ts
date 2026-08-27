@@ -10,12 +10,11 @@ async function runMigration() {
   // 🔥 CORREÇÃO CRUCIAL: Utilizamos $where (JavaScript nativo do Mongo)
   // Isso impede que o Mongoose tente fazer o "Cast" do "null" para ObjectId e quebre a query.
   const observations = await Observation.find({
-    $where: function() {
-      return this.patternId === null || 
-             this.patternId === "null" || 
-             this.patternId === "" || 
-             this.patternId === undefined;
-    }
+    $or: [
+      { patternId: null },
+      { patternId: { $in: ["null", ""] } },
+      { patternId: { $exists: false } }
+    ]
   });
 
   console.log(`🔍 Encontradas ${observations.length} observations sem padrão válido. Tentando vincular...`);

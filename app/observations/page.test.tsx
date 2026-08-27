@@ -2,7 +2,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import ObservationsPage, { UserAvatar, ObservationsReport } from "./page";
+import ObservationsPage from "./page";
+import { UserAvatar, ObservationsReport } from "./components";
 import type { IObservation } from "@/models/Observation";
 import { useSession } from "next-auth/react";
 import { useReactToPrint } from "react-to-print";
@@ -586,23 +587,28 @@ describe("ObservationsPage - Fluxos de erro", () => {
   });
 
   it("deve cancelar exportação Excel quando confirmação for false", async () => {
+    const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Exportar Excel");
-    await userEvent.click(exportButton);
-    expect(mockFetch).not.toHaveBeenCalledWith(
-      expect.stringContaining("all=true"),
-    );
+    // Abre o dropdown
+    const menuButton = screen.getByTitle("Opções de exportação");
+    await user.click(menuButton);
+
+    // Clica em Exportar Excel
+    const exportExcel = screen.getByTitle("Exportar Excel");
+    await user.click(exportExcel);
+
+    expect(mockFetch).not.toHaveBeenCalledWith(expect.stringContaining("all=true"));
     confirmSpy.mockRestore();
   });
 
   it("deve exibir alerta quando não há issues para exportar no Excel", async () => {
+    const user = userEvent.setup();
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const user = userEvent.setup();
-
+    // ... mocks de fetch para retornar observations: [] ...
     mockFetch.mockImplementation((url: RequestInfo | URL) => {
       if (url.toString().includes("/api/users")) {
         return Promise.resolve({ ok: true, status: 200, json: async () => [] });
@@ -627,20 +633,20 @@ describe("ObservationsPage - Fluxos de erro", () => {
     render(<ObservationsPage />);
     await screen.findByText("Nenhuma vulnerabilidade encontrada.");
 
-    const exportButton = screen.getByTitle("Exportar Excel");
-    await user.click(exportButton);
+    const menuButton = screen.getByTitle("Opções de exportação");
+    await user.click(menuButton);
+    const exportExcel = screen.getByTitle("Exportar Excel");
+    await user.click(exportExcel);
 
-    await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith("Nenhuma issue para exportar"),
-    );
-    confirmSpy.mockRestore();
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Nenhuma issue para exportar"));
     alertSpy.mockRestore();
+    confirmSpy.mockRestore();
   });
 
   it("deve exibir alerta quando falha na exportação PDF", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const user = userEvent.setup();
-
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    // ... mocks de fetch que falham no all=true ...
     mockFetch.mockImplementation((url: RequestInfo | URL) => {
       if (url.toString().includes("/api/users")) {
         return Promise.resolve({ ok: true, status: 200, json: async () => [] });
@@ -665,7 +671,7 @@ describe("ObservationsPage - Fluxos de erro", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Relatório Executivo PDF");
+    const exportButton = screen.getByTitle("Exportar PDF"); // título novo
     await user.click(exportButton);
 
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
@@ -674,46 +680,45 @@ describe("ObservationsPage - Fluxos de erro", () => {
 
   it("deve lidar com exportação PDF quando não há dados", async () => {
     mockFetch.mockImplementation((url: RequestInfo | URL) => {
-    if (url.toString().includes("/api/users")) {
+      if (url.toString().includes("/api/users")) {
         return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => [],
+          ok: true,
+          status: 200,
+          json: async () => [],
         });
-    }
-    if (url.toString().includes("/api/observations")) {
+      }
+      if (url.toString().includes("/api/observations")) {
         if (url.toString().includes("all=true")) {
-        return Promise.resolve({
+          return Promise.resolve({
             ok: true,
             status: 200,
             json: async () => ({ observations: [] }),
-        });
+          });
         }
         return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({ observations: [], totalPages: 1 }),
+          ok: true,
+          status: 200,
+          json: async () => ({ observations: [], totalPages: 1 }),
         });
-    }
-    return Promise.resolve({
+      }
+      return Promise.resolve({
         ok: true,
         status: 200,
         json: async () => ({}),
-    });
+      });
     });
 
     const user = userEvent.setup();
     render(<ObservationsPage />);
     await screen.findByText("Nenhuma vulnerabilidade encontrada.");
 
-    const exportButton = screen.getByTitle("Relatório Executivo PDF");
+    const exportButton = screen.getByTitle("Exportar PDF"); // título novo
     await user.click(exportButton);
 
-    // Não deve lançar alerta e a impressão não deve ser chamada
     await waitFor(() =>
-    expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("all=true"),
-    ),
+      ),
     );
   });
 
@@ -746,8 +751,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Exportar Excel");
-    await user.click(exportButton);
+    // Abre o dropdown
+    const menuButton = screen.getByTitle("Opções de exportação");
+    await user.click(menuButton);
+    const exportExcel = screen.getByTitle("Exportar Excel");
+    await user.click(exportExcel);
 
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
     alertSpy.mockRestore();
@@ -946,17 +954,45 @@ describe("ObservationsPage - Exportações com sucesso", () => {
   it("deve exportar para PDF com sucesso (chamando handlePrint)", async () => {
     const user = userEvent.setup();
     render(<ObservationsPage />);
-    await screen.findByText("file1.js");
+    await screen.findByText('file1.js');
 
-    const exportButton = screen.getByTitle("Relatório Executivo PDF");
+    const exportButton = screen.getByTitle('Exportar PDF'); // título novo
     await user.click(exportButton);
 
-    // Aguarda a chamada para all=true e depois a impressão
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("all=true"),
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('all=true'));
     });
+  });
+
+  it("deve abrir e fechar o dropdown do split button", async () => {
+    const user = userEvent.setup();
+    render(<ObservationsPage />);
+    await screen.findByText('file1.js');
+
+    const menuButton = screen.getByTitle('Opções de exportação');
+    expect(screen.queryByTitle('Exportar Excel')).not.toBeInTheDocument();
+
+    await user.click(menuButton);
+    expect(screen.getByTitle('Exportar Excel')).toBeInTheDocument();
+
+    // Clica fora para fechar (simula clique no body)
+    await user.click(document.body);
+    expect(screen.queryByTitle('Exportar Excel')).not.toBeInTheDocument();
+  });
+
+  it("deve cancelar exportação Excel quando confirmação for false", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ObservationsPage />);
+    await screen.findByText("file1.js");
+
+    const menuButton = screen.getByTitle("Opções de exportação");
+    await user.click(menuButton);
+    const exportExcel = screen.getByTitle("Exportar Excel");
+    await user.click(exportExcel);
+
+    expect(mockFetch).not.toHaveBeenCalledWith(expect.stringContaining("all=true"));
+    confirmSpy.mockRestore();
   });
 
   it("deve exportar para PDF e chamar a função de impressão", async () => {
@@ -964,15 +1000,13 @@ describe("ObservationsPage - Exportações com sucesso", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Relatório Executivo PDF");
+    const exportButton = screen.getByTitle("Exportar PDF"); // título novo
     await user.click(exportButton);
 
-    // Aguarda a chamada com all=true
     await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("all=true"));
     });
 
-    // Aguarda o setTimeout e verifica que a função de impressão foi chamada
     await waitFor(() => {
         expect(mockPrint).toHaveBeenCalled();
     }, { timeout: 2000 });
@@ -980,19 +1014,20 @@ describe("ObservationsPage - Exportações com sucesso", () => {
 
   it("deve exportar para Excel com sucesso (gerando arquivo)", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true); // adicionado
 
     render(<ObservationsPage />);
-    await screen.findByText("file1.js");
+    await screen.findByText('file1.js');
 
-    const exportButton = screen.getByTitle("Exportar Excel");
-    await user.click(exportButton);
+    const menuButton = screen.getByTitle('Opções de exportação');
+    await user.click(menuButton);
+    const exportExcel = screen.getByTitle('Exportar Excel');
+    await user.click(exportExcel);
 
     await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("all=true"));
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('all=true'));
     });
     expect(confirmSpy).toHaveBeenCalled();
-
     confirmSpy.mockRestore();
   });
 
@@ -1000,7 +1035,6 @@ describe("ObservationsPage - Exportações com sucesso", () => {
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    // Simula usuário sem azureSettings
     (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
         data: {
         ...mockSession,
@@ -1012,8 +1046,10 @@ describe("ObservationsPage - Exportações com sucesso", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Exportar Excel");
-    await user.click(exportButton);
+    const menuButton = screen.getByTitle("Opções de exportação");
+    await user.click(menuButton);
+    const exportExcel = screen.getByTitle("Exportar Excel");
+    await user.click(exportExcel);
 
     await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("all=true"));
@@ -1157,38 +1193,6 @@ describe("ObservationsPage", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
     expect(screen.getByTestId("dbql-search")).toBeInTheDocument();
-  });
-
-  it("deve ocultar o AdvancedSearch ao clicar no botão", async () => {
-    const user = userEvent.setup();
-    render(<ObservationsPage />);
-    await screen.findByText("file1.js");
-
-    const toggleButton = screen.getByRole("button", { name: /ocultar busca/i });
-    await user.click(toggleButton);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("dbql-search")).not.toBeInTheDocument();
-    });
-    expect(
-      screen.getByRole("button", { name: /mostrar busca/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("deve mostrar novamente o AdvancedSearch ao clicar no botão", async () => {
-    const user = userEvent.setup();
-    render(<ObservationsPage />);
-    await screen.findByText("file1.js");
-
-    const toggleButton = screen.getByRole("button", { name: /ocultar busca/i });
-    await user.click(toggleButton);
-
-    const showButton = screen.getByRole("button", { name: /mostrar busca/i });
-    await user.click(showButton);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("dbql-search")).toBeInTheDocument();
-    });
   });
 });
 
@@ -1497,14 +1501,12 @@ describe("ObservationsReport - Totais com status variados", () => {
 
     render(<ObservationsReport observations={observations} usersMap={{}} />);
 
-    // Verifica totais no card "Em aberto" (recurring conta como aberto)
     const openCard = screen.getByText("Em aberto").closest("div");
     expect(openCard).toHaveTextContent("1");
 
     const wontFixCard = screen.getByText("Não corrigir").closest("div");
     expect(wontFixCard).toHaveTextContent("1");
 
-    // Verifica que os status aparecem na tabela
     expect(screen.getByText("wont_fix")).toBeInTheDocument();
     expect(screen.getByText("recurring")).toBeInTheDocument();
   });
@@ -1516,7 +1518,6 @@ describe("ObservationsPage - Busca e paginação combinadas", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    // Digita uma busca
     const searchInput = screen.getByPlaceholderText(/Buscar via DBQL/i);
     await user.type(searchInput, "severity:high");
 
@@ -1524,7 +1525,6 @@ describe("ObservationsPage - Busca e paginação combinadas", () => {
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("search=severity%3Ahigh"));
     });
 
-    // Navega para a próxima página
     const nextButton = screen.getByRole("button", { name: /próxima página/i });
     await user.click(nextButton);
 
@@ -1557,14 +1557,13 @@ describe("ObservationsPage - Erro na busca de usuários com exportação PDF", (
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const exportButton = screen.getByTitle("Relatório Executivo PDF");
+    const exportButton = screen.getByTitle("Exportar PDF"); // título novo
     await user.click(exportButton);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("all=true"));
     });
 
-    // Verifica que não houve erro (alert não chamado) e que a impressão foi acionada
     expect(alertSpy).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(mockPrint).toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { MongoClient, ObjectId } from 'mongodb';
+import mongoose from 'mongoose';
 
 const uri = process.env.MONGODB_URI;
 
@@ -196,7 +197,7 @@ async function run() {
 
     for (const pattern of optimizedPatterns) {
       const result = await VulnerabilityPattern.updateOne(
-        { _id: new ObjectId(pattern.id) },
+        { _id: new mongoose.Types.ObjectId(pattern.id) },
         { 
           $set: { 
             description: pattern.description,
