@@ -9,27 +9,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-    
+
     - name: Install dependencies
       run: |
         cd frontend
         npm ci
-    
+
     - name: Run linter
       run: |
         cd frontend
         npm run lint
-    
+
     - name: Build
       run: |
         cd frontend
         npm run build
-    
+
+    - name: Run tests with coverage and generate JUnit report
+      run: |
+        cd frontend
+        npx vitest run --coverage --reporter=junit --outputFile=test-report.junit.xml
+
+    # Opcional: se preferir usar o script 'test:coverage' (caso exista no package.json)
+    # em vez do comando direto, descomente a linha abaixo:
+    # - name: Run tests with coverage
+    #   run: |
+    #     cd frontend
+    #     npm run test:coverage
+
+    - name: Upload test results to Codecov
+      if: ${{ !cancelled() }}
+      uses: codecov/test-results-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./frontend/test-report.junit.xml
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
@@ -37,3 +56,4 @@ jobs:
         flags: unittests
         name: github-actions
         fail_ci_if_error: false
+        directory: ./frontend/coverage
