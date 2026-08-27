@@ -20,12 +20,7 @@ async function fixEmptyPatternIds() {
   }
 
   let resolvedCount = 0;
-  for (const issue of observationsToFix) {
-    // 🔥 Substitui a string vazia por null, que é o ObjectId vazio válido para o Mongoose.
-    issue.patternId = null;
-    await issue.save();
-    resolvedCount++;
-  }
+
   console.log(`✅ ${resolvedCount} observations corrigidas com sucesso.`);
   console.log('🎉 Limpeza concluída!');
 }

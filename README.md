@@ -34,3 +34,31 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+# Instalar VITEST
+
+```shell
+npm install -D vitest @vitejs/plugin-react @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom @testing-library/dom
+````
+
+* vitest – o próprio framework de testes (usa o Vite internamente).
+
+* @vitejs/plugin-react – suporte para transformar JSX/TSX no Vite.
+
+* @testing-library/react – renderiza componentes React para testes.
+
+* @testing-library/jest-dom – matchers extras (ex.: toBeInTheDocument()).
+
+* @testing-library/user-event – simula eventos de usuário de forma realista.
+
+* jsdom – simula um ambiente de navegador para os testes.
+
+* @testing-library/dom – dependência interna do Testing Library (já instalada junto, mas é bom listar).
+
+### Para gerar Coverage
+
+```shell
+npm install -D @vitest/coverage-v8
+```
+

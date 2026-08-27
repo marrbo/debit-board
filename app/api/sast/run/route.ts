@@ -43,18 +43,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum pattern SAST ativo.' }, { status: 400 });
     }
 
-    const existingObservations = await Observation.find({
-      tenantId,
-      status: { $in: ['open', 'recurring', 'wont_fix', 'expired'] }
-    }).lean();
+    // 🛡️ MUDANÇA: Buscamos TODOS os status, incluindo 'resolved', para que não seja criado um novo quando reaparecer
+    const existingObservations = await Observation.find({ tenantId }).lean();
 
     const observationMap = new Map<string, any>();
     existingObservations.forEach(observation => {
-      const key = `${observation.patternId}|${observation.filePath}`;
+      // 🛡️ MUDANÇA: Chave composta rigorosa baseada na sua regra de negócio
+      const key = `${observation.project || ''}|${observation.repository || ''}|${observation.filePath}|${observation.category}`;
       observationMap.set(key, observation);
     });
 
-    // 🔍 Rastreia todas as chaves encontradas no scan atual para calcular os resolvidos
+    // 🔍 Rastreia todas as chaves encontradas no scan atual
     const foundKeys = new Set<string>();
 
     const patternResults = [];
@@ -92,8 +91,6 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // como o Azure não possui filtro de branch no Search Code
-        // Então, filtramos aqui
         result.results = result.results.filter(
           (item: SearchItem) => ['main', 'master'].includes(item.branch)
         );
@@ -111,20 +108,30 @@ export async function POST(req: NextRequest) {
         totalOccurrences += result.hitCount;
 
         for (const item of result.results) {
-          const key = `${pattern._id.toString()}|${item.path}`;
+          const key = `${item.project || ''}|${item.repository || ''}|${item.path}|${pattern.category}`;
+          
+          // 🛡️ MUDANÇA: Se já processamos esse exato arquivo e categoria nesta mesma execução, ignoramos a duplicata intra-scan.
+          if (foundKeys.has(key)) continue;
           foundKeys.add(key);
+
           const existingIssue = observationMap.get(key);
 
           if (existingIssue) {
+            // 🛡️ MUDANÇA: Lógica de atualização de status. Se estava resolvido, vira recurring. Se estava open, mantém open.
+            let nextStatus = existingIssue.status;
+            if (existingIssue.status === 'resolved' || existingIssue.status === 'expired' || existingIssue.status === 'wont_fix') {
+              nextStatus = 'recurring';
+            }
+
             updates.push({
               updateOne: {
                 filter: { _id: existingIssue._id },
                 update: {
                   $set: {
-                    status: 'recurring',
+                    status: nextStatus,
                     lastSeen: new Date(),
                     hitCount: item.hitCount || 0,
-                    patternId: pattern._id.toString(),
+                    patternId: pattern._id.toString(), // Atualiza caso tenha mudado o pattern da categoria
                     hits: item.hits,
                     scanId: newScan._id,
                     project: item.project || '',
@@ -159,6 +166,9 @@ export async function POST(req: NextRequest) {
               snippet: null,
               lineNumber: 0,
             });
+            
+            // Adiciona no mapa para que um próximo pattern concorrente na mesma run não duplique
+            observationMap.set(key, { _id: 'temp', status: 'open' });
           }
         }
       } catch (searchErr: any) {
@@ -180,7 +190,8 @@ export async function POST(req: NextRequest) {
     // 🚀 Marca como resolved as observations que existiam anteriormente mas sumiram no scan atual
     const resolvedUpdates: any[] = [];
     observationMap.forEach((issue, key) => {
-      if (!foundKeys.has(key)) {
+      // 🛡️ MUDANÇA: Só envia atualização se não foi encontrado AGORA e se já não estiver com status resolved
+      if (!foundKeys.has(key) && issue.status !== 'resolved' && issue._id !== 'temp') {
         resolvedUpdates.push({
           updateOne: {
             filter: { _id: issue._id },

@@ -25,7 +25,7 @@ import React from 'react';
 /**
  * Renderiza o Avatar do usuário de forma padronizada.
  */
-function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string; className?: string }) {
+export function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string; className?: string }) {
   const initial = (name || sub || 'U').charAt(0).toUpperCase();
   const colors = ['bg-blue-600', 'bg-red-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 'bg-pink-600'];
   const colorIndex = (sub || name || '').length % colors.length;
@@ -39,7 +39,7 @@ function UserAvatar({ name, sub, className = "" }: { name?: string; sub?: string
 /**
  * Componente do Relatório PDF com agrupamentos e timbrado executivo.
  */
-const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
+export const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
   if (!observations.length) return null;
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -271,6 +271,9 @@ export default function ObservationsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
 
+  // NOVO: estado para controlar visibilidade do AdvancedSearch
+  const [showSearch, setShowSearch] = useState(true);
+
   const [sortBy, setSortBy] = useState<string>('firstSeen');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -377,6 +380,9 @@ export default function ObservationsPage() {
     return data.observations as IObservation[];
   };
 
+  // =========================================================================
+  // 🔥 FUNÇÃO DE EXPORTAÇÃO EXCEL CORRIGIDA
+  // =========================================================================
   const handleExportExcel = async () => {
     if (!confirm('Exportar todos os resultados atuais para Excel?')) return;
     try {
@@ -386,81 +392,122 @@ export default function ObservationsPage() {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet('Observations');
 
-      ws.spliceRows(1, 4);
-
+      // Definir colunas sem headers (apenas chaves e larguras)
       ws.columns = [
-        { header: 'Projeto', key: 'project', width: 20 },
-        { header: 'Repositório', key: 'repository', width: 25 },
-        { header: 'Branch', key: 'branch', width: 15 },
-        { header: 'Arquivo', key: 'filePath', width: 45 },
-        { header: 'Categoria', key: 'category', width: 30 },
-        { header: 'Status', key: 'status', width: 15 },
-        { header: 'Atribuído a', key: 'assignedTo', width: 20 },
-        { header: 'Severidade', key: 'severity', width: 15 },
-        { header: 'SLA (Horas)', key: 'slaHours', width: 15 },
-        { header: 'Hits', key: 'hitCount', width: 10 },
+        { key: 'project', width: 20 },
+        { key: 'repository', width: 25 },
+        { key: 'branch', width: 15 },
+        { key: 'filePath', width: 45 },
+        { key: 'category', width: 30 },
+        { key: 'status', width: 15 },
+        { key: 'azureLink', width: 20 },
+        { key: 'severity', width: 15 },
+        { key: 'slaHours', width: 15 },
+        { key: 'hitCount', width: 10 },
+        { key: 'justificativa', width: 30 },  // Nova coluna
       ];
 
-      const logoSvg = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQBAMAAAB8P++eAAAAMFBMVEUAAAAAff8Aev8Ae/8Aev9hrf9utP+UyP+52v/o9P8cHB5ISElISEqXl5je3t7////qY+UUAAAACnRSTlMAM2aZzN3f5+/50JrR+gAAAURJREFUSMftVDFSwzAQVOIPeBI/wDF+QJzoA9jHMPQ0/ICOhp6OlibU6R34QJ5AQ0/DE9IFMgMcd5JsS8qAoUqj7fa0vj2d7ixEQEBAwAExGM1lNUutwJGs5tmebixBoVWONYeJp6PQ5XJ32yqHDYfM110g4R5K7SsllplQmOgpKlzDMUeSjtvKnNiNPngDiNWXHTcmuh44Qfxcr14Rz2EqRGTzLiUnPMOvp7p+2OCCE+Q2B10NgbtwhR814Rm35D10uarGOMMdvvDBI74DTCOXA1djnGGJaz5Y4Y6ccpc33kqIWCsgAlTS5RRRQtkv1A1KfOsy8a21MOq/TNo+oNOOdOC3x/Qx6Wt4+d8n/PNQqJS/jFksHKUZ1Co2Ju3gFvaIZz+vQuEuzcjsUmGb8OMVe3uY8bra5fC6TuLwIwsICDgkvgFF8FxdZN3g9gAAAABJRU5ErkJggg==`;
-      const logoBase64 = logoSvg.replace(/^data:image\/\w+;base64,/, '');
-      const imageId = workbook.addImage({ base64: logoBase64, extension: 'png' });
+      // Congelar as primeiras 5 linhas
+      ws.views = [{ state: 'frozen', ySplit: 5 }];
 
-      ws.addImage(imageId, {
-        tl: { col: 0.1, row: 0.2 },
-        ext: { width: 45, height: 45 },
-        editAs: 'oneCell'
-      });
-      
-      ws.mergeCells('B1:H1');
-      const titleCell = ws.getCell('B1');
+      // Linha 1: Título (mesclado A1:K1)
+      ws.mergeCells('A1:K1');
+      const titleCell = ws.getCell('A1');
       titleCell.value = 'Debit Board - Executive Report (Observations)';
       titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: '003366' } };
       titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
       ws.getRow(1).height = 30;
 
-      ws.mergeCells('B2:H2');
-      const subtitleCell = ws.getCell('B2');
+      // Linha 2: Subtítulo (mesclado A2:K2)
+      ws.mergeCells('A2:K2');
+      const subtitleCell = ws.getCell('A2');
       subtitleCell.value = 'Relatório Geral de Vulnerabilidades de Projetos';
       subtitleCell.font = { name: 'Arial', size: 12, italic: true, color: { argb: '666666' } };
       subtitleCell.alignment = { vertical: 'middle', horizontal: 'left' };
       ws.getRow(2).height = 20;
 
-      ws.mergeCells('B3:H3');
-      const timestampCell = ws.getCell('B3');
+      // Linha 3: Timestamp (mesclado A3:K3)
+      ws.mergeCells('A3:K3');
+      const timestampCell = ws.getCell('A3');
       timestampCell.value = `Exportado por DebitBoard em ${new Date().toLocaleString()}`;
       timestampCell.font = { name: 'Arial', size: 10, color: { argb: '999999' } };
       timestampCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
+      // Linha 4: linha em branco (separador)
+      ws.getRow(4).height = 10;
+
+      // Linha 5: Cabeçalho da tabela (com filtros)
       const headerRow = ws.getRow(5);
       headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 };
       headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-      headerRow.eachCell(cell => {
-        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+
+      // Preencher cabeçalhos manualmente
+      const headers = [
+        'Projeto', 'Repositório', 'Branch', 'Arquivo', 'Categoria',
+        'Status', 'Azure', 'Severidade', 'SLA (Horas)', 'Hits', 'Justificativa'
+      ];
+      headers.forEach((header, index) => {
+        const cell = headerRow.getCell(index + 1);
+        cell.value = header;
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
-      fullObservations.forEach(issue => {
-        const row = ws.addRow({
-          project: issue.project || '',
-          repository: issue.repository || '',
-          branch: issue.branch,
-          filePath: issue.filePath,
-          category: issue.category,
-          status: issue.status,
-          assignedTo: usersMap[issue.assignedTo || ''] || '',
-          severity: issue.severity,
-          slaHours: issue.slaHours,
-          hitCount: issue.hitCount
-        });
+      // Aplicar filtro automático na linha 5 (A5:K5)
+      ws.autoFilter = { from: 'A5', to: 'K5' };
+
+      // Totais à direita (colunas L e M) – não sobrescrevem o cabeçalho
+      const totalObservations = fullObservations.length;
+      const totalOpen = fullObservations.filter(i => i.status === 'open' || i.status === 'recurring').length;
+      const totalResolved = fullObservations.filter(i => i.status === 'resolved').length;
+      const totalProjects = new Set(fullObservations.map(i => i.project)).size;
+
+      ws.getCell('L1').value = 'Total Itens:';
+      ws.getCell('M1').value = totalObservations;
+      ws.getCell('L2').value = 'Abertos:';
+      ws.getCell('M2').value = totalOpen;
+      ws.getCell('L3').value = 'Resolvidos:';
+      ws.getCell('M3').value = totalResolved;
+      ws.getCell('L4').value = 'Projetos:';
+      ws.getCell('M4').value = totalProjects;
+
+      // Preencher dados a partir da linha 6
+      fullObservations.forEach((issue, index) => {
+        const rowNumber = 6 + index;
+        const row = ws.getRow(rowNumber);
+
+        // Construir URL do Azure (mesma lógica da página de detalhes)
+        const azureSettings = session?.user?.azureSettings;
+        const instanceUrl = azureSettings?.instanceUrl || '';
+        const azureCollection = azureSettings?.azureCollection || '';
+        const azureUrl = `${instanceUrl}/tfs/${azureCollection}/${issue.project}/_git/${issue.repository}?path=${issue.filePath}&version=GB${issue.branch}&_a=contents`;
+
+        row.getCell('project').value = issue.project || '';
+        row.getCell('repository').value = issue.repository || '';
+        row.getCell('branch').value = issue.branch;
+        row.getCell('filePath').value = issue.filePath;
+        row.getCell('category').value = issue.category;
+        row.getCell('status').value = issue.status;
+        row.getCell('azureLink').value = { text: 'Ver no Azure', hyperlink: azureUrl };
+        row.getCell('severity').value = issue.severity;
+        row.getCell('slaHours').value = issue.slaHours;
+        row.getCell('hitCount').value = issue.hitCount;
+        // Coluna Justificativa permanece vazia (preenchimento manual)
+        row.getCell('justificativa').value = '';
+
+        // Ajustes de alinhamento
         row.alignment = { vertical: 'middle' };
         row.getCell('status').alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell('severity').alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell('hitCount').alignment = { horizontal: 'center', vertical: 'middle' };
-        
+        row.getCell('azureLink').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        // Bordas
         row.eachCell(cell => {
-          cell.border = { top: {style:'thin', color:{argb:'E5E7EB'}}, left: {style:'thin', color:{argb:'E5E7EB'}}, bottom: {style:'thin', color:{argb:'E5E7EB'}}, right: {style:'thin', color:{argb:'E5E7EB'}} };
+          cell.border = { top: { style: 'thin', color: { argb: 'E5E7EB' } }, left: { style: 'thin', color: { argb: 'E5E7EB' } }, bottom: { style: 'thin', color: { argb: 'E5E7EB' } }, right: { style: 'thin', color: { argb: 'E5E7EB' } } };
         });
 
+        // Cores de status
         const statusCell = row.getCell('status');
         if (issue.status === 'new' || issue.status === 'open' || issue.status === 'recurring') {
           statusCell.font = { color: { argb: '991B1B' }, bold: true };
@@ -469,7 +516,8 @@ export default function ObservationsPage() {
           statusCell.font = { color: { argb: '065F46' }, bold: true };
           statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
         }
-        
+
+        // Cores de severidade
         const sevCell = row.getCell('severity');
         if (issue.severity === 'critical') {
           sevCell.font = { color: { argb: '991B1B' }, bold: true };
@@ -480,6 +528,7 @@ export default function ObservationsPage() {
         }
       });
 
+      // Gerar arquivo
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
@@ -554,13 +603,36 @@ export default function ObservationsPage() {
             }
           />
 
+          {/* NOVO BLOCO: Botão toggle + AdvancedSearch */}
           <div className="w-full">
-            <DBQLAdvancedSearch 
-              onSearch={setSearchQuery} 
-              userId={session.user.id || ''}
-              context="observations" 
-              placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
-            />
+            <div className="flex items-center justify-end mb-1">
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors"
+                title={showSearch ? 'Ocultar busca' : 'Mostrar busca'}
+              >
+                {showSearch ? (
+                  <>
+                    <ChevronDown className="w-3 h-3" />
+                    Ocultar busca
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="w-3 h-3" />
+                    Mostrar busca
+                  </>
+                )}
+              </button>
+            </div>
+
+            {showSearch && (
+              <DBQLAdvancedSearch 
+                onSearch={setSearchQuery} 
+                userId={session.user.id || ''}
+                context="observations" 
+                placeholder="Buscar via DBQL (ex: severity:critical AND status:open)" 
+              />
+            )}
           </div>
 
           <div className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm overflow-hidden flex flex-col w-full h-[600px]">
@@ -706,14 +778,16 @@ export default function ObservationsPage() {
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-1.5 rounded-lg border border-apple-border-light dark:border-apple-border-dark text-apple-tertiary-light hover:text-apple-label-light disabled:opacity-30 transition-colors"
+                    aria-label="Página anterior"
+                    className="..."
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="p-1.5 rounded-lg border border-apple-border-light dark:border-apple-border-dark text-apple-tertiary-light hover:text-apple-label-light disabled:opacity-30 transition-colors"
+                    aria-label="Próxima página"
+                    className="..."
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
