@@ -3,34 +3,6 @@
 @tailwind utilities;
 
 /* ==============================================================
-   🍎 TEMA APPLE (HUMAN INTERFACE GUIDELINES)
-   ============================================================== */
-
-/* ATENÇÃO: Se você está usando Tailwind CSS v3, mova todo o bloco @theme 
-   para dentro do arquivo tailwind.config.js (na propriedade theme.extend.colors).
-   Se estiver no Tailwind v4, este bloco já funcionará aqui. */
-@theme {
-  /* O Off-White baseado no seu pedido (padrão Apple) */
-  --color-white: oklch(98.7% 0.022 95.277); 
-  --color-apple-bg: oklch(98.6% 0.031 120.757); /* Aplicado ao fundo global */
-  
-  /* Cores de Superfície e Cartões (Apple "System Backgrounds") */
-  --color-apple-card: #FFFFFF; /* Branco puro para modais/cartões */
-  --color-apple-input: #FFFFFF; /* Branco puro para inputs */
-  --color-apple-border: #D1D1D6; /* Cinza claro Apple para bordas */
-  --color-apple-hover: #F2F2F7; /* Cinza de hover Apple (System Gray 6) */
-
-  /* Cores de Tipografia (Apple Label Colors) */
-  --color-label: #1C1C1E;       /* Preto quase puro (Primary Label) */
-  --color-secondary-label: #3A3A3C; /* Cinza escuro (Secondary Label) */
-  --color-tertiary-label: #8E8E93;  /* Cinza médio (Tertiary Label) */
-  
-  /* Fontes padrão do Apple (San Francisco) */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-/* ==============================================================
    APLICAÇÃO GLOBAL DO TEMA
    ============================================================== */
 

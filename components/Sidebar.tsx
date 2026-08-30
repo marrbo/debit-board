@@ -2,10 +2,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { 
-  User, LogOut, UserMinus
-} from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { LogOut, UserMinus } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
 
@@ -15,7 +13,6 @@ import ThemeToggle from './ThemeToggle';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { data: session } = useSession();
   
   const [isAccountOpen, setIsAccountOpen] = useState(false);

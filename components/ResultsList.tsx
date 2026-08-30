@@ -1,7 +1,7 @@
 // components/ResultsList.tsx
 'use client';
 
-import { SearchItem } from '@/lib/types';
+import type { SearchItem } from '@/lib/types';
 import { groupBy, calculateTotalHits } from '@/lib/utils';
 import { FileCode, FolderTree, GitBranch, ExternalLink, Target, Search } from 'lucide-react';
 

@@ -47,21 +47,6 @@ const MEME_QUIPS = [
   "Stack overflow de tokens: operadores encadeados demais para uma única query.",
 ];
 
-const useOutsideClick = (
-  ref: React.RefObject<HTMLElement>,
-  callback: () => void,
-) => {
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        callback();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [ref, callback]);
-};
-
 interface ValidationError {
   error: string;
   highlightIndex: number | null;
@@ -84,7 +69,7 @@ const parseInputToTags = (input: string): string[] => {
 const validateDBQL = (query: string): ValidationError[] => {
   if (!query) return [];
   const errors: ValidationError[] = [];
-  const tokens = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  const tokens: string[] = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   let searchIndex = 0;
   let looseTextStart: number | null = null;
   let looseTextEnd: number | null = null;
@@ -192,7 +177,7 @@ const validateDBQL = (query: string): ValidationError[] => {
 };
 
 const getEditingToken = (text: string) => {
-  const tokens = text
+  const tokens: string[] = text
     .split(/(?=\b(?:and|or|not)\b|\s)/i)
     .map((t) => t.trim())
     .filter(Boolean);
@@ -274,7 +259,6 @@ export default function DBQLAdvancedSearch({
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastNotifiedQuery = useRef<string>("");
   const savedDropdownRef = useRef<HTMLDivElement>(null);
-  const helpModalRef = useRef<HTMLDivElement>(null);
   const saveModalRef = useRef<HTMLDivElement>(null);
   const aiModalRef = useRef<HTMLDivElement>(null);
   const initialLoadDoneRef = useRef(false);
@@ -1048,7 +1032,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   )}
                 </button>
 
-                {isSavedDropdownOpen && (
+                {!isLoading && isSavedDropdownOpen && (
                   <div
                     ref={savedDropdownRef}
                     style={savedDropdownStyle}

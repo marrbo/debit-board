@@ -12,7 +12,6 @@ export default function TeamsPage() {
   const [teams, setTeams] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [newTeamName, setNewTeamName] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {
     const teamsRes = await fetch('/api/teams');

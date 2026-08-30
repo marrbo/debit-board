@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldKeyhole } from 'lucide-react';
 
@@ -22,12 +22,13 @@ function LoginErrorHandler() {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { status: sessionStatus } = useSession(); // 🔥 Agora status está definido
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (sessionStatus === 'authenticated') {
       router.push('/');
     }
-  }, [status, router]);
+  }, [sessionStatus, router]);
 
   const handleSSOLogin = () => {
     signIn('keycloak', { callbackUrl: '/stats' });

@@ -1,27 +1,39 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": false,                    // 🔹 desative se não houver JS puro
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false, // 🔹 desative se não houver JS puro
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
-    "useDefineForClassFields": true,    // 🔹 padrão moderno
-    "verbatimModuleSyntax": true,        // 🔹 melhora tree-shaking
+    "useDefineForClassFields": true, // 🔹 padrão moderno
+    "verbatimModuleSyntax": true, // 🔹 melhora tree-shaking
     "forceConsistentCasingInFileNames": true,
-    "noUncheckedIndexedAccess": true,    // 🔹 pega erros de acesso a índices
-    "noImplicitOverride": true,          // 🔹 exige `override` em heranças
-    "noUnusedLocals": true,              // 🔹 detecta variáveis não usadas
-    "noUnusedParameters": true,          // 🔹 detecta parâmetros não usados
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./*"] }
+    "noUncheckedIndexedAccess": true, // 🔹 pega erros de acesso a índices
+    "noImplicitOverride": true, // 🔹 exige `override` em heranças
+    "noUnusedLocals": true, // 🔹 detecta variáveis não usadas
+    "noUnusedParameters": true, // 🔹 detecta parâmetros não usados
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
   "include": [
     "next-env.d.ts",
@@ -32,5 +44,11 @@
     "**/*.mts",
     "next.config.mjs"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
 }

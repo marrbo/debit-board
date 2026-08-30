@@ -1,6 +1,6 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
-import { MongoClient, ObjectId } from 'mongodb';
+import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
 
 const uri = process.env.MONGODB_URI;

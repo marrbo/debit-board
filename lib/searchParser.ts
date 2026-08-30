@@ -50,8 +50,6 @@ function tokenize(searchStr: string): string[] {
 
 // 🔥 Converte um termo simples em um filtro MongoDB, tratando `!` e `*`
 function parseCondition(token: string): any {
-  // Substitui `!` no início por `NOT` (será tratado posteriormente pelo parser, mas já preparamos)
-  let fieldKey = token;
   let isNegated = false;
 
   // Verifica se o token começa com `!`

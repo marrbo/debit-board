@@ -1,10 +1,10 @@
-// middleware.ts
+// proxy.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as Sentry from "@sentry/nextjs";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // --- INJEÇÃO DE INSTRUÇÕES (SENTRY E BASEURL) ---
@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
   if (!isLoggedIn) {
     const signInUrl = new URL('/login', request.url);
     signInUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(signInUrl, { status: 401});
+    return NextResponse.redirect(signInUrl, { status: 302});
   }
 
   // FLUXO DO ADMIN

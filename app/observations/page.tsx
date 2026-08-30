@@ -3,11 +3,8 @@
 
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ChevronLeft,
-  ChevronRight,
   ChevronUp,
   ChevronDown,
   Binoculars,
@@ -21,7 +18,6 @@ import DBQLAdvancedSearch from "@/components/dbql/DBQLAdvancedSearch";
 import PageHeader from "@/components/PageHeader";
 import AssigneeSelect from "@/components/AssigneeSelect";
 import type { IObservation } from "@/models/Observation";
-import React from "react";
 import { ObservationsReport } from "./components";
 import ExportSplitButton from "@/components/ExportSplitButton";
 import { PaginationInfo } from "@/components/PaginationInfo";

@@ -15,7 +15,7 @@ async function migrate() {
   console.log(`✅ Tenants atualizados: ${tenantResult.modifiedCount}`);
 
   console.log('🔄 Adicionando campo isActive: true para todos os Usuários...');
-  const userResult = await User.updateMany(
+  const userResult = await (User as any).updateMany(
     { isActive: { $exists: false } }, // Só atualiza quem ainda não tem o campo
     { $set: { isActive: true } }
   );

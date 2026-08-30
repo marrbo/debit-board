@@ -15,7 +15,7 @@ import {
 } from 'chart.js';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import { useMemo } from 'react';
-import { ChartDataPoint } from '@/lib/types';
+import type { ChartDataPoint } from '@/lib/types';
 
 ChartJS.register(
   CategoryScale,
@@ -158,7 +158,7 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
       base.onHover = (event: any, elements: any) => {
         event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
       };
-      base.onClick = (event: any, elements: any) => {
+      base.onClick = (elements: any) => {
         if (elements.length > 0) {
           const index = elements[0].index;
           const label = processed.labels[index];

@@ -35,7 +35,7 @@ export function negateExpression(expr: any): any {
   }
   const keys = Object.keys(expr);
   if (keys.length === 1) {
-    const field = keys[0];
+    const field = keys[0] || '';
     const val = expr[field];
     if (val && typeof val === 'object') {
       if (val.$regex) {
@@ -69,7 +69,9 @@ export function parseDBQL(queryString: string): any {
         const unparsed = str.substring(lastIndex, match.index).trim();
         if (unparsed) tokens.push(unparsed);
       }
-      tokens.push(match[1]);
+      if (match[1]) {
+        tokens.push(match[1]);
+      }
       lastIndex = regex.lastIndex;
     }
 
@@ -104,7 +106,7 @@ export function parseDBQL(queryString: string): any {
     let left = parseTerm();
 
     while (tokenIndex < tokens.length) {
-      const operator = tokens[tokenIndex].toUpperCase();
+      const operator = tokens[tokenIndex]?.toUpperCase();
       if (operator === 'OR' || operator === 'AND') {
         tokenIndex++; // consome o operador
         const right = parseTerm();
@@ -136,7 +138,7 @@ export function parseDBQL(queryString: string): any {
     }
 
     // Tratamento de operador NOT unário ou '!'
-    if (token === '!' || token.toUpperCase() === 'NOT') {
+    if (token === '!' || token?.toUpperCase() === 'NOT') {
       tokenIndex++; // consome '!' ou 'NOT'
       const subExpr = parseTerm();
       return negateExpression(subExpr);
@@ -144,10 +146,10 @@ export function parseDBQL(queryString: string): any {
 
     // Tratamento de termo folha (campo:valor ou !campo:valor)
     tokenIndex++;
-    const termMatch = token.match(/^(!?)(\w+):(?:"([^"]*)"|(\S+))$/);
+    const termMatch = token?.match(/^(!?)(\w+):(?:"([^"]*)"|(\S+))$/);
     if (termMatch) {
       const isNot = termMatch[1] === '!';
-      const key = termMatch[2];
+      const key = termMatch[2] || '';
       const value = termMatch[3] || termMatch[4];
       return buildMongoCondition(isNot, key, value || '');
     }

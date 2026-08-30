@@ -1,9 +1,25 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import { codecovWebpackPlugin } from "@codecov/webpack-plugin";
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('./package.json');
+
+
+function sanitizeDeploymentId(value) {
+  if (!value) return 'default-deployment';
+  return value
+    .replace(/[^a-zA-Z0-9_-]/g, '-') // substitui qualquer caractere inválido por '-'
+    .replace(/-+/g, '-')              // remove hífens duplicados
+    .replace(/^-|-$/g, '');           // remove hífens do início e fim
+}
+
+const versionFromPackage = pkg.version || '0.0.0';
+const deploymentId = sanitizeDeploymentId(`v${versionFromPackage}`);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  deploymentId: process.env.GIT_SHA || 'v2026.8.5',
+  
+  deploymentId,
 
   // 🔹 Ative strict mode para detectar problemas de renderização
   reactStrictMode: true,

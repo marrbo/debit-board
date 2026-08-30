@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Check, User, SearchCode } from "lucide-react";
+import { Check, User, SearchCode } from "lucide-react";
 
 interface AssigneeSelectProps {
   users: any[];

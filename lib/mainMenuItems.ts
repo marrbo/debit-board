@@ -5,9 +5,9 @@ import {
   SearchCode, 
   BookOpen, 
   Settings,
-  LucideIcon,
   Binoculars
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface MenuItem {
   href: string;

@@ -80,7 +80,6 @@ function RepositoriesContent() {
     if (!searchQuery.trim()) return filtered;
 
     return filtered.filter(repo => {
-      const lowerQuery = searchQuery.toLowerCase();
       const parts = searchQuery.split(' ');
       
       return parts.every(part => {

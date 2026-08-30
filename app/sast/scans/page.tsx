@@ -4,8 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { RefreshCw, CheckCircle, XCircle, Clock, Play } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 
