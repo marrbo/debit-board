@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { getServerAuthSession } from '@/lib/auth';
 
-export async function GET(request: Request, { params }: { params: { slug: string[] } }) {
+export async function GET(request: Request, props: { params: Promise<{ slug: string[] }> }) {
+  const params = await props.params;
   await request.json();
   const slugPath = params.slug.join('/');
   const filePath = path.join(process.cwd(), 'content', 'wiki', `${slugPath}.md`);
@@ -11,10 +12,11 @@ export async function GET(request: Request, { params }: { params: { slug: string
   return NextResponse.json({ content });
 }
 
-export async function PUT(request: Request, { params }: { params: { slug: string[] } }) {
+export async function PUT(request: Request, props: { params: Promise<{ slug: string[] }> }) {
+  const params = await props.params;
   // Ajuste aqui para usar sua função async
   const session = await getServerAuthSession();
-  
+
   // Garantia de segurança: Apenas Admin Global pode salvar
   if (session?.user?.isAdmin !== true) {
     return new NextResponse('Unauthorized', { status: 401 });

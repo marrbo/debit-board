@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Cria o cookie seguro de impersonação
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set('impersonating_user', targetUserId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

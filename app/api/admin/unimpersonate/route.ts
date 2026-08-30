@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 export async function POST() {
   // Remove o cookie de impersonação
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete('impersonating_user');
 
   return NextResponse.json({ success: true });

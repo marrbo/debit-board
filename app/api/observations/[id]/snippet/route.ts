@@ -70,12 +70,13 @@ function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, numb
   return offsetToLineMap;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tenantId = req.headers.get('x-tenant-id');``
 
   await connectToDatabase();
   // 🔥 Popula o padrão para trazer os dados mais atualizados
-  const issue = await Observation.findById(params.id).populate('patternId'); 
+  const issue = await Observation.findById(params.id).populate('patternId');
   if (!issue || issue.tenantId !== tenantId) {
     return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
   }
@@ -137,10 +138,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const tenantId = req.headers.get('x-tenant-id');
 

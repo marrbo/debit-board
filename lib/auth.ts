@@ -59,7 +59,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           const isAdmin = token.email === process.env.ADMIN_EMAIL;
           token.isAdmin = isAdmin;
 
-          const cookieStore = cookies();
+          const cookieStore = await cookies();
           const impersonatingCookie = cookieStore.get('impersonating_user')?.value;
 
           // ========================================================

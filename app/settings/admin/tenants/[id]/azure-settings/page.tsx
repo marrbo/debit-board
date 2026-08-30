@@ -10,7 +10,8 @@ import { Settings } from "lucide-react";
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
 export const instant = false;
 
-export default async function TenantAzureSettings({ params }: { params: { id: string } }) {
+export default async function TenantAzureSettings(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerAuthSession();
   const adminEmail = process.env.ADMIN_EMAIL;
 

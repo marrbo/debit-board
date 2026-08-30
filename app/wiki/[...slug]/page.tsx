@@ -8,13 +8,14 @@ import WikiEditor from './_WikiEditor';
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
 export const instant = false;
 
-export default async function WikiPage({ 
-  params, 
-  searchParams 
-}: { 
-  params: { slug: string[] }, 
-  searchParams: { edit?: string } 
-}) {
+export default async function WikiPage(
+  props: { 
+    params: Promise<{ slug: string[] }>, 
+    searchParams: Promise<{ edit?: string }> 
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const session = await getServerAuthSession();
   const isAdmin: boolean = session?.user?.isAdmin || false;
 

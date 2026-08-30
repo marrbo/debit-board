@@ -1,7 +1,7 @@
 // app/observations/[id]/page.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,15 +16,16 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { IObservation } from '@/models/Observation';
 
-export default function IssueDetailPage({ params }: { params: { id: string } }) {
+export default function IssueDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { data: session, status } = useSession();
   const router = useRouter();
-  
+
   // Estados Principais
   const [issue, setIssue] = useState<any>(null);
   const [loadingIssue, setLoadingIssue] = useState(true);
   const [errorIssue, setErrorIssue] = useState<string | null>(null);
-  
+
   // Estados do Snippet (Isolados)
   const [snippets, setSnippets] = useState<{ snippet: string; hitLine: number; startLine: number }[]>([]);
   const [loadingSnippets, setLoadingSnippets] = useState(false);
