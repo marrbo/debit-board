@@ -1,30 +1,31 @@
-// app/api/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
-import { SearchRecord } from '@/models/SearchRecord';
-import { SASTScan } from '@/models/SASTScan';
-import { getServerAuthSession } from '@/lib/auth';
 import { subDays, format } from 'date-fns';
-import { PipelineStage } from 'mongoose';
-import { parseSearchQuery } from '@/lib/searchParser';
+import type { PipelineStage } from 'mongoose';
+import { parseDBQL } from '@/lib/parseDBQL';
+import { getServerSessionIds } from '@/lib/session-server';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // 🔹 Obter tenantId com prioridade do header, fallback para sessão
+  const sessionIds = await getServerSessionIds();
+  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
 
   await connectToDatabase();
-  const tenantId = session.user.tenantId;
-  const { searchParams } = new URL(req.url);
 
-  const range = searchParams.get('range') || '7d';
+  const { searchParams } = new URL(req.url);
+  const range = searchParams.get('range') || '30d';
   const projectId = searchParams.get('projectId');
   const searchQuery = searchParams.get('search') || '';
 
-  // 🔒 Sempre começa com tenantId
-  let baseMatch: any = { tenantId };
+  let baseMatch: any = {};
+
+  // Se tenantId existir, usa; senão, loga aviso (em dev pode buscar todos)
+  if (tenantId) {
+    baseMatch.tenantId = tenantId;
+  } else {
+    console.warn('⚠️ Nenhum tenantId encontrado! Buscando sem filtro de tenant (apenas para debug).');
+  }
 
   // Filtro de período
   if (range === '7d') baseMatch.firstSeen = { $gte: subDays(new Date(), 7) };
@@ -38,35 +39,32 @@ export async function GET(req: NextRequest) {
 
   // Aplicar searchQuery
   if (searchQuery) {
-    const parsedMatch = parseSearchQuery(searchQuery, {}); // passa um objeto vazio
-    // Se parseSearchQuery retornar algo, combinamos com $and
-    baseMatch = {
-      $and: [
-        baseMatch,
-        parsedMatch
-      ]
-    };
+    const parsedMatch = parseDBQL(searchQuery);
+    if (parsedMatch && Object.keys(parsedMatch).length > 0) {
+      baseMatch = {
+        $and: [baseMatch, parsedMatch]
+      };
+    }
   }
 
-  // ================= KPIs e Gráficos de Issue =================
-  // ... (restante do código permanece igual, mas usa baseMatch)
-
-  // As agregações abaixo usam baseMatch
+  // ================= KPIs =================
   const kpiPipeline: PipelineStage[] = [
     { $match: baseMatch },
-    { $group: { 
-      _id: null,
-      total: { $sum: 1 },
-      open: { $sum: { $cond: [{ $eq: ["$status", "open"] }, 1, 0] } },
-      recurring: { $sum: { $cond: [{ $eq: ["$status", "recurring"] }, 1, 0] } },
-      resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
-      wontFix: { $sum: { $cond: [{ $eq: ["$status", "wont_fix"] }, 1, 0] } },
-      expired: { $sum: { $cond: [{ $lt: ["$slaDueAt", new Date()] }, 1, 0] } }
-    }}
+    { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        open: { $sum: { $cond: [{ $eq: ["$status", "open"] }, 1, 0] } },
+        recurring: { $sum: { $cond: [{ $eq: ["$status", "recurring"] }, 1, 0] } },
+        resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
+        wontFix: { $sum: { $cond: [{ $eq: ["$status", "wont_fix"] }, 1, 0] } },
+        expired: { $sum: { $cond: [{ $lt: ["$slaDueAt", new Date()] }, 1, 0] } }
+      }
+    }
   ];
 
   const kpiResult = await Observation.aggregate(kpiPipeline);
-  const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0 };
+  
+  const kpi = kpiResult[0] || { total: 0, open: 0, recurring: 0, resolved: 0, wontFix: 0, expired: 0 };
 
   // Severidade
   const severityPipeline: PipelineStage[] = [
@@ -74,6 +72,7 @@ export async function GET(req: NextRequest) {
     { $group: { _id: "$severity", count: { $sum: 1 } } }
   ];
   const severityData = await Observation.aggregate(severityPipeline);
+  
   const severityTotals: Record<string, number> = {};
   severityData.forEach((d: any) => {
     severityTotals[d._id || 'unknown'] = d.count;
@@ -86,6 +85,7 @@ export async function GET(req: NextRequest) {
     { $sort: { count: -1 } }
   ];
   const categoryData = await Observation.aggregate(categoryPipeline);
+  
   const categoryTotals = categoryData.map((d: any) => ({
     label: d._id || 'Sem Categoria',
     value: d.count
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
     { $limit: 10 }
   ];
   const projectData = await Observation.aggregate(projectPipeline);
-
+  
   // Status por projeto
   const projectStatusPipeline: PipelineStage[] = [
     { $match: baseMatch },

@@ -64,9 +64,9 @@ export async function POST() {
       }
 
       // 4. Criar ou Atualizar o Usuário local
-      const existingUser = await User.findOne({ sub: kcUser.id });
+      const existingUser = await (User as any).findOne({ sub: kcUser.id });
       if (existingUser) {
-        await User.updateOne(
+        await (User as any).updateOne(
           { sub: kcUser.id },
           { email: kcUser.email, name: kcUser.firstName + ' ' + kcUser.lastName, tenantId: tenant._id }
         );

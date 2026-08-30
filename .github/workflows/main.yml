@@ -45,11 +45,8 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./test-report.junit.xml
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        flags: unittests
-        name: github-actions
-        fail_ci_if_error: false
-        directory: ./coverage
+        slug: marrbo/debit-board

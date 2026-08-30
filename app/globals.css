@@ -108,3 +108,66 @@
 .issue-pill-severity-medium {
   @apply bg-[#FF9F0A]/20 text-[#FF9F0A] dark:bg-[#FF9F0A]/40;
 }
+
+/* ============================================================
+   ESTILOS PARA LINHAS DA TABELA DE OBSERVAÇÕES
+   ============================================================ */
+/* Classe base para as linhas */
+.observation-row {
+  position: relative;
+  transition: background-color 150ms ease-in-out;
+}
+
+/* Zebra sutil nas linhas pares */
+.observation-row:nth-child(even) {
+  background-color: rgba(59, 130, 246, 0.03);
+}
+
+/* Hover State - fundo slate-100 */
+.observation-row:hover {
+  background-color: #f1f5f9;
+}
+
+/* Garante que as células não mudem de tamanho no hover */
+.observation-row td {
+  transition: background-color 150ms ease-in-out;
+}
+
+/* Remove qualquer mudança de border no hover que possa causar shift */
+.observation-row:hover td {
+  background-color: transparent; /* O fundo da linha é aplicado no tr, não no td */
+}
+
+/* Evita que o filete cause deslocamento */
+.observation-row::before {
+  z-index: 1;
+  pointer-events: none; /* Não interfere no clique */
+}
+
+/* Filete lateral dinâmico (só aparece no hover, com fade suave) */
+.observation-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--severity-color, transparent);
+  border-top-left-radius: 2px;
+  border-bottom-left-radius: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease-in-out;
+}
+
+.observation-row:hover::before {
+  opacity: 1;
+}
+
+/* Ajustes no modo escuro */
+.dark .observation-row:nth-child(even) {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.dark .observation-row:hover {
+  background-color: rgba(30, 41, 59, 0.5);
+}

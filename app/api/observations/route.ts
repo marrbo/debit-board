@@ -3,187 +3,68 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern'; 
-import { getServerAuthSession } from '@/lib/auth';
 import '@/utils/mongooseExtensions';
-import { ObjectId } from 'mongoose';
+import type { ObjectId } from 'mongoose';
+import { parseDBQL } from '@/lib/parseDBQL';
+import * as Sentry from '@sentry/nextjs';
 
+import { User } from '@/models/User'; // ajuste para seu modelo
 
-// 🛠️ Função auxiliar para converter um termo individual (ex: branch:main ou !fileName:*Test*) em objeto do MongoDB
-function buildMongoCondition(isNot: boolean, key: string, rawValue: string): any {
-  const condition: any = {};
+    // Função para converter nomes de usuários em subs
+async function convertAssignedToSubs(query: string): Promise<string> {
+  if (!query.includes('assignedTo:')) return query;
 
-  if (rawValue.includes('*')) {
-    const escaped = rawValue.replace(/([.+?^${}()|[\]\\])/g, '\\$1').replace(/\*/g, '.*');
-    const regexPattern = `^${escaped}$`;
-    
-    if (isNot) {
-      condition[key] = { $not: { $regex: regexPattern, $options: 'i' } };
-    } else {
-      condition[key] = { $regex: regexPattern, $options: 'i' };
-    }
-  } else {
-    if (isNot) {
-      condition[key] = { $ne: rawValue };
-    } else {
-      condition[key] = rawValue;
-    }
-  }
-  return condition;
-}
+  // Regex para capturar padrão "assignedTo:valor"
+  const regex = /assignedTo:\s*(?:"([^"]*)"|([^\s()]+))/gi
+  const matches = query.match(regex);
 
-// 🛠️ Função para negar expressões complexas (evita erro do MongoDB com $not em operadores lógicos)
-function negateExpression(expr: any): any {
-  if (!expr) return {};
-  if (expr.$or) {
-    return { $nor: expr.$or };
-  }
-  if (expr.$and) {
-    return { $or: expr.$and.map(negateExpression) };
-  }
-  const keys = Object.keys(expr);
-  if (keys.length === 1) {
-    const field = keys[0];
-    const val = expr[field];
-    if (val && typeof val === 'object') {
-      if (val.$regex) {
-        return { [field]: { $not: { $regex: val.$regex, $options: val.$options || 'i' } } };
-      }
-      if (val.$ne !== undefined) {
-        return { [field]: val.$ne };
-      }
-    } else {
-      return { [field]: { $ne: val } };
-    }
-  }
-  return { $nor: [expr] };
-}
+  if (!matches) return query;
 
-// 🔥 PARSER DBQL COMPLETO: Suporte a OR, AND, NOT, ! e Parênteses com recursão
-function parseDBQL(queryString: string): any {
-  if (!queryString || !queryString.trim()) return null;
+  // Para cada ocorrência, substituir
+  for (const match of matches) {
+    const matchArray = match?.split(':');
+    if (matchArray?.length > 0 && matchArray[1]) {
+      const value = matchArray[1].replace(/"/g, '');
 
-  const queryStr = queryString.trim();
+      // Buscar usuário por nome ou email
+      const users = await (User as any).find({
+        $or: [
+          { name: { $regex: `^${value}$`, $options: 'i' } },
+          { email: { $regex: `^${value}$`, $options: 'i' } },
+        ],
+      }).select('sub').lean();
 
-  // Função interna para tokenizar a string respeitando parênteses e operadores lógicos
-  function tokenize(str: string) {
-    const regex = /\s*(AND|OR|NOT|!|\(|\)|!?[a-zA-Z0-9_]+:(?:"[^"]*"|\S+))\s*/gi;
-    const tokens: string[] = [];
-    let match;
-    let lastIndex = 0;
+      const subs = users.map((u: any) => u.sub);
+      if (subs.length > 0) {
+        // Substituir por uma expressão OR com os subs
+        const replacement = subs.length === 1
+          ? `assignedTo:${subs[0]}`
+          : `assignedTo:${subs.join(' OR assignedTo:')}`;
 
-    while ((match = regex.exec(str)) !== null) {
-      if (match.index > lastIndex) {
-        const unparsed = str.substring(lastIndex, match.index).trim();
-        if (unparsed) tokens.push(unparsed);
-      }
-      tokens.push(match[1]);
-      lastIndex = regex.lastIndex;
-    }
-
-    // 🔥 Pós-processamento: Separa parênteses de fechamento grudados em valores (ex: branch:master))
-    const expandedTokens: string[] = [];
-    for (const t of tokens) {
-      if (t !== ')' && t.endsWith(')')) {
-        let clean = t;
-        const closingParens: string[] = [];
-        while (clean.endsWith(')') && clean.length > 1 && !clean.endsWith('"')) {
-          closingParens.unshift(')');
-          clean = clean.slice(0, -1);
-        }
-        if (closingParens.length > 0) {
-          expandedTokens.push(clean);
-          expandedTokens.push(...closingParens);
-          continue;
-        }
-      }
-      expandedTokens.push(t);
-    }
-
-    return expandedTokens;
-  }
-
-  const tokens = tokenize(queryStr);
-  if (tokens.length === 0) return null;
-
-  let tokenIndex = 0;
-
-  function parseExpression(): any {
-    let left = parseTerm();
-
-    while (tokenIndex < tokens.length) {
-      const operator = tokens[tokenIndex].toUpperCase();
-      if (operator === 'OR' || operator === 'AND') {
-        tokenIndex++; // consome o operador
-        const right = parseTerm();
-        if (operator === 'OR') {
-          left = { $or: [left, right] };
-        } else {
-          left = { $and: [left, right] };
-        }
-      } else {
-        break;
+        query = query.replace(match, replacement);
       }
     }
-    return left;
   }
 
-  function parseTerm(): any {
-    if (tokenIndex >= tokens.length) return {};
-
-    const token = tokens[tokenIndex];
-
-    // Tratamento de Parênteses (Agrupamento)
-    if (token === '(') {
-      tokenIndex++; // consome '('
-      const expr = parseExpression();
-      if (tokens[tokenIndex] === ')') {
-        tokenIndex++; // consome ')'
-      }
-      return expr;
-    }
-
-    // Tratamento de operador NOT unário ou '!'
-    if (token === '!' || token.toUpperCase() === 'NOT') {
-      tokenIndex++; // consome '!' ou 'NOT'
-      const subExpr = parseTerm();
-      return negateExpression(subExpr);
-    }
-
-    // Tratamento de termo folha (campo:valor ou !campo:valor)
-    tokenIndex++;
-    const termMatch = token.match(/^(!?)(\w+):(?:"([^"]*)"|(\S+))$/);
-    if (termMatch) {
-      const isNot = termMatch[1] === '!';
-      const key = termMatch[2];
-      const value = termMatch[3] || termMatch[4];
-      return buildMongoCondition(isNot, key, value || '');
-    }
-
-    // Fallback caso encontre token avulso
-    return {};
-  }
-
-  try {
-    const result = parseExpression();
-    return result;
-  } catch (e) {
-    console.error('❌ Erro no parser DBQL avançado:', e);
-    return null;
-  }
+  return query;
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  let response_time = Date.now();
+
+  const tenantId = req.headers.get('x-tenant-id');
 
   try {
+
+
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    
+    
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const category = searchParams.get('category') || '';
@@ -194,7 +75,7 @@ export async function GET(req: NextRequest) {
 
     if (id) {
       let issue = await Observation.findById(id).lean();
-      if (!issue || issue.tenantId !== session.user.tenantId) {
+      if (!issue || issue.tenantId !== tenantId) {
         return NextResponse.json({ error: 'Issue não encontrada.' }, { status: 404 });
       }
 
@@ -207,7 +88,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(issue);
     }
 
-    const query: any = { tenantId: session.user.tenantId };
+    const query: any = { tenantId: tenantId };
     if (status) query.status = status;
     if (category) query.category = category;
     if (branch) query.branch = branch;
@@ -216,10 +97,11 @@ export async function GET(req: NextRequest) {
 
     // 🔥 APLICAÇÃO DA ÁRVORE DBQL GERADA PELO PARSER RECURSIVO
     if (search) {
-      const dbqlParsedQuery = parseDBQL(search);
+      const searchWithSubs = await convertAssignedToSubs(search);
+      const dbqlParsedQuery = parseDBQL(searchWithSubs);
       if (dbqlParsedQuery && Object.keys(dbqlParsedQuery).length > 0) {
         query.$and = [
-          { tenantId: session.user.tenantId },
+          { tenantId: tenantId },
           dbqlParsedQuery
         ];
         delete query.tenantId;
@@ -239,6 +121,7 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
+    // Se for all=true, retorna tudo sem paginação
     if (all) {
       const allObservations = await Observation.find(query).sort({ firstSeen: -1 }).lean();
       return NextResponse.json({ observations: allObservations });
@@ -250,12 +133,50 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      observations: observations,
+      observations,
+      page,              // ← página atual
+      limit,             // ← itens por página
+      total,             // ← total de itens
       totalPages: Math.ceil(total / limit),
     });
 
   } catch (error: any) {
     console.error('❌ Erro fatal na API de Observations:', error.message);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } finally {
+    response_time = Date.now() - response_time;
+    Sentry.metrics.distribution('api_response_time', response_time);
+  }
+}
+
+// app/api/observations/route.ts
+
+export async function PATCH(req: NextRequest) {
+  const tenantId = req.headers.get('x-tenant-id');
+
+  try {
+    await connectToDatabase();
+    const body = await req.json();
+    const { issueId, assignedTo } = body;
+
+    if (!issueId) {
+      return NextResponse.json({ error: 'ID da observation é obrigatório.' }, { status: 400 });
+    }
+
+    // Busca a observation e verifica se pertence ao tenant
+    const observation = await Observation.findOne({ _id: issueId, tenantId });
+
+    if (!observation) {
+      return NextResponse.json({ error: 'Observation não encontrada.' }, { status: 404 });
+    }
+
+    // Atualiza o campo assignedTo (pode ser string ou null)
+    observation.assignedTo = assignedTo ?? undefined; // ou null, dependendo do modelo
+    await observation.save();
+
+    return NextResponse.json(observation, { status: 200 });
+  } catch (error: any) {
+    console.error('❌ Erro ao atualizar observation:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

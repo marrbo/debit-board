@@ -4,17 +4,13 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { SearchRecord } from '@/models/SearchRecord';
 import { SASTScan } from '@/models/SASTScan';
 import { Observation } from '@/models/Observation';
-import { getServerAuthSession } from '@/lib/auth';
 import { subDays, startOfDay, endOfDay, format } from 'date-fns';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const tenantId = req.headers.get('x-tenant-id');
 
   await connectToDatabase();
-  const tenantId = session.user.tenantId;
+  
   const { searchParams } = new URL(req.url);
   const period = searchParams.get('period');
   const start = searchParams.get('start');

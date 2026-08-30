@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors duration-200">
+      <body className="min-h-screen space-y-0 flex flex-col bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors duration-200">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

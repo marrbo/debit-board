@@ -7,8 +7,9 @@ import {
   useEffect,
   useMemo,
   useTransition,
-  CSSProperties,
+  useCallback,
 } from "react";
+import type { CSSProperties } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Search,
@@ -36,11 +37,7 @@ interface AdvancedSearchProps {
   context?: "observations" | "stats" | "projects" | "repositories";
   userId: string;
   onManageQueries?: () => void;
-  externalQuery?: string;
-  onExternalQueryChange?: (query: string) => void;
 }
-
-const STORAGE_KEY_MODE = "debitboard_search_mode";
 
 const MEME_QUIPS = [
   "Houston, temos um problema lógico: 'You shall not pass!' 🧙‍♂️",
@@ -71,528 +68,553 @@ interface ValidationError {
   errorLength: number;
 }
 
+// ============================================================
+// Funções auxiliares
+// ============================================================
+const hasComplexSyntax = (q: string): boolean =>
+  /[\(\)!\*]|\b(>=|<=|>|<|!=|:|=|and|or|not)\b/i.test(q);
+
+const parseInputToTags = (input: string): string[] => {
+  const regex =
+    /(?:(?:and|or)\s+not\s+|(?:and|or|not)\s+)?!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)(?:"[^"]*"|[^\s\(\)]+)/gi;
+  const matches = input.match(regex) || [];
+  return matches.map((m) => m.trim());
+};
+
+const validateDBQL = (query: string): ValidationError[] => {
+  if (!query) return [];
+  const errors: ValidationError[] = [];
+  const tokens = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  let searchIndex = 0;
+  let looseTextStart: number | null = null;
+  let looseTextEnd: number | null = null;
+  let looseTextContent = "";
+
+  tokens.forEach((token) => {
+    const cleanToken = token.replace(/^[\(]+|[\)]+$/g, "");
+    const tokenIndex = query.indexOf(token, searchIndex);
+
+    if (cleanToken !== "") {
+      const lower = cleanToken.toLowerCase();
+      const isOperator = ["and", "or", "not"].includes(lower);
+      const isField = /^!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)/i.test(cleanToken);
+      const isParens = /^[\(\)]+$/.test(token);
+
+      if (!isOperator && !isField && !isParens) {
+        if (looseTextStart === null) {
+          looseTextStart = tokenIndex;
+          looseTextContent = token;
+        } else {
+          looseTextContent += ` ${token}`;
+        }
+        looseTextEnd = tokenIndex + token.length;
+      } else {
+        if (looseTextStart !== null && looseTextEnd !== null) {
+          errors.push({
+            error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
+            highlightIndex: looseTextStart,
+            errorLength: looseTextEnd - looseTextStart,
+          });
+          looseTextStart = null;
+          looseTextEnd = null;
+          looseTextContent = "";
+        }
+      }
+    }
+    searchIndex = tokenIndex + token.length;
+  });
+
+  if (looseTextStart !== null && looseTextEnd !== null) {
+    errors.push({
+      error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
+      highlightIndex: looseTextStart,
+      errorLength: looseTextEnd - looseTextStart,
+    });
+  }
+
+  const stack: number[] = [];
+  for (let i = 0; i < query.length; i++) {
+    if (query[i] === "(") stack.push(i);
+    else if (query[i] === ")") {
+      if (stack.length > 0) stack.pop();
+      else
+        errors.push({
+          error: "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
+          highlightIndex: i,
+          errorLength: 1,
+        });
+    }
+  }
+  if (stack.length > 0)
+    errors.push({
+      error: "Erro de sintaxe: Parêntese aberto não foi fechado.",
+      highlightIndex: stack[stack.length - 1] || null,
+      errorLength: 1,
+    });
+
+  if (/\(\s*\)[\)]*/.test(query)) {
+    const match = query.match(/\(\s*\)/);
+    errors.push({
+      error: "Erro de sintaxe: Agrupamento vazio ( ).",
+      highlightIndex: match?.index ?? 0,
+      errorLength: match ? match[0].length : 2,
+    });
+  }
+
+  let openQuote = false;
+  let firstUnclosedQuote = -1;
+  for (let i = 0; i < query.length; i++) {
+    if (query[i] === '"') {
+      openQuote = !openQuote;
+      if (openQuote) firstUnclosedQuote = i;
+    }
+  }
+  if (openQuote)
+    errors.push({
+      error: "Erro de sintaxe: Aspas duplas não fechadas.",
+      highlightIndex: firstUnclosedQuote,
+      errorLength: 1,
+    });
+
+  const chaoticRegex = /\b(and|or|not)\s+(and|or|not)\s+(and|or|not)\b/i;
+  const chaoticMatch = chaoticRegex.exec(query);
+  if (chaoticMatch) {
+    const randomMeme =
+      MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)];
+    errors.push({
+      error: `${randomMeme} (Detectado: '${chaoticMatch[0]}')`,
+      highlightIndex: chaoticMatch.index ?? 0,
+      errorLength: chaoticMatch[0].length,
+    });
+  }
+
+  return errors.slice(0, 3);
+};
+
+const getEditingToken = (text: string) => {
+  const tokens = text
+    .split(/(?=\b(?:and|or|not)\b|\s)/i)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const currentToken = tokens[tokens.length - 1] || "";
+  const cleanToken = currentToken.replace(
+    /^[\(!]+|\b(?:and\s+not|or\s+not|not|and|or)\s+/gi,
+    "",
+  );
+
+  const match = cleanToken.match(/^([a-zA-Z0-9_]+)(>=|<=|>|<|!=|:|=)(.*)$/);
+  if (!match) return null;
+  return {
+    rawToken: currentToken,
+    cleanToken,
+    fieldKey: match[1],
+    operator: match[2],
+    query: match[3]?.replace(/^"/, ""),
+  };
+};
+
+// ============================================================
+// Componente principal
+// ============================================================
 export default function DBQLAdvancedSearch({
   onSearch,
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
   context = "observations",
   userId = "",
   onManageQueries,
-  externalQuery,
-  onExternalQueryChange,
 }: AdvancedSearchProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [_, startTransition] = useTransition();
 
-  const [isSearchVisible, setIsSearchVisible] = useState(true);
-
+  // Parâmetros da URL
   const rawUrlQueryId = searchParams.get("q") || "";
   const urlModeParam = searchParams.get("m") || searchParams.get("mode");
 
+  // ========== ESTADOS DE EDIÇÃO (o que o usuário vê/digita) ==========
   const [mode, setMode] = useState<"tags" | "advanced">("tags");
   const [inputValue, setInputValue] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+
+  // ========== ESTADO ATIVO (a query que está efetivamente sendo usada) ==========
+  const [activeQueryString, setActiveQueryString] = useState<string>("");
+  // Informações da query salva (se houver)
+  const [activeSavedQuery, setActiveSavedQuery] = useState<{
+    id: string;
+    name: string;
+    queryString: string;
+    context: string;
+    visibility: "private" | "shared" | "public" | "temporary";
+  } | null>(null);
+  const [originalQueryString, setOriginalQueryString] = useState<string>("");
+
+  // ========== ESTADOS DE UI ==========
   const [isOpen, setIsOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
-
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveVisibility, setSaveVisibility] = useState<
     "private" | "shared" | "public"
   >("private");
-
-  const [savedQueries, setSavedQueries] = useState<any[]>([]);
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
   const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>(
     {},
   );
-
-  // Chave de sessão isolada por contexto para evitar conflitos na troca de páginas
-  const storageKeyActiveQuery = `debitboard_active_query_${context}`;
-
-  const [activeSavedQuery, setActiveSavedQuery] = useState<{
-    id: string;
-    name: string;
-    context: string;
-    queryString: string;
-    visibility: "private" | "shared" | "public" | "temporary";
-  } | null>(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem(storageKeyActiveQuery);
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (e) {}
-      }
-    }
-    return null;
-  });
-
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [savedQueries, setSavedQueries] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Refs
   const savedButtonRef = useRef<HTMLButtonElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const tempQueryIdRef = useRef<string | null>(null);
-  const hasInitializedRef = useRef(false);
-  const prevQueryIdRef = useRef(rawUrlQueryId);
-
+  const lastNotifiedQuery = useRef<string>("");
   const savedDropdownRef = useRef<HTMLDivElement>(null);
   const helpModalRef = useRef<HTMLDivElement>(null);
   const saveModalRef = useRef<HTMLDivElement>(null);
   const aiModalRef = useRef<HTMLDivElement>(null);
-  const externalQueryRef = useRef<string | null>(null);
+  const initialLoadDoneRef = useRef(false);
 
-  useOutsideClick(savedDropdownRef, () => setIsSavedDropdownOpen(false));
-  useOutsideClick(helpModalRef, () => setIsHelpModalOpen(false));
-  useOutsideClick(saveModalRef, () => setIsSaveModalOpen(false));
-  useOutsideClick(aiModalRef, () => setIsAiModalOpen(false));
-
+  // ============================================================
+  // 1. Carregar da URL (efeito principal)
+  // ============================================================
   useEffect(() => {
-    if (activeSavedQuery) {
-      sessionStorage.setItem(
-        storageKeyActiveQuery,
-        JSON.stringify({ ...activeSavedQuery, context })
-      );
-    } else {
-      sessionStorage.removeItem(storageKeyActiveQuery);
-    }
-  }, [activeSavedQuery, context, storageKeyActiveQuery]);
-
-  useEffect(() => {
-    if (rawUrlQueryId !== prevQueryIdRef.current) {
-      hasInitializedRef.current = false;
-      prevQueryIdRef.current = rawUrlQueryId;
-    }
-  }, [rawUrlQueryId]);
-
-  useEffect(() => {
-    if (externalQuery !== undefined && externalQuery !== externalQueryRef.current) {
-      externalQueryRef.current = externalQuery;
-      hasInitializedRef.current = true;
-
-      if (hasComplexSyntax(externalQuery)) {
-        setMode("advanced");
-        setInputValue(externalQuery);
-        setTags([]);
-      } else {
-        setMode("tags");
-        setTags(parseInputToTags(externalQuery));
-        setInputValue("");
-      }
-      if (onSearch) onSearch(externalQuery);
-    }
-  }, [externalQuery, onSearch]);
-
-  const validateDBQL = (query: string): ValidationError[] => {
-    if (!query) return [];
-    const errors: ValidationError[] = [];
-    const tokens = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-    let searchIndex = 0;
-
-    let looseTextStart: number | null = null;
-    let looseTextEnd: number | null = null;
-    let looseTextContent = "";
-
-    tokens.forEach((token) => {
-      const cleanToken = token.replace(/^[\(]+|[\)]+$/g, "");
-      const tokenIndex = query.indexOf(token, searchIndex);
-
-      if (cleanToken !== "") {
-        const lower = cleanToken.toLowerCase();
-        const isOperator = ["and", "or", "not"].includes(lower);
-        const isField = /^!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)/i.test(cleanToken);
-        const isParens = /^[\(\)]+$/.test(token);
-
-        if (!isOperator && !isField && !isParens) {
-          if (looseTextStart === null) {
-            looseTextStart = tokenIndex;
-            looseTextContent = token;
-          } else {
-            looseTextContent += ` ${token}`;
-          }
-          looseTextEnd = tokenIndex + token.length;
-        } else {
-          if (looseTextStart !== null && looseTextEnd !== null) {
-            errors.push({
-              error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
-              highlightIndex: looseTextStart,
-              errorLength: looseTextEnd - looseTextStart,
-            });
-            looseTextStart = null;
-            looseTextEnd = null;
-            looseTextContent = "";
+    const loadFromUrl = async () => {
+      setIsLoading(true);
+      try {
+        if (rawUrlQueryId) {
+          const res = await fetch(`/api/saved-queries?id=${rawUrlQueryId}`, {
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // Agora data é um objeto, não array
+            const matched = Array.isArray(data) ? data[0] : data;
+            if (matched?.queryString) {
+              const query = matched;
+              // Atualiza o estado ativo
+              setActiveSavedQuery({
+                id: query._id,
+                name: query.name,
+                queryString: query.queryString,
+                context: query.context || context,
+                visibility: query.visibility || "private",
+              });
+              setOriginalQueryString(query.queryString);
+              setActiveQueryString(query.queryString);
+              // Atualiza o estado de edição
+              const targetMode = hasComplexSyntax(query.queryString)
+                ? "advanced"
+                : "tags";
+              setMode(targetMode);
+              if (targetMode === "advanced") {
+                setInputValue(query.queryString);
+                setTags([]);
+              } else {
+                setTags(parseInputToTags(query.queryString));
+                setInputValue("");
+              }
+              // Notifica o pai com a query
+              notifySearch(query.queryString);
+              setIsLoading(false);
+              initialLoadDoneRef.current = true;
+              return;
+            }
           }
         }
+
+        // Sem ID ou falha: estado vazio
+        setActiveSavedQuery(null);
+        setOriginalQueryString("");
+        setActiveQueryString("");
+        const initialMode =
+          urlModeParam === "a" || urlModeParam === "advanced"
+            ? "advanced"
+            : urlModeParam === "t" || urlModeParam === "tags"
+              ? "tags"
+              : "tags";
+        setMode(initialMode);
+        setInputValue("");
+        setTags([]);
+        notifySearch("");
+        // Se houver parâmetros q ou m, removê-los
+        const params = new URLSearchParams(searchParams.toString());
+        if (params.has("q") || params.has("m")) {
+          params.delete("q");
+          params.delete("m");
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar query da URL:", err);
+      } finally {
+        setIsLoading(false);
+        initialLoadDoneRef.current = true;
       }
-      searchIndex = tokenIndex + token.length;
-    });
-
-    if (looseTextStart !== null && looseTextEnd !== null) {
-      errors.push({
-        error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
-        highlightIndex: looseTextStart,
-        errorLength: looseTextEnd - looseTextStart,
-      });
-    }
-
-    const stack: number[] = [];
-    for (let i = 0; i < query.length; i++) {
-      if (query[i] === "(") stack.push(i);
-      else if (query[i] === ")") {
-        if (stack.length > 0) stack.pop();
-        else
-          errors.push({
-            error:
-              "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
-            highlightIndex: i,
-            errorLength: 1,
-          });
-      }
-    }
-    if (stack.length > 0)
-      errors.push({
-        error: "Erro de sintaxe: Parêntese aberto não foi fechado.",
-        highlightIndex: stack[stack.length - 1],
-        errorLength: 1,
-      });
-
-    if (/\(\s*\)[\)]*/.test(query)) {
-      const match = query.match(/\(\s*\)/);
-      errors.push({
-        error: "Erro de sintaxe: Agrupamento vazio ( ).",
-        highlightIndex: match?.index ?? 0,
-        errorLength: match ? match[0].length : 2,
-      });
-    }
-
-    let openQuote = false;
-    let firstUnclosedQuote = -1;
-    for (let i = 0; i < query.length; i++) {
-      if (query[i] === '"') {
-        openQuote = !openQuote;
-        if (openQuote) firstUnclosedQuote = i;
-      }
-    }
-    if (openQuote)
-      errors.push({
-        error: "Erro de sintaxe: Aspas duplas não fechadas.",
-        highlightIndex: firstUnclosedQuote,
-        errorLength: 1,
-      });
-
-    const chaoticRegex = /\b(and|or|not)\s+(and|or|not)\s+(and|or|not)\b/i;
-    const chaoticMatch = chaoticRegex.exec(query);
-    if (chaoticMatch) {
-      const randomMeme =
-        MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)];
-      errors.push({
-        error: `${randomMeme} (Detectado: '${chaoticMatch[0]}')`,
-        highlightIndex: chaoticMatch.index ?? 0,
-        errorLength: chaoticMatch[0].length,
-      });
-    }
-
-    return errors.slice(0, 3);
-  };
-
-  const hasComplexSyntax = (q: string): boolean =>
-    /[\(\)!\*]|\b(>=|<=|>|<|!=|:|=|and|or|not)\b/i.test(q);
-
-  const parseInputToTags = (input: string): string[] => {
-    const regex =
-      /(?:(?:and|or)\s+not\s+|(?:and|or|not)\s+)?!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)(?:"[^"]*"|[^\s\(\)]+)/gi;
-    const matches = input.match(regex) || [];
-    return matches.map((m) => m.trim());
-  };
-
-  const getEditingToken = (text: string) => {
-    const tokens = text
-      .split(/(?=\b(?:and|or|not)\b|\s)/i)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    const currentToken = tokens[tokens.length - 1] || "";
-    const cleanToken = currentToken.replace(
-      /^[\(!]+|\b(?:and\s+not|or\s+not|not|and|or)\s+/gi,
-      "",
-    );
-
-    const match = cleanToken.match(/^([a-zA-Z0-9_]+)(>=|<=|>|<|!=|:|=)(.*)$/);
-    if (!match) return null;
-    return {
-      rawToken: currentToken,
-      cleanToken,
-      fieldKey: match[1],
-      operator: match[2],
-      query: match[3].replace(/^"/, ""),
     };
+
+    loadFromUrl();
+  }, [rawUrlQueryId, urlModeParam]); // Reage a mudanças na URL
+
+  // ============================================================
+  // 2. Computar a query atual (baseada no estado de edição)
+  // ============================================================
+  const currentEditingQuery = useMemo(() => {
+    if (mode === "advanced") {
+      return inputValue;
+    }
+    return [...tags, inputValue].filter(Boolean).join(" ");
+  }, [mode, inputValue, tags]);
+
+  // ============================================================
+  // 3. Notificar pai (evita duplicatas)
+  // ============================================================
+  const notifySearch = useCallback(
+    (query: string) => {
+      if (query !== lastNotifiedQuery.current) {
+        lastNotifiedQuery.current = query;
+        startTransition(() => {
+          onSearch?.(query);
+        });
+      }
+    },
+    [onSearch],
+  );
+
+  // ============================================================
+  // 4. Função para executar a busca (clicar em Executar ou Enter)
+  // ============================================================
+  const executeSearch = useCallback(async () => {
+    const fullQuery = currentEditingQuery;
+    const currentMode = mode;
+
+    // Se não houver query, limpar
+    if (!fullQuery) {
+      clearAllInternal();
+      return;
+    }
+
+    // Se a query não mudou em relação à ativa, não fazer nada
+    if (fullQuery === activeQueryString && currentMode === mode) {
+      // Apenas notificar caso necessário
+      notifySearch(fullQuery);
+      return;
+    }
+
+    // Persistir a query na API (criar/atualizar temporária ou salva)
+    try {
+      let id = activeSavedQuery?.id || null;
+      let visibility = activeSavedQuery?.visibility || "temporary";
+      let name = activeSavedQuery?.name || `Temporária (${context})`;
+
+      // Se não houver ID ou for temporária, criar/atualizar temporária
+      if (!id || visibility === "temporary") {
+        const payload = {
+          name,
+          queryString: fullQuery,
+          context,
+          visibility: "temporary",
+          userId,
+        };
+        const method = id ? "PUT" : "POST";
+        const body = id ? { ...payload, id } : payload;
+
+        const res = await fetch("/api/saved-queries", {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const saved = await res.json();
+          setActiveSavedQuery({
+            id: saved._id,
+            name: saved.name,
+            queryString: saved.queryString,
+            context: saved.context,
+            visibility: saved.visibility,
+          });
+          setOriginalQueryString(saved.queryString);
+          setActiveQueryString(fullQuery);
+          // Atualizar URL
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("q", saved._id);
+          params.set("m", currentMode === "advanced" ? "a" : "t");
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          notifySearch(fullQuery);
+        }
+      } else {
+        // Query salva (não temporária) – atualizar se mudou
+        if (fullQuery !== originalQueryString) {
+          const res = await fetch("/api/saved-queries", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id,
+              name: activeSavedQuery?.name,
+              queryString: fullQuery,
+              context,
+            }),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setActiveSavedQuery(updated);
+            setOriginalQueryString(updated.queryString);
+            setActiveQueryString(fullQuery);
+            // Atualizar URL (modo)
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("m", currentMode === "advanced" ? "a" : "t");
+            router.replace(`${pathname}?${params.toString()}`, {
+              scroll: false,
+            });
+            notifySearch(fullQuery);
+          }
+        } else {
+          // Query não mudou, apenas garantir modo
+          const params = new URLSearchParams(searchParams.toString());
+          const expectedMode = currentMode === "advanced" ? "a" : "t";
+          if (params.get("m") !== expectedMode) {
+            params.set("m", expectedMode);
+            router.replace(`${pathname}?${params.toString()}`, {
+              scroll: false,
+            });
+          }
+          setActiveQueryString(fullQuery);
+          notifySearch(fullQuery);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao persistir query:", err);
+    }
+  }, [
+    currentEditingQuery,
+    mode,
+    activeSavedQuery,
+    originalQueryString,
+    context,
+    userId,
+    searchParams,
+    pathname,
+    router,
+    notifySearch,
+    activeQueryString,
+  ]);
+
+  // ============================================================
+  // 5. Função para limpar (usada internamente e no botão)
+  // ============================================================
+  const clearAllInternal = useCallback(() => {
+    setTags([]);
+    setInputValue("");
+    setActiveSavedQuery(null);
+    setOriginalQueryString("");
+    setActiveQueryString("");
+    setMode("tags");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    params.delete("m");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    notifySearch("");
+    setIsSavedDropdownOpen(false);
+    setIsOpen(false);
+  }, [pathname, router, searchParams, notifySearch]);
+
+  // ============================================================
+  // 6. Handler do botão Executar e Enter
+  // ============================================================
+  const handleExecuteSearch = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    executeSearch();
   };
 
-  // Refs para estabilizar callbacks e evitar loops de re-render
-  const onSearchRef = useRef(onSearch);
-  onSearchRef.current = onSearch;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      // Se estiver no modo tags e houver texto no input, adicionar como tag
+      if (mode === "tags" && inputValue.trim()) {
+        const newTags = [...tags, inputValue.trim()];
+        setTags(newTags);
+        setInputValue("");
+        // Não executar automaticamente; o usuário pode executar depois
+        // Mas podemos executar? Vamos executar para manter comportamento.
+        // Para seguir a regra de "só executa ao clicar em Executar", podemos não executar.
+        // Mas o Enter no campo de texto pode ser esperado para executar.
+        // Vamos executar.
+        setTimeout(() => executeSearch(), 0);
+      } else {
+        // Se já estiver em advanced ou não houver texto, executar
+        executeSearch();
+      }
+    } else if (
+      e.key === "Backspace" &&
+      mode === "tags" &&
+      !inputValue &&
+      tags.length > 0
+    ) {
+      const newTags = tags.slice(0, -1);
+      setTags(newTags);
+    }
+  };
 
-  const onExternalQueryChangeRef = useRef(onExternalQueryChange);
-  onExternalQueryChangeRef.current = onExternalQueryChange;
+  // ============================================================
+  // 7. Outros handlers (removeTag, toggleMode, etc.)
+  // ============================================================
+  const removeTag = (indexToRemove: number) => {
+    const newTags = tags.filter((_, idx) => idx !== indexToRemove);
+    setTags(newTags);
+  };
 
-  // Trava para evitar execuções simultâneas/duplicadas no Strict Mode
-  const isFetchingRef = useRef(false);
+  const toggleMode = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (mode === "tags") {
+      const fullQuery = tags.join(" ") + (inputValue ? ` ${inputValue}` : "");
+      setInputValue(fullQuery.trim());
+      setMode("advanced");
+    } else {
+      if (hasComplexSyntax(inputValue)) {
+        alert("A consulta possui sintaxes avançadas exclusivas.");
+        return;
+      }
+      const parsed = parseInputToTags(inputValue);
+      setTags(parsed);
+      setInputValue("");
+      setMode("tags");
+    }
+  };
 
-  const fetchSavedQueries = async (queryIdToFetch?: string) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
+  const clearAll = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    clearAllInternal();
+  };
 
-    try {
-      const activeId = queryIdToFetch || rawUrlQueryId;
-      
-      // Se temos um ID na URL, buscamos ele E a lista em uma única passada lógica
-      if (activeId && !externalQueryRef.current) {
-        const res = await fetch(`/api/saved-queries?id=${activeId}`, {
+  // ============================================================
+  // 8. Carregar lista de queries salvas
+  // ============================================================
+  useEffect(() => {
+    const fetchSavedQueries = async () => {
+      try {
+        const res = await fetch(`/api/saved-queries?context=${context}`, {
           cache: "no-store",
         });
         if (res.ok) {
-          const fetched = await res.json();
-          const matched = Array.isArray(fetched) ? fetched[0] : fetched?.data || fetched;
-
-          if (matched?.queryString) {
-            setActiveSavedQuery({
-              id: matched._id,
-              name: matched.name,
-              context: matched.context || context,
-              queryString: matched.queryString,
-              visibility: matched.visibility,
-            });
-            const targetMode = hasComplexSyntax(matched.queryString) ? "advanced" : "tags";
-            if (targetMode === "advanced") {
-              setMode("advanced");
-              setInputValue(matched.queryString);
-              setTags([]);
-            } else {
-              setMode("tags");
-              setTags(parseInputToTags(matched.queryString));
-              setInputValue("");
-            }
-            if (onSearchRef.current) onSearchRef.current(matched.queryString);
-            if (onExternalQueryChangeRef.current) onExternalQueryChangeRef.current(matched.queryString);
-          }
+          const data = await res.json();
+          setSavedQueries(data);
         }
-      }
-
-      const listRes = await fetch(`/api/saved-queries?context=${context}`, {
-        cache: "no-store",
-      });
-      if (listRes.ok) {
-        const data = await listRes.json();
-        setSavedQueries(data);
-        const existingTemp = data.find((q: any) => q.visibility === "temporary" && q.context === context);
-        if (existingTemp) tempQueryIdRef.current = existingTemp._id;
-      }
-    } catch (err) {
-      console.error("Erro ao buscar saved queries", err);
-    } finally {
-      isFetchingRef.current = false;
-    }
-  };
-
-  // Effect de inicialização isolado e travado para rodar estritamente uma vez por contexto
-  useEffect(() => {
-    const restoreFromStorage = () => {
-      let source = activeSavedQuery;
-      if (!source) {
-        try {
-          const stored = sessionStorage.getItem(storageKeyActiveQuery);
-          if (stored) source = JSON.parse(stored);
-        } catch {}
-      }
-
-      if (source?.queryString && !rawUrlQueryId) {
-        const targetMode = hasComplexSyntax(source.queryString) ? "advanced" : "tags";
-        if (targetMode === "advanced") {
-          setMode("advanced");
-          setInputValue(source.queryString);
-          setTags([]);
-        } else {
-          setMode("tags");
-          setTags(parseInputToTags(source.queryString));
-          setInputValue("");
-        }
-
-        if (source.id) {
-          const params = new URLSearchParams(window.location.search);
-          params.set("q", source.id);
-          if (targetMode === "advanced") params.set("m", "a");
-          else params.delete("m");
-          params.delete("mode");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        }
-
-        if (onSearchRef.current) onSearchRef.current(source.queryString);
-        if (onExternalQueryChangeRef.current) onExternalQueryChangeRef.current(source.queryString);
+      } catch (err) {
+        console.error("Erro ao buscar saved queries", err);
       }
     };
-
-    restoreFromStorage();
     fetchSavedQueries();
-
-    const resolvedMode =
-      urlModeParam === "a" || urlModeParam === "advanced"
-        ? "advanced"
-        : urlModeParam === "t" || urlModeParam === "tags"
-          ? "tags"
-          : sessionStorage.getItem(STORAGE_KEY_MODE) === "advanced"
-            ? "advanced"
-            : "tags";
-    setMode(resolvedMode);
   }, [context]);
 
-  const currentQueryString =
-    mode === "advanced"
-      ? inputValue
-      : [...tags, inputValue].filter(Boolean).join(" ");
-  const isQueryModified = activeSavedQuery
-    ? currentQueryString !== activeSavedQuery.queryString
-    : false;
-  const syntaxErrors = useMemo(
-    () => validateDBQL(currentQueryString),
-    [currentQueryString],
-  );
-
-  useEffect(() => {
-    const tokenData = getEditingToken(inputValue);
-    if (!tokenData || !tokenData.fieldKey || tokenData.query.includes("*")) {
-      setSuggestions([]);
-      setIsOpen(false);
-      setActiveField(null);
-      return;
-    }
-
-    setActiveField(tokenData.fieldKey);
-    if (tokenData.fieldKey.toLowerCase() === "severity") {
-      const severities = ["critical", "high", "medium", "low", "info"];
-      const filtered = severities.filter(
-        (s) =>
-          s.startsWith(tokenData.query.toLowerCase()) &&
-          s !== tokenData.query.toLowerCase(),
-      );
-      setSuggestions(filtered);
-      setIsOpen(filtered.length > 0);
-      return;
-    }
-
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const timeout = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/observation-filters?field=${encodeURIComponent(tokenData.fieldKey)}&query=${encodeURIComponent(tokenData.query)}&context=${encodeURIComponent(context)}`,
-          { signal: controller.signal },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.from(
-            new Set(data.suggestions || data.values || []),
-          ).filter((item): item is string => typeof item === "string");
-          const filtered = list
-            .filter(
-              (item) => item.toLowerCase() !== tokenData.query.toLowerCase(),
-            )
-            .slice(0, 10);
-          setSuggestions(filtered);
-          setIsOpen(filtered.length > 0);
-        }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
-          setSuggestions([]);
-          setIsOpen(false);
-        }
-      }
-    }, 250);
-    return () => clearTimeout(timeout);
-  }, [inputValue, context]);
-
-  const updateAndSearch = async (
-    fullQuery: string,
-    currentMode: "tags" | "advanced",
-    explicitQueryId?: string,
-  ) => {
-    if (syntaxErrors.length > 0) return;
-    sessionStorage.setItem(STORAGE_KEY_MODE, currentMode);
-
-    let queryRefId = explicitQueryId;
-
-    if (!queryRefId) {
-      if (activeSavedQuery && activeSavedQuery.visibility !== "temporary") {
-        queryRefId = activeSavedQuery.id;
-      } else {
-        queryRefId = rawUrlQueryId;
-      }
-    }
-
-    if (fullQuery) {
-      if (!queryRefId || queryRefId === tempQueryIdRef.current) {
-        try {
-          if (tempQueryIdRef.current) {
-            await fetch("/api/saved-queries", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: tempQueryIdRef.current,
-                name: `Temporária (${context})`,
-                queryString: fullQuery,
-                context,
-                visibility: "temporary",
-                userId: userId,
-              }),
-            });
-            queryRefId = tempQueryIdRef.current;
-          } else {
-            const res = await fetch("/api/saved-queries", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name: `Temporária (${context})`,
-                queryString: fullQuery,
-                context,
-                visibility: "temporary",
-                userId: userId,
-              }),
-            });
-            if (res.ok) {
-              const created = await res.json();
-              tempQueryIdRef.current = created._id;
-              queryRefId = created._id;
-            }
-          }
-        } catch (e) {
-          console.error("Erro ao registrar query temporária", e);
-        }
-      }
-    } else {
-      queryRefId = "";
-    }
-
-    const params = new URLSearchParams(searchParams.toString());
-    if (queryRefId) params.set("q", queryRefId);
-    else params.delete("q");
-
-    if (currentMode === "advanced") params.set("m", "a");
-    else params.delete("m");
-    params.delete("mode");
-
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-
-    startTransition(() => {
-      if (onSearch) onSearch(fullQuery);
-      if (onExternalQueryChange) onExternalQueryChange(fullQuery);
-    });
-  };
-
+  // ============================================================
+  // 9. Sugestões (mantido) - observe que o handleSuggestionSelect está definido antes
+  // ============================================================
   const handleSuggestionSelect = (selectedValue: string) => {
     const tokenData = getEditingToken(inputValue);
     if (!tokenData) return;
@@ -614,94 +636,68 @@ export default function DBQLAdvancedSearch({
     setSuggestions([]);
     setActiveField(null);
   };
-
-  const handleExecuteSearch = (e?: React.MouseEvent | React.KeyboardEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+  
+  useEffect(() => {
+    const tokenData = getEditingToken(inputValue);
+    if (!tokenData || !tokenData.fieldKey || tokenData?.query?.includes("*")) {
+      setSuggestions([]);
+      setIsOpen(false);
+      setActiveField(null);
+      return;
     }
-    if (syntaxErrors.length > 0) return;
 
-    if (mode === "advanced") {
-      updateAndSearch(inputValue, mode);
-    } else {
-      const trimmedInput = inputValue.trim();
-      if (trimmedInput) {
-        if (hasComplexSyntax(trimmedInput)) {
-          setMode("advanced");
-          setInputValue(trimmedInput);
-          updateAndSearch(trimmedInput, "advanced");
-        } else {
-          const newTags = [...tags, trimmedInput];
-          setTags(newTags);
-          setInputValue("");
-          updateAndSearch(newTags.join(" "), mode);
+    setActiveField(tokenData.fieldKey);
+    if (tokenData.fieldKey.toLowerCase() === "severity") {
+      const severities = ["critical", "high", "medium", "low", "info"];
+      const filtered = severities.filter(
+        (s) =>
+          s.startsWith((tokenData?.query || '').toLowerCase()) &&
+          s !== tokenData?.query?.toLowerCase(),
+      );
+      setSuggestions(filtered);
+      setIsOpen(filtered.length > 0);
+      return;
+    }
+
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/observation-filters?field=${encodeURIComponent(tokenData?.fieldKey || '')}&query=${encodeURIComponent(tokenData.query || '')}&context=${encodeURIComponent(context)}`,
+          { signal: controller.signal },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.from(
+            new Set(data.suggestions || data.values || []),
+          ).filter((item): item is string => typeof item === "string");
+          const filtered = list
+            .filter(
+              (item) => item.toLowerCase() !== tokenData?.query?.toLowerCase(),
+            )
+            .slice(0, 10);
+          setSuggestions(filtered);
+          setIsOpen(filtered.length > 0);
         }
-      } else {
-        updateAndSearch(tags.join(" "), mode);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setSuggestions([]);
+          setIsOpen(false);
+        }
       }
-    }
-    setIsOpen(false);
-  };
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [inputValue, context]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleExecuteSearch(e);
-    } else if (
-      e.key === "Backspace" &&
-      mode === "tags" &&
-      !inputValue &&
-      tags.length > 0
-    ) {
-      const newTags = tags.slice(0, -1);
-      setTags(newTags);
-      updateAndSearch(newTags.join(" "), mode);
-    }
-  };
-
-  const removeTag = (indexToRemove: number) => {
-    const newTags = tags.filter((_, idx) => idx !== indexToRemove);
-    setTags(newTags);
-    updateAndSearch(newTags.join(" "), mode);
-  };
-
-  const toggleMode = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (mode === "tags") {
-      const fullQuery = tags.join(" ") + (inputValue ? ` ${inputValue}` : "");
-      setInputValue(fullQuery.trim());
-      setMode("advanced");
-      if (validateDBQL(fullQuery.trim()).length === 0)
-        updateAndSearch(fullQuery.trim(), "advanced");
-    } else {
-      if (hasComplexSyntax(inputValue)) {
-        alert("A consulta possui sintaxes avançadas exclusivas.");
-        return;
-      }
-      const parsed = parseInputToTags(inputValue);
-      setTags(parsed);
-      setInputValue("");
-      setMode("tags");
-      updateAndSearch(parsed.join(" "), "tags");
-    }
-  };
-
-  const clearAll = (e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    setTags([]);
-    setInputValue("");
-    setSuggestions([]);
-    setActiveSavedQuery(null);
-    sessionStorage.removeItem(storageKeyActiveQuery);
-    tempQueryIdRef.current = null;
-    hasInitializedRef.current = false;
-    updateAndSearch("", mode);
-  };
-
+  // ============================================================
+  // 10. Salvamento e gerenciamento de queries salvas
+  // ============================================================
   const handleSaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!saveName.trim() || !currentQueryString) return;
+    if (!saveName.trim() || !currentEditingQuery) return;
 
     try {
       const res = await fetch("/api/saved-queries", {
@@ -709,7 +705,7 @@ export default function DBQLAdvancedSearch({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: saveName.trim(),
-          queryString: currentQueryString,
+          queryString: currentEditingQuery,
           context,
           visibility: saveVisibility,
         }),
@@ -723,15 +719,24 @@ export default function DBQLAdvancedSearch({
           context: saved.context,
           visibility: saved.visibility,
         });
+        setOriginalQueryString(saved.queryString);
+        setActiveQueryString(saved.queryString);
         setIsSaveModalOpen(false);
         setSaveName("");
-        tempQueryIdRef.current = null;
-        hasInitializedRef.current = true;
-
+        // Atualizar URL
         const params = new URLSearchParams(searchParams.toString());
         params.set("q", saved._id);
+        params.set("m", mode === "advanced" ? "a" : "t");
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        fetchSavedQueries();
+        // Atualizar lista
+        const listRes = await fetch(`/api/saved-queries?context=${context}`, {
+          cache: "no-store",
+        });
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(data);
+        }
+        notifySearch(currentEditingQuery);
       }
     } catch (err) {
       console.error("Erro ao salvar nova query", err);
@@ -740,7 +745,7 @@ export default function DBQLAdvancedSearch({
 
   const handleUpdateActiveQuery = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!activeSavedQuery || !isQueryModified) return;
+    if (!activeSavedQuery || activeSavedQuery.visibility === "temporary") return;
     try {
       const res = await fetch("/api/saved-queries", {
         method: "PUT",
@@ -748,16 +753,24 @@ export default function DBQLAdvancedSearch({
         body: JSON.stringify({
           id: activeSavedQuery.id,
           name: activeSavedQuery.name,
-          queryString: currentQueryString,
+          queryString: currentEditingQuery,
           context,
         }),
       });
       if (res.ok) {
-        setActiveSavedQuery({
-          ...activeSavedQuery,
-          queryString: currentQueryString,
+        const updated = await res.json();
+        setActiveSavedQuery(updated);
+        setOriginalQueryString(updated.queryString);
+        setActiveQueryString(updated.queryString);
+        // Atualizar lista
+        const listRes = await fetch(`/api/saved-queries?context=${context}`, {
+          cache: "no-store",
         });
-        fetchSavedQueries();
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(data);
+        }
+        notifySearch(currentEditingQuery);
       }
     } catch (err) {
       console.error("Erro ao atualizar query salva", err);
@@ -773,8 +786,17 @@ export default function DBQLAdvancedSearch({
         method: "DELETE",
       });
       if (res.ok) {
-        if (activeSavedQuery?.id === id) setActiveSavedQuery(null);
-        fetchSavedQueries();
+        if (activeSavedQuery?.id === id) {
+          clearAllInternal();
+        }
+        // Atualizar lista
+        const listRes = await fetch(`/api/saved-queries?context=${context}`, {
+          cache: "no-store",
+        });
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(data);
+        }
       }
     } catch (err) {
       console.error("Erro ao excluir query salva", err);
@@ -796,6 +818,9 @@ export default function DBQLAdvancedSearch({
     setIsSavedDropdownOpen(!isSavedDropdownOpen);
   };
 
+  // ============================================================
+  // 11. Gerador de prompt IA
+  // ============================================================
   const generatedAiPromptText = `Você é um assistente especialista na Debit Board Query Language (DBQL).
 Contexto atual da interface: ${context} (AdvancedQuery - DBQL).
 
@@ -825,7 +850,38 @@ Solicitação do usuário em linguagem natural:
 
 Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
 
-  const realSavedQueries = savedQueries.filter((q) => !q.isTemporary);
+  // ============================================================
+  // 12. Aviso de saída sem salvar
+  // ============================================================
+  const isModified = useMemo(() => {
+    if (!activeSavedQuery) return false;
+    if (activeSavedQuery.visibility === "temporary") return false;
+    return currentEditingQuery !== originalQueryString;
+  }, [currentEditingQuery, originalQueryString, activeSavedQuery]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isModified) {
+        e.preventDefault();
+        e.returnValue = "Você tem alterações não salvas. Deseja realmente sair?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isModified]);
+
+  // ============================================================
+  // 13. Renderização
+  // ============================================================
+  const syntaxErrors = useMemo(
+    () => validateDBQL(currentEditingQuery),
+    [currentEditingQuery],
+  );
+  const realSavedQueries = savedQueries.filter((q) => q.visibility !== "temporary");
+  const isQueryModified = isModified;
+
+  const [isSearchVisible, setIsSearchVisible] = useState(true);
 
   return (
     <div className="relative w-full flex flex-col gap-1.5">
@@ -950,16 +1006,18 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
             </div>
 
             <div className="flex items-center gap-2 ml-auto">
-              {activeSavedQuery && isQueryModified && (
-                <button
-                  type="button"
-                  onClick={handleUpdateActiveQuery}
-                  className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Salvar Alterações</span>
-                </button>
-              )}
+              {activeSavedQuery &&
+                isQueryModified &&
+                activeSavedQuery.visibility !== "temporary" && (
+                  <button
+                    type="button"
+                    onClick={handleUpdateActiveQuery}
+                    className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                )}
 
               <button
                 type="button"
@@ -967,7 +1025,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   e.preventDefault();
                   setIsSaveModalOpen(true);
                 }}
-                disabled={!currentQueryString || syntaxErrors.length > 0}
+                disabled={!currentEditingQuery || syntaxErrors.length > 0}
                 className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
               >
                 <BookmarkPlus className="w-3.5 h-3.5" />
@@ -1023,27 +1081,20 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         <div
                           key={q._id}
                           onClick={() => {
-                            hasInitializedRef.current = true;
+                            // Carregar a query salva na URL
+                            const params = new URLSearchParams(
+                              searchParams.toString(),
+                            );
+                            params.set("q", q._id);
                             const targetMode = hasComplexSyntax(q.queryString)
-                              ? "advanced"
-                              : "tags";
-                            setActiveSavedQuery({
-                              id: q._id,
-                              name: q.name,
-                              queryString: q.queryString,
-                              context: q.context,
-                              visibility: q.visibility || "private",
-                            });
-                            if (targetMode === "advanced") {
-                              setMode("advanced");
-                              setInputValue(q.queryString);
-                              setTags([]);
-                            } else {
-                              setMode("tags");
-                              setTags(parseInputToTags(q.queryString));
-                              setInputValue("");
-                            }
-                            updateAndSearch(q.queryString, targetMode, q._id);
+                              ? "a"
+                              : "t";
+                            params.set("m", targetMode);
+                            router.replace(
+                              `${pathname}?${params.toString()}`,
+                              { scroll: false },
+                            );
+                            // O efeito de carregamento da URL vai atualizar o estado
                             setIsSavedDropdownOpen(false);
                           }}
                           className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
@@ -1139,19 +1190,19 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 {err.highlightIndex !== null && err.highlightIndex >= 0 && (
                   <div className="font-mono text-[10px] bg-white dark:bg-[#1C1C1E] px-2 py-1 rounded border border-apple-border-light text-apple-label-light dark:text-apple-label-dark inline-block">
                     <span>
-                      {currentQueryString.substring(
+                      {currentEditingQuery.substring(
                         Math.max(0, err.highlightIndex - 10),
                         err.highlightIndex,
                       )}
                     </span>
                     <span className="bg-apple-red/25 text-apple-red px-1 py-0.5 rounded font-bold mx-0.5">
-                      {currentQueryString.substring(
+                      {currentEditingQuery.substring(
                         err.highlightIndex,
                         err.highlightIndex + err.errorLength,
                       )}
                     </span>
                     <span>
-                      {currentQueryString.substring(
+                      {currentEditingQuery.substring(
                         err.highlightIndex + err.errorLength,
                         err.highlightIndex + err.errorLength + 10,
                       )}
@@ -1164,6 +1215,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         </div>
       )}
 
+      {/* Modal Salvar */}
       {isSaveModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
@@ -1222,6 +1274,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         </div>
       )}
 
+      {/* Modal IA */}
       {isAiModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div

@@ -11,6 +11,7 @@ export interface ISavedQuery extends Document {
 }
 
 const SavedQuerySchema: Schema = new Schema({
+  _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
   tenantId: { type: String, required: true, index: true, ref: 'Tenant' },
   sub: { type: String, required: true, index: true, ref: 'User' },
   name: { type: String, required: true },

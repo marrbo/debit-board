@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Atualiza o Usuário com o tenantUuid
-  await User.findOneAndUpdate(
+  await (User as any).findOneAndUpdate(
     { sub: session.user.id },
     {
       sub: session.user.id,

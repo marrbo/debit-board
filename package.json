@@ -1,8 +1,9 @@
 {
-  "name": "nextjs-allow-anonymous",
-  "version": "0.1.0",
+  "name": "debit-board",
+  "version": "2026.8.5",
   "private": true,
   "scripts": {
+    "disable-telemetry": "npx next telemetry disable",
     "dev": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
@@ -12,6 +13,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.72.0",
     "@tailwindcss/typography": "^0.5.20",
     "azure-devops-node-api": "^15.1.2",
     "chart.js": "^4.4.0",

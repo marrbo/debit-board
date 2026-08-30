@@ -1,6 +1,5 @@
 // lib/auth.ts
-import NextAuth, { type NextAuthOptions, type Session } from "next-auth";
-import type { JWT } from "next-auth/jwt";
+import { type NextAuthOptions } from "next-auth";
 import KeycloakProvider from "next-auth/providers/keycloak";
 import { connectToDatabase } from "./mongodb";
 import { Tenant } from "@/models/Tenant";
@@ -67,7 +66,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           // 1. Lógica de IMPERSONAÇÃO (Admin impersonando outro usuário)
           // ========================================================
           if (isAdmin && impersonatingCookie) {
-            const targetUser = await User.findOne({ sub: impersonatingCookie });
+            const targetUser = await (User as any).findOne({ sub: impersonatingCookie });
             if (targetUser && targetUser.tenantId !== 'pending') {
               token.originalSub = token.sub;
               token.sub = targetUser.sub;
@@ -90,7 +89,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           // 2. Lógica de AUTO-RESET (Admin saindo da impersonação)
           // ========================================================
           if (isAdmin && token.impersonating && !impersonatingCookie) {
-            const realAdmin = await User.findOne({ email: process.env.ADMIN_EMAIL });
+            const realAdmin = await (User as any).findOne({ email: process.env.ADMIN_EMAIL });
             if (realAdmin) {
               token.sub = realAdmin.sub;
               token.email = realAdmin.email;
@@ -124,9 +123,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             // 🔥 CORREÇÃO CRUCIAL: Busca o usuário por Sub OU Email
-            let adminUser = await User.findOne({ sub: token.sub });
+            let adminUser = await (User as any).findOne({ sub: token.sub });
             if (!adminUser) {
-              adminUser = await User.findOne({ email: token.email });
+              adminUser = await (User as any).findOne({ email: token.email });
             }
 
             if (adminUser) {
@@ -184,9 +183,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             targetTenantId = tenant._id.toString();
           }
 
-          let dbUser = await User.findOne({ sub: token.sub });
+          let dbUser = await (User as any).findOne({ sub: token.sub });
           if (!dbUser && token.email) {
-            dbUser = await User.findOne({ email: token.email });
+            dbUser = await (User as any).findOne({ email: token.email });
             if (dbUser) {
               dbUser.sub = token.sub;
               await dbUser.save();

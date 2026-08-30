@@ -2,9 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
-import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { Tenant } from '@/models/Tenant';
-import { getServerAuthSession } from '@/lib/auth';
 import https from 'node:https';
 import { URL } from 'node:url';
 
@@ -39,9 +37,10 @@ async function azureFetch(urlString: string, pat: string): Promise<string> {
 function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, number> {
   const lineOffsets: number[] = [];
   let currentChar = 0;
-  for (let i = 0; i < lines.length; i++) {
+  for (let i: number = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
     lineOffsets[i] = currentChar;
-    currentChar += lines[i].length + 1;
+    currentChar += line.length + 1;
   }
 
   const offsetToLineMap = new Map<number, number>();
@@ -49,27 +48,35 @@ function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, numb
     let low = 0, high = lineOffsets.length - 1;
     while (low <= high) {
       const mid = (low + high) >> 1;
-      if (lineOffsets[mid] <= offset && (mid === lineOffsets.length - 1 || offset < lineOffsets[mid + 1])) {
+      const lineStart = lineOffsets[mid];
+      const nextLineStart = lineOffsets[mid + 1];
+
+      if (
+        lineStart !== undefined &&
+        lineStart <= offset &&
+        (mid === lineOffsets.length - 1 || (nextLineStart !== undefined && offset < nextLineStart))
+      ) {
         offsetToLineMap.set(offset, mid);
         break;
       }
-      if (lineOffsets[mid] > offset) high = mid - 1;
-      else low = mid + 1;
+
+      if (lineStart === undefined || lineStart > offset) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
     }
   });
   return offsetToLineMap;
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const tenantId = req.headers.get('x-tenant-id');``
 
   await connectToDatabase();
   // 🔥 Popula o padrão para trazer os dados mais atualizados
   const issue = await Observation.findById(params.id).populate('patternId'); 
-  if (!issue || issue.tenantId !== session.user.tenantId) {
+  if (!issue || issue.tenantId !== tenantId) {
     return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
   }
 
@@ -135,10 +142,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerAuthSession();
-    if (!session?.user?.tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const tenantId = req.headers.get('x-tenant-id');
 
     const { id } = params;
     const body = await req.json();
@@ -148,7 +152,7 @@ export async function PATCH(
 
     // Garante que a observação pertence ao tenant do usuário logado
     const updatedObservation = await Observation.findOneAndUpdate(
-      { _id: id, tenantId: session.user.tenantId },
+      { _id: id, tenantId: tenantId },
       { $set: { assigneeId: assigneeId || null } },
       { new: true }
     );

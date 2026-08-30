@@ -4,14 +4,14 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/models/User';
 import { getServerAuthSession } from '@/lib/auth';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getServerAuthSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   await connectToDatabase();
-  const user = await User.findOne({ sub: session.user.id }).lean();
+  const user = await (User as any).findOne({ sub: session.user.id }).lean();
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest) {
   const { name, company, jobTitle, phone } = body;
 
   await connectToDatabase();
-  await User.updateOne(
+  await (User as any).updateOne(
     { sub: session.user.id },
     { $set: { name, company, jobTitle, phone } }
   );

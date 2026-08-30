@@ -1,6 +1,18 @@
 // models/Tenant.ts
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 
+
+export interface IAzureSettings {
+  instanceUrl: string;
+  azureCollection: string;
+  pat: string;
+  username?: string;
+  defaultProject?: string;
+  defaultRepository?: string;
+  reportTitle?: string;
+  ignoreTlsErrors: boolean,
+};
+
 export interface ITenant extends Document {
   _id: Types.ObjectId;
   uuid: string;          // Identificador único gerado por nós (UUID)
@@ -14,17 +26,19 @@ export interface ITenant extends Document {
   dominio: string;
   isActive: boolean;
 
-  azureSettings: {
-    instanceUrl: string;
-    azureCollection: string;
-    pat: string;
-    username?: string;
-    defaultProject?: string;
-    defaultRepository?: string;
-    reportTitle?: string;
-    ignoreTlsErrors?: boolean;
-  };
+  azureSettings: IAzureSettings;
 }
+
+const azureSettings: IAzureSettings = {
+    instanceUrl: 'https://example.com',
+    azureCollection: 'defaultCollection',
+    pat: 'pat',
+    username: 'username',
+    defaultProject: 'project',
+    defaultRepository: 'repository',
+    reportTitle: 'reportTitle',
+    ignoreTlsErrors: true,
+  };
 
 const TenantSchema = new Schema<ITenant>({
   _id: { type: Schema.Types.ObjectId, auto: true },
@@ -38,16 +52,7 @@ const TenantSchema = new Schema<ITenant>({
   keycloakClientId: String,
   keycloakClientSecret: String,
 
-  azureSettings: {
-    instanceUrl: String,
-    azureCollection: String,
-    pat: String,
-    username: String,
-    defaultProject: String,
-    defaultRepository: String,
-    reportTitle: String,
-    ignoreTlsErrors: Boolean,
-  },
+  azureSettings: { type: Object, required: true, default: azureSettings },
 });
 
 export const Tenant: Model<ITenant> = 

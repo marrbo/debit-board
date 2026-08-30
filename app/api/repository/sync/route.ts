@@ -1,23 +1,17 @@
 // app/api/repository/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerAuthSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Tenant } from '@/models/Tenant';
 import { Project } from '@/models/Project';
 import { Repository } from '@/models/Repository';
 
 export async function POST(req: NextRequest) {
-  const session = await getServerAuthSession();
-  
-  // 1. Validação de usuário e Tenant
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const tenantId = req.headers.get('x-tenant-id');
 
   await connectToDatabase();
 
   // 2. Buscar Configurações do Tenant
-  const tenant = await Tenant.findById(session.user.tenantId);
+  const tenant = await Tenant.findById(tenantId);
   if (!tenant || !tenant.azureSettings || !tenant.azureSettings.instanceUrl) {
     return NextResponse.json({ error: 'Configurações do Azure não encontradas para este Tenant.' }, { status: 400 });
   }
@@ -46,7 +40,7 @@ export async function POST(req: NextRequest) {
 
       // Upsert do Projeto no nosso banco
       const savedProject = await Project.findOneAndUpdate(
-        { tenantId: session.user.tenantId, name: projectName },
+        { tenantId: tenantId, name: projectName },
         { name: projectName, teamIds: [] },
         { upsert: true, new: true }
       );
@@ -65,14 +59,14 @@ export async function POST(req: NextRequest) {
           // Upsert do Repositório
           await Repository.findOneAndUpdate(
             { 
-              tenantId: session.user.tenantId, 
+              tenantId: tenantId, 
               projectId: savedProject._id.toString(),
               name: azureRepo.name 
             },
             { 
               name: azureRepo.name,
               projectId: savedProject._id.toString(),
-              tenantId: session.user.tenantId
+              tenantId: tenantId
             },
             { upsert: true }
           );

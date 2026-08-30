@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldKeyhole } from 'lucide-react';
 
@@ -21,7 +21,6 @@ function LoginErrorHandler() {
 }
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
 
   useEffect(() => {

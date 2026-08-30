@@ -1,6 +1,6 @@
 // app/observations/components.tsx
 import React from 'react';
-import { IObservation } from '@/models/Observation';
+import type { IObservation } from '@/models/Observation';
 
 /**
  * Renderiza o Avatar do usuário de forma padronizada.
@@ -33,8 +33,8 @@ export const ObservationsReport = ({ observations, usersMap }: { observations: I
     return a.fileName.localeCompare(b.fileName);
   });
 
-  const groupBy = (arr: IObservation[], key: keyof IObservation) => {
-    return arr.reduce((acc, item) => {
+  const groupBy = (arr: IObservation[] | undefined, key: keyof IObservation) => {
+    return (arr || []).reduce((acc, item) => {
       const groupKey = String(item[key] || 'Sem ' + key);
       if (!acc[groupKey]) acc[groupKey] = [];
       acc[groupKey].push(item);
@@ -184,7 +184,7 @@ export const ObservationsReport = ({ observations, usersMap }: { observations: I
                                       </span>
                                     </td>
                                   </tr>
-                                  {items.map((issue) => (
+                                  {items?.map((issue) => (
                                     <tr key={issue._id.toString()} className="border-b border-gray-100 hover:bg-gray-50 row-item">
                                       <td className="border border-gray-200 p-2 pl-20 align-top">
                                         <div className="font-bold text-[11px]">{issue.fileName}</div>

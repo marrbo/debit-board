@@ -1,6 +1,5 @@
 // app/api/azure/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerAuthSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Tenant } from '@/models/Tenant';
 import { Project } from '@/models/Project';
@@ -9,15 +8,12 @@ import * as azdev from 'azure-devops-node-api';
 import { getPersonalAccessTokenHandler } from 'azure-devops-node-api';
 
 export async function POST(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const tenantId = req.headers.get('x-tenant-id');
 
   await connectToDatabase();
 
   // 1. Buscar configurações do Tenant
-  const tenant = await Tenant.findById(session.user.tenantId);
+  const tenant = await Tenant.findById(tenantId);
   if (!tenant || !tenant.azureSettings || !tenant.azureSettings.instanceUrl || !tenant.azureSettings.pat) {
     return NextResponse.json(
       { error: 'Configurações do Azure DevOps não encontradas para este Tenant.' },
@@ -51,7 +47,7 @@ export async function POST(req: NextRequest) {
 
       // Upsert do Projeto
       const savedProject = await Project.findOneAndUpdate(
-        { tenantId: session.user.tenantId, name: projectName },
+        { tenantId: tenantId, name: projectName },
         { name: projectName, teamIds: [] },
         { upsert: true, new: true }
       );
@@ -62,14 +58,14 @@ export async function POST(req: NextRequest) {
         for (const azureRepo of repos) {
           await Repository.findOneAndUpdate(
             {
-              tenantId: session.user.tenantId,
+              tenantId: tenantId,
               projectId: savedProject._id.toString(),
               name: azureRepo.name!,
             },
             {
               name: azureRepo.name!,
               projectId: savedProject._id.toString(),
-              tenantId: session.user.tenantId,
+              tenantId: tenantId,
             },
             { upsert: true }
           );

@@ -47,7 +47,6 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
   };
 
   return (
-    // ⬇️ REMOVA a classe 'focus-within:border-apple-blue' da linha abaixo
     <div className={`relative grid grid-cols-1 items-stretch w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl overflow-hidden ${className}`}>
       <div className="col-start-1 row-start-1 text-[13px] font-mono pointer-events-none whitespace-pre-wrap break-words leading-relaxed p-3 select-none w-full h-full">
         {renderDBQLColoredQuery(value)}

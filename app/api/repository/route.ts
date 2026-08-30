@@ -1,10 +1,10 @@
 // app/api/projects/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Repository } from '@/models/Repository';
 import { getServerAuthSession } from '@/lib/auth';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getServerAuthSession();
 
   await connectToDatabase();

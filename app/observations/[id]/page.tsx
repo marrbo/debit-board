@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Code, BookOpen, ShieldCheck, RotateCw } from 'lucide-react';
+import { ArrowLeft, ExternalLink, BookOpen, ShieldCheck, RotateCw } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 // 🔥 Importações do Markdown
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { IObservation } from '@/models/Observation';
+import type { IObservation } from '@/models/Observation';
 
 export default function IssueDetailPage({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();
@@ -34,8 +34,6 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   const [activeTab, setActiveTab] = useState<'code' | 'why' | 'fix'>('code');
   const [activeSnippetIndex, setActiveSnippetIndex] = useState(0);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
-  
-  const isAdmin = session?.user?.tenantId === 'tenant_admin';
 
   // Detectar tema
   useEffect(() => {
@@ -190,7 +188,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
     return (
       <div className="w-full transition-all duration-300">
         <div className="flex items-center justify-between mb-4 text-apple-tertiary-light">
-            <span className="text-xs font-mono">Linhas {current.startLine} - {current.startLine + current.snippet.split('\n').length - 1}</span>
+            <span className="text-xs font-mono">Linhas {current?.startLine} - {(current?.startLine || 0) + (current?.snippet?.split('\n')?.length || 0) - 1}</span>
             {snippets.length > 1 && (
                 <div className="flex gap-2">
                     <button onClick={() => setActiveSnippetIndex(i => Math.max(0, i-1))} disabled={activeSnippetIndex === 0} className="px-2 py-1 bg-apple-tertiary-light/10 rounded text-xs disabled:opacity-30">Anterior</button>
@@ -212,10 +210,10 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
               margin: 0,
               transition: 'background-color 0.2s ease'
             }}
-            startingLineNumber={current.startLine}
+            startingLineNumber={current?.startLine}
             lineProps={(lineNumber) => {
-              const globalLine = (current.startLine || 1) + (lineNumber - 1);
-              const isHit = globalLine === ((current.hitLine + (current.startLine || 1)) - 1);
+              const globalLine = (current?.startLine || 1) + (lineNumber - 1);
+              const isHit = globalLine === ((current?.hitLine || 0 ) + (current?.startLine || 1) - 1);
               if (isHit) {
                 return { 
                   style: { 
@@ -232,7 +230,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
               return {};
             }}
           >
-            {current.snippet}
+            {current?.snippet ?? ''}
           </SyntaxHighlighter>
         </div>
       </div>

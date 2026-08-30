@@ -2,37 +2,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { SavedQuery } from '@/models/SavedQuery';
-import { getServerAuthSession } from '@/lib/auth';
+import { getServerSessionIds } from '@/lib/session-server';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const userId = session.user.id; // sub do OpenID
-  const tenantId = session.user.tenantId;
-
   try {
+    // ✅ Obtém IDs corretamente (sem inversão)
+    const { userId, tenantId } = await getServerSessionIds();
+
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const context = searchParams.get('context') || '';
+    const id = searchParams.get('id');
 
-    // Monta a condição com $or
+    if (id) {
+      const queryFilter: any = {
+        _id: id,
+        $or: [
+          { tenantId, sub: userId }, // ✅ correto
+          { visibility: 'public' },
+          { tenantId, visibility: 'shared' }
+        ]
+      };
+
+      const query = await SavedQuery.findOne(queryFilter).lean();
+
+      if (!query) {
+        return NextResponse.json({ error: 'Query não encontrada ou sem permissão' }, { status: 404 });
+      }
+
+      return NextResponse.json(query, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-validate, max-age=0',
+        },
+      });
+    }
+
     const filter: any = {
       $or: [
-        // 1. Queries do próprio usuário no seu tenant (todas as visibilidades)
-        { tenantId: tenantId, sub: userId },
-        // 2. Queries públicas (qualquer tenant/user)
+        { tenantId, sub: userId }, // ✅ correto
         { visibility: 'public' },
-        // 3. Queries compartilhadas no mesmo tenant
-        { tenantId: tenantId, visibility: 'shared' },
-        // 4. Queries temporárias no mesmo tenant
-        // { tenantId: tenantId, visibility: 'temporary' }
+        { tenantId, visibility: 'shared' }
       ]
     };
 
-    // Se houver filtro por contexto, adiciona à raiz (aplica a todos os documentos)
     if (context) filter.context = context;
 
     const queries = await SavedQuery.find(filter)
@@ -44,7 +56,6 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store, no-cache, must-validate, max-age=0',
       },
     });
-
   } catch (error: any) {
     console.error('❌ Erro ao buscar SavedQueries:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -52,26 +63,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { userId, tenantId } = await getServerSessionIds();
+
     await connectToDatabase();
-    
     const body = await req.json();
-    const { name, tenantId, sub: userId, queryString, context, visibility } = body;
+    const { name, tenantId: bodyTenant, sub: bodyUser, queryString, context, visibility } = body;
 
     if (!name || !queryString) {
       return NextResponse.json({ error: 'Nome e query são obrigatórios.' }, { status: 400 });
     }
 
-    
-
     const newSavedQuery = await SavedQuery.create({
-      tenantId: tenantId || session.user.tenantId,
-      sub: userId || session.user.id,
+      tenantId: bodyTenant || tenantId,
+      sub: bodyUser || userId,
       name,
       queryString,
       context: context || 'observations',
@@ -86,25 +91,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { userId, tenantId: tenantIdFromSession } = await getServerSessionIds();
+
     await connectToDatabase();
     const body = await req.json();
-
-    body.tenantId ??= session.user.tenantId;
-
-    const { id, name, sub, tenantId, queryString, context, visibility } = body;
+    const { id, name, sub, queryString, context, visibility } = body;
 
     if (!id || !name || !queryString) {
       return NextResponse.json({ error: 'ID, nome e query são obrigatórios.' }, { status: 400 });
     }
 
-    const updated = await SavedQuery.findOneAndUpdate(
-      { _id: id, tenantId, sub: session.user.id },
+    const updated = await (SavedQuery as any).findOneAndUpdate(
+      { _id: id, tenantId: tenantIdFromSession, sub: sub || userId }, // ✅ correto
       { name, queryString, context: context || 'observations', visibility },
       { new: true }
     );
@@ -121,12 +120,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { userId, tenantId } = await getServerSessionIds();
+
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
@@ -135,7 +131,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID obrigatório.' }, { status: 400 });
     }
 
-    const deleted = await SavedQuery.findOneAndDelete({ _id: id, sub: session.user.id, tenantId: session.user.tenantId });
+    const deleted = await (SavedQuery as any).findOneAndDelete({
+      _id: id,
+      sub: userId,
+      tenantId
+    });
+
     if (!deleted) {
       return NextResponse.json({ error: 'Registro não encontrado.' }, { status: 404 });
     }
