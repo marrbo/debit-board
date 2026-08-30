@@ -554,37 +554,35 @@ export default function StatsClient({
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse table-fixed">
-            {/* Definição de larguras fixas para cada coluna */}
-            <colgroup>
-              <col className="w-[6%]" /><col className="w-[32%]" /><col className="w-[22%]" /><col className="w-[8%]" /><col className="w-[10%]" /><col className="w-[12%]" /><col className="w-[10%]" />
-            </colgroup>
-
+          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
             <thead className="bg-apple-border-light/20 dark:bg-apple-border-dark/20 sticky top-0 z-10">
               <tr>
-                <th className="w-[6%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Severidade</th>
-                <th className="w-[32%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Arquivo / Observação</th>
-                <th className="w-[22%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Categoria</th>
-                <th className="w-[8%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Branch</th>
-                <th className="w-[10%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">SLA</th>
-                <th className="w-[12%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Responsável</th>
-                <th className="w-[10%] px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Ação</th>
+                <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Severidade</th>
+                <th style={{ width: '32%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Arquivo / Observação</th>
+                <th style={{ width: '22%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Categoria</th>
+                <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Branch</th>
+                <th style={{ width: '10%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">SLA</th>
+                <th style={{ width: '12%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Responsável</th>
+                <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
               {loadingObs ? (
-                <tr><td colSpan={7} className="p-8 text-center"><div className="flex justify-center"><div className="w-6 h-6 border-2 border-apple-blue border-t-transparent rounded-full animate-spin"></div></div></td></tr>
+                <tr><td colSpan={7} className="p-8 text-center">...</td></tr>
               ) : observations.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-apple-tertiary-light text-sm">Nenhuma observação encontrada.</td></tr>
               ) : (
                 observations.map((issue) => (
-                  <tr key={issue._id.toString()} 
+                  <tr
+                    key={issue._id.toString()}
                     className="observation-row cursor-pointer"
                     style={{
                       '--severity-color': severityColors[issue.severity] || '#8E8E93',
                     } as React.CSSProperties}
-                    onClick={() => setSelectedObservation(issue)}>
-                    <td className="px-3 py-3 text-center">
+                    onClick={() => setSelectedObservation(issue)}
+                  >
+                    {/* Severidade - agora no final */}
+                    <td className="px-4 py-3 text-center overflow-hidden">
                       <span className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded ${
                         issue.severity === 'critical' ? 'bg-red-100 text-red-800' :
                         issue.severity === 'high' ? 'bg-orange-100 text-orange-800' :
@@ -592,21 +590,44 @@ export default function StatsClient({
                         'bg-blue-100 text-blue-800'
                       }`}>{issue.severity}</span>
                     </td>
-                    <td className="px-4 py-3 min-w-0">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-semibold truncate">{issue.fileName}</span>
-                        <span className="text-[10px] font-mono text-apple-tertiary-light truncate">{issue.filePath}</span>
-                        <span className="text-[10px] font-medium text-apple-tertiary-light">{issue.hitCount} {issue.hitCount === 1 ? 'hit' : 'hits'}</span>
+                    
+                    {/* Arquivo / Observação */}
+                    <td className="px-4 py-3 overflow-hidden">
+                      <div className="flex flex-col gap-0.5 w-full">
+                        <span className="text-xs font-semibold truncate block w-full whitespace-nowrap">{issue.fileName}</span>
+                        <span className="text-[10px] font-mono text-apple-tertiary-light truncate block w-full whitespace-nowrap">{issue.filePath}</span>
+                        <span className="text-[10px] font-medium text-apple-tertiary-light block w-full">{issue.hitCount} {issue.hitCount === 1 ? 'hit' : 'hits'}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs min-w-0 truncate">{issue.category}</td>
-                    <td className="px-4 py-3 text-xs font-mono min-w-0 truncate">{issue.branch}</td>
-                    <td className="px-4 py-3 text-xs  min-w-0 truncate">{issue.slaDueAt ? new Date(issue.slaDueAt).toLocaleDateString('pt-BR') : '—'}</td>
-                    <td className="px-4 py-3">
+
+                    {/* Categoria */}
+                    <td className="px-4 py-3 text-xs overflow-hidden">
+                      <div className="truncate whitespace-nowrap">{issue.category}</div>
+                    </td>
+
+                    {/* Branch */}
+                    <td className="px-4 py-3 text-xs font-mono overflow-hidden">
+                      <div className="truncate whitespace-nowrap">{issue.branch}</div>
+                    </td>
+
+                    {/* SLA */}
+                    <td className="px-4 py-3 text-xs overflow-hidden">
+                      <div className="truncate whitespace-nowrap">{issue.slaDueAt ? new Date(issue.slaDueAt).toLocaleDateString('pt-BR') : '—'}</div>
+                    </td>
+
+                    {/* Responsável */}
+                    <td className="px-4 py-3 overflow-hidden">
                       <AssigneeSelect users={users} value={issue.assignedTo} onChange={(v) => updateAssignee(issue._id.toString(), v)} className="" />
                     </td>
-                    <td className="px-4 py-3">
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedObservation(issue); }} className="p-2 rounded-lg hover:bg-apple-border-light/30 text-apple-tertiary-light hover:text-apple-blue transition-colors" aria-label="Ver detalhes" title="Ver detalhes">
+
+                    {/* Ação */}
+                    <td className="px-4 py-3 overflow-hidden">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedObservation(issue); }}
+                        className="p-2 rounded-lg hover:bg-apple-border-light/30 text-apple-tertiary-light hover:text-apple-blue transition-colors"
+                        aria-label="Ver detalhes"
+                        title="Ver detalhes"
+                      >
                         <ExternalLink className="w-4 h-4" />
                       </button>
                     </td>

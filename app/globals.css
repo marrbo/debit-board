@@ -110,31 +110,6 @@
   background-color: transparent; /* O fundo da linha é aplicado no tr, não no td */
 }
 
-/* Evita que o filete cause deslocamento */
-.observation-row::before {
-  z-index: 1;
-  pointer-events: none; /* Não interfere no clique */
-}
-
-/* Filete lateral dinâmico (só aparece no hover, com fade suave) */
-.observation-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background-color: var(--severity-color, transparent);
-  border-top-left-radius: 2px;
-  border-bottom-left-radius: 2px;
-  opacity: 0;
-  transition: opacity 150ms ease-in-out;
-}
-
-.observation-row:hover::before {
-  opacity: 1;
-}
-
 /* Ajustes no modo escuro */
 .dark .observation-row:nth-child(even) {
   background-color: rgba(59, 130, 246, 0.05);
