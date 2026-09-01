@@ -3,10 +3,11 @@
 import { X, ExternalLink, Database } from 'lucide-react';
 import AssigneeSelect from './AssigneeSelect';
 import type { IObservation } from '@/models/Observation';
+import type { IUser } from '@/models/User';
 
 interface ObservationDrawerProps {
   observation: IObservation | null;
-  users: any[];
+  users: IUser[];
   onClose: () => void;
   onUpdateAssignee: (issueId: string, assignedTo: string | null) => void;
 }
@@ -59,21 +60,21 @@ export default function ObservationDrawer({
   const externalLink = `https://dev.azure.com/${project}/${repository}/_search?text=${encodeURIComponent(fileName)}`;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex justify-end">
+    <div className="fixed inset-0 -top-6 z-[9999] flex justify-end">
       {/* Overlay */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 -top-6 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* Drawer - altura total, sem espaço no topo */}
-      <div className="relative w-full max-w-lg bg-white dark:bg-[#1C1C1E] shadow-2xl h-screen overflow-y-auto p-6">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl h-screen overflow-y-auto p-6">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-4">
-          <div>
-            <h3 className="text-base font-bold text-apple-label-light dark:text-apple-label-dark">
+        <div className="flex items-start justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-4 mb-10">
+          <div className="max-w-10">
+            <h3 className="text-lg font-bold text-apple-label-light dark:text-apple-label-dark">
               {fileName}
             </h3>
-            <p className="text-xs text-apple-tertiary-light mt-1 font-mono">{filePath}</p>
+            <p className="text-[12px] text-apple-tertiary-light mt-1 font-mono text-ellipsis text-wrap">{filePath}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-apple-tertiary-light hover:text-apple-red transition-colors" aria-label="Fechar">
+          <button onClick={onClose} className="p-0 text-apple-tertiary-light hover:text-apple-red transition-colors" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -132,15 +133,15 @@ export default function ObservationDrawer({
 
           {/* Descrição e Recomendação */}
           <div className="border-t border-apple-border-light dark:border-apple-border-dark pt-4">
-            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mb-2">Por que isso é um problema?</h4>
-            <p className="text-sm text-apple-secondary-light dark:text-apple-secondary-dark">{description}</p>
-            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mt-4 mb-2">Como corrigir?</h4>
+            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mb-6">Por que isso é um problema?</h4>
+            <p className="text-sm text-apple-secondary-light dark:text-apple-secondary-dark mb-10">{description}</p>
+            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mt-4 mb-6">Como corrigir?</h4>
             <p className="text-sm text-apple-secondary-light dark:text-apple-secondary-dark">{recommendation}</p>
           </div>
 
           {/* Origem */}
           <div className="border-t border-apple-border-light dark:border-apple-border-dark pt-4">
-            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mb-2">Origem</h4>
+            <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mb-6">Origem</h4>
             <div className="flex items-center gap-2 text-sm text-apple-tertiary-light">
               <Database className="w-4 h-4" />
               <span>Azure DevOps Search Code</span>

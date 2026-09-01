@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "disable-telemetry": "npx next telemetry disable",
-    "dev": "next dev --experimental-https",
+    "dev": "next dev --turbopack --experimental-https",
     "build": "next build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/",
     "start": "node start-standalone.js",
     "lint": "eslint .",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -14,6 +14,36 @@ import { PaginationInfo } from '@/components/PaginationInfo';
 import AssigneeSelect from '@/components/AssigneeSelect';
 import ObservationDrawer from '@/components/ObservationDrawer';
 import type { StatsData, DailyStats } from './services/statsService';
+import type { IUser } from '@/models/User';
+
+// Componente ChartCard movido para fora (evita criação durante render)
+function ChartCard({
+  title,
+  children,
+  chartKey,
+  onExpand,
+}: {
+  title: string;
+  children: ReactNode;
+  chartKey: string;
+  onExpand: (chartKey: string) => void;
+}) {
+  return (
+    <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">{title}</h3>
+        <button
+          onClick={() => onExpand(chartKey)}
+          className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors"
+          title="Expandir gráfico"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="h-64">{children}</div>
+    </div>
+  );
+}
 
 interface StatsClientProps {
   initialStats: StatsData;
@@ -54,7 +84,7 @@ export default function StatsClient({
   const [loadingObs, setLoadingObs] = useState(false);
 
   // Usuários e observação selecionada
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<IUser[]>([]);
   const [selectedObservation, setSelectedObservation] = useState<IObservation | null>(null);
 
   // Filtros ativos (clicáveis)
@@ -67,74 +97,105 @@ export default function StatsClient({
 
   // Função para mapear severidade para cor
   const severityColors: Record<string, string> = {
-    critical: '#FF3B30', // vermelho
-    high: '#FF9500',     // laranja
-    medium: '#FFCC00',   // amarelo
-    low: '#007AFF',      // azul
+    critical: '#FF3B30',
+    high: '#FF9500',
+    medium: '#FFCC00',
+    low: '#007AFF',
   };
+
+  // ================= FETCH STATS =================
+  const fetchStats = useCallback(async (query: string): Promise<StatsData> => {
+    const params = new URLSearchParams();
+    if (query) params.set('search', query);
+    const res = await fetch(`/api/stats?${params.toString()}`);
+    if (!res.ok) throw new Error('Erro ao carregar estatísticas');
+    return await res.json() as StatsData;
+  }, []);
+
+  // ================= FETCH OBSERVATIONS =================
+  const fetchObservations = useCallback(async (
+    query: string,
+    page: number,
+    limit: number
+  ): Promise<{ observations: IObservation[]; total: number; totalPages: number }> => {
+    const params = new URLSearchParams();
+    if (query) params.set('search', query);
+    params.set('page', page.toString());
+    params.set('limit', limit.toString());
+    const res = await fetch(`/api/observations?${params.toString()}`);
+    if (!res.ok) throw new Error('Erro ao carregar observações');
+    return await res.json();
+  }, []);
 
   // ================= BUSCAR USUÁRIOS =================
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch('/api/users');
-        if (res.ok) setUsers(await res.json());
-      } catch (err) {
+    let cancelled = false;
+
+    fetch('/api/users')
+      .then(res => res.ok ? res.json() : Promise.reject('Erro ao carregar usuários'))
+      .then((data: IUser[]) => {
+        if (!cancelled) setUsers(data);
+      })
+      .catch(err => {
         console.error('Erro ao carregar usuários:', err);
+      });
+
+    return () => { cancelled = true; };
+  }, [session, status]);
+
+  // ================= CARREGAR DADOS PRINCIPAIS (STATS + OBSERVAÇÕES) =================
+  useEffect(() => {
+    if (status !== 'authenticated' || !session) return;
+    let cancelled = false;
+
+    const loadAll = async () => {
+      // Agendar loading para evitar setState síncrono no corpo do efeito
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setLoading(true);
+          setLoadingObs(true);
+        }
+      });
+
+      try {
+        const [statsData, obsData] = await Promise.all([
+          fetchStats(searchQuery),
+          fetchObservations(searchQuery, obsPage, obsPageSize),
+        ]);
+
+        if (!cancelled) {
+          setStats(statsData);
+          setError(null);
+          setObservations(obsData.observations || []);
+          setObsTotal(obsData.total || 0);
+          setObsTotalPages(obsData.totalPages || 1);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Erro ao carregar dados');
+        }
+      } finally {
+        // Agendar loading final
+        Promise.resolve().then(() => {
+          if (!cancelled) {
+            setLoading(false);
+            setLoadingObs(false);
+          }
+        });
       }
     };
-    fetchUsers();
-  }, [session, status]);
 
-  // ================= FETCH STATS =================
-  const fetchStats = useCallback(async (query: string) => {
-    if (status !== 'authenticated' || !session) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (query) params.set('search', query);
-      const res = await fetch(`/api/stats?${params.toString()}`);
-      if (!res.ok) throw new Error('Erro ao carregar estatísticas');
-      const data = await res.json();
-      setStats(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [session, status]);
+    loadAll();
 
-  // ================= FETCH OBSERVAÇÕES =================
-  const fetchObservations = useCallback(async (query: string, page: number) => {
-    if (!session) return;
-    setLoadingObs(true);
-    try {
-      const params = new URLSearchParams();
-      if (query) params.set('search', query);
-      params.set('page', page.toString());
-      params.set('limit', obsPageSize.toString());
-      const res = await fetch(`/api/observations?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setObservations(data.observations || []);
-        setObsTotal(data.total || 0);
-        setObsTotalPages(data.totalPages || 1);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar observações:', err);
-    } finally {
-      setLoadingObs(false);
-    }
-  }, [session, obsPageSize]);
+    return () => { cancelled = true; };
+  }, [searchQuery, obsPage, obsPageSize, fetchStats, fetchObservations, status, session]);
 
   // ================= HANDLER DE BUSCA =================
   const handleSearch = useCallback((newQuery: string) => {
     setSearchQuery(newQuery);
     lastSearchQueryRef.current = newQuery;
     setObsPage(1);
-    // Limpar filtros ativos quando a query é alterada manualmente
     setActiveStatusFilter(null);
     setActiveSeverityFilter(null);
   }, []);
@@ -142,10 +203,8 @@ export default function StatsClient({
   // ================= APLICAR FILTROS VIA KPI =================
   const applyFilters = (newStatus: string | null, newSeverity: string | null) => {
     let newQuery = searchQuery;
-    // Remove status/severity existentes
     newQuery = newQuery.replace(/\bstatus:\S+/g, '').replace(/\bseverity:\S+/g, '').trim();
 
-    // Adiciona novos
     if (newStatus) newQuery += ` status:${newStatus}`;
     if (newSeverity) newQuery += ` severity:${newSeverity}`;
 
@@ -166,17 +225,6 @@ export default function StatsClient({
     applyFilters(activeStatusFilter, newSeverity);
   };
 
-  // ================= EFEITOS DE BUSCA =================
-  useEffect(() => {
-    if (status !== 'authenticated' || !session) return;
-    fetchStats(searchQuery);
-    fetchObservations(searchQuery, obsPage);
-  }, [searchQuery, obsPage, fetchStats, fetchObservations, status, session]);
-
-  useEffect(() => {
-    setObsPage(1);
-  }, [searchQuery]);
-
   // ================= ATUALIZAR RESPONSÁVEL =================
   const updateAssignee = async (issueId: string, assignedTo: string | null) => {
     setObservations((prev) =>
@@ -195,18 +243,29 @@ export default function StatsClient({
         body: JSON.stringify({ issueId, assignedTo: assignedTo || null }),
       });
       if (!res.ok) throw new Error('Erro ao atualizar');
-    } catch (err: any) {
+    } catch (err) {
       alert(err.message);
-      fetchObservations(searchQuery, obsPage);
+      // Recarregar observações com o limit correto
+      try {
+        const obsData = await fetchObservations(searchQuery, obsPage, obsPageSize);
+        setObservations(obsData.observations || []);
+        setObsTotal(obsData.total || 0);
+        setObsTotalPages(obsData.totalPages || 1);
+      } catch (reloadErr) {
+        console.error('Erro ao recarregar observações:', reloadErr);
+      }
     }
   };
 
   // ================= DADOS DERIVADOS =================
   const severityTotals = stats?.severityTotals || {};
   const categoryTotals = stats?.categoryTotals || [];
-  const projectTotals = stats?.projectTotals || [];
+  const projectTotals = useMemo(() => stats?.projectTotals || [], [stats?.projectTotals]);
 
-  const chartData = stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [];
+  const chartData = useMemo(
+    () => stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [],
+    [stats?.chartData]
+  );
 
   const movingAverage = (values: number[], windowSize = 3): number[] => {
     if (!values.length) return [];
@@ -225,7 +284,7 @@ export default function StatsClient({
     const total = chartData.map((d: DailyStats) => d.total);
     const medianTotal = movingAverage(total);
 
-    const datasets: any[] = [];
+    const datasets: unknown[] = [];
 
     if (evolutionViewMode === 'severity') {
       const severities = [
@@ -383,18 +442,6 @@ export default function StatsClient({
     return <div className="bg-[#FFD1D1] dark:bg-[#FF453A]/20 border border-[#FF453A]/40 rounded-xl p-6 text-[#FF453A]">{error}</div>;
   }
 
-  const ChartCard = ({ title, children, chartKey }: { title: string; children: React.ReactNode; chartKey: string }) => (
-    <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">{title}</h3>
-        <button onClick={() => setExpandedChart(chartKey)} className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors" title="Expandir gráfico">
-          <Maximize2 className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="h-64">{children}</div>
-    </div>
-  );
-
   return (
     <div className="w-full space-y-6 p-8">
       <PageHeader
@@ -481,7 +528,7 @@ export default function StatsClient({
         </div>
 
         {/* Categoria */}
-        <ChartCard title="Distribuição por Categoria" chartKey="category">
+        <ChartCard title="Distribuição por Categoria" chartKey="category" onExpand={setExpandedChart}>
           {categoryTotals.length > 0 ? (
             <Charts data={categoryTotals} type="pie" onSliceClick={handleSliceClick} />
           ) : (
@@ -489,7 +536,7 @@ export default function StatsClient({
           )}
           {lastCategory && (
             <div className="mt-2 flex items-center justify-between">
-              <p className="text-[11px] text-apple-tertiary-light">Filtro: <span className="font-mono text-apple-blue">category:"{lastCategory}"</span></p>
+              <p className="text-[11px] text-apple-tertiary-light">Filtro: <span className="font-mono text-apple-blue">category:`{lastCategory}`</span></p>
               <button onClick={clearCategoryFilter} className="flex items-center gap-1 text-[11px] text-apple-red hover:underline"><XCircle className="w-3 h-3" /> Voltar</button>
             </div>
           )}
@@ -520,7 +567,7 @@ export default function StatsClient({
 
       {/* ================= MODAL DE EXPANSÃO ================= */}
       {expandedChart && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+        <div className="fixed inset-0 -space-y-6 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-apple-border-light dark:border-apple-border-dark">
               <h3 className="text-base font-semibold text-apple-label-light dark:text-apple-label-dark">
@@ -558,6 +605,7 @@ export default function StatsClient({
             <thead className="bg-apple-border-light/20 dark:bg-apple-border-dark/20 sticky top-0 z-10">
               <tr>
                 <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Severidade</th>
+                <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Status</th>
                 <th style={{ width: '32%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Arquivo / Observação</th>
                 <th style={{ width: '22%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Categoria</th>
                 <th style={{ width: '8%' }} className="px-3 py-2 text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">Branch</th>
@@ -568,7 +616,7 @@ export default function StatsClient({
             </thead>
             <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
               {loadingObs ? (
-                <tr><td colSpan={7} className="p-8 text-center">...</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center">Carregando observações...</td></tr>
               ) : observations.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-apple-tertiary-light text-sm">Nenhuma observação encontrada.</td></tr>
               ) : (
@@ -581,7 +629,7 @@ export default function StatsClient({
                     } as React.CSSProperties}
                     onClick={() => setSelectedObservation(issue)}
                   >
-                    {/* Severidade - agora no final */}
+                    {/* Severidade */}
                     <td className="px-4 py-3 text-center overflow-hidden">
                       <span className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded ${
                         issue.severity === 'critical' ? 'bg-red-100 text-red-800' :
@@ -589,6 +637,15 @@ export default function StatsClient({
                         issue.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-blue-100 text-blue-800'
                       }`}>{issue.severity}</span>
+                    </td>
+
+                    {/* Categoria */}
+                    <td className="px-4 py-3 text-center overflow-hidden">
+                      <span className={`inline-block px-2 py-0.5 min-w-20 text-[10px] font-bold uppercase rounded ${
+                        issue.status === 'recurring' ? 'bg-orange-100 text-orange-800' :
+                        issue.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                        'bg-blue-100 text-blue-800'
+                      }`}>{issue.status}</span>
                     </td>
                     
                     {/* Arquivo / Observação */}
@@ -601,27 +658,27 @@ export default function StatsClient({
                     </td>
 
                     {/* Categoria */}
-                    <td className="px-4 py-3 text-xs overflow-hidden">
+                    <td className="px-4 py-3 text-xs text-center overflow-hidden">
                       <div className="truncate whitespace-nowrap">{issue.category}</div>
                     </td>
 
                     {/* Branch */}
-                    <td className="px-4 py-3 text-xs font-mono overflow-hidden">
+                    <td className="px-4 py-3 text-xs text-center font-mono overflow-hidden">
                       <div className="truncate whitespace-nowrap">{issue.branch}</div>
                     </td>
 
                     {/* SLA */}
-                    <td className="px-4 py-3 text-xs overflow-hidden">
+                    <td className="px-4 py-3 text-xs text-center  overflow-hidden">
                       <div className="truncate whitespace-nowrap">{issue.slaDueAt ? new Date(issue.slaDueAt).toLocaleDateString('pt-BR') : '—'}</div>
                     </td>
 
                     {/* Responsável */}
-                    <td className="px-4 py-3 overflow-hidden">
-                      <AssigneeSelect users={users} value={issue.assignedTo} onChange={(v) => updateAssignee(issue._id.toString(), v)} className="" />
+                    <td className="px-4 py-3 text-center overflow-hidden">
+                      <AssigneeSelect users={users} value={issue.assignedTo} onChange={(v) => updateAssignee(issue._id.toString(), v)} className="text-center" />
                     </td>
 
                     {/* Ação */}
-                    <td className="px-4 py-3 overflow-hidden">
+                    <td className="px-4 py-3 text-center overflow-hidden">
                       <button
                         onClick={(e) => { e.stopPropagation(); setSelectedObservation(issue); }}
                         className="p-2 rounded-lg hover:bg-apple-border-light/30 text-apple-tertiary-light hover:text-apple-blue transition-colors"
