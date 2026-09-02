@@ -1,4 +1,5 @@
 import { serverFetch } from '@/lib/serverFetch';
+import type { SavedQueryItem } from '../types';
 
 export async function getSavedQueries(
   signal?: AbortSignal,
