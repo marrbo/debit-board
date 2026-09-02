@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface PaginationInfoProps {
   currentPage: number;
@@ -61,22 +61,19 @@ export function PaginationInfo({
   onPageSizeChange,
   className = '',
 }: PaginationInfoProps) {
-  const [inputPage, setInputPage] = useState('');
-
-  useEffect(() => {
-    setInputPage('');
-  }, [currentPage]);
+  const [inputPage, setInputPage] = useState({ page: currentPage, value: '' });
+  const inputValue = inputPage.page === currentPage ? inputPage.value : '';
 
   const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const end = Math.min(currentPage * pageSize, totalItems);
 
   const handlePageInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      const parsed = parseInt(inputPage, 10);
+      const parsed = parseInt(inputValue, 10);
       if (!isNaN(parsed) && parsed >= 1 && parsed <= totalPages) {
         onPageChange(parsed);
       }
-      setInputPage('');
+      setInputPage({ page: currentPage, value: '' });
     }
   };
 
@@ -92,7 +89,7 @@ export function PaginationInfo({
   return (
     <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-xs text-apple-tertiary-light ${className}`}>
       <span className="whitespace-nowrap">
-        Exibindo {start}–{end} de {totalItems}
+        Exibindo {start} – {end} de {totalItems}
       </span>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -194,8 +191,8 @@ export function PaginationInfo({
             type="number"
             min={1}
             max={totalPages}
-            value={inputPage}
-            onChange={(e) => setInputPage(e.target.value)}
+            value={inputValue}
+            onChange={(e) => setInputPage({ page: currentPage, value: e.target.value })}
             onKeyDown={handlePageInput}
             placeholder={String(currentPage)}
             className="w-14 bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg px-2 py-1 text-xs text-center"

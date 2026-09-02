@@ -31,13 +31,34 @@ import DBQLRichInput from "./DBQLRichInput";
 import DBQLHelpModal from "./DBQLHelpModal";
 import DBQLSuggestions from "./DBQLSuggestions";
 
+// ============================================================
+// Tipos e interfaces
+// ============================================================
 interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
   placeholder?: string;
   context?: "observations" | "stats" | "projects" | "repositories";
   userId: string;
   onManageQueries?: () => void;
+  value?: string;
 }
+
+interface SavedQuery {
+  _id: string;
+  name: string;
+  queryString: string;
+  context: string;
+  visibility: "private" | "shared" | "public" | "temporary";
+  userId?: string;
+}
+
+interface ValidationError {
+  error: string;
+  highlightIndex: number | null;
+  errorLength: number;
+}
+
+type Visibility = "private" | "shared" | "public";
 
 const MEME_QUIPS = [
   "Houston, temos um problema lógico: 'You shall not pass!' 🧙‍♂️",
@@ -46,12 +67,6 @@ const MEME_QUIPS = [
   "Erro 418: Sou um bule de chá, mas até eu sei que essa sintaxe não faz sentido!",
   "Stack overflow de tokens: operadores encadeados demais para uma única query.",
 ];
-
-interface ValidationError {
-  error: string;
-  highlightIndex: number | null;
-  errorLength: number;
-}
 
 // ============================================================
 // Funções auxiliares
@@ -207,6 +222,7 @@ export default function DBQLAdvancedSearch({
   context = "observations",
   userId = "",
   onManageQueries,
+  value,
 }: AdvancedSearchProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -224,14 +240,7 @@ export default function DBQLAdvancedSearch({
 
   // ========== ESTADO ATIVO (a query que está efetivamente sendo usada) ==========
   const [activeQueryString, setActiveQueryString] = useState<string>("");
-  // Informações da query salva (se houver)
-  const [activeSavedQuery, setActiveSavedQuery] = useState<{
-    id: string;
-    name: string;
-    queryString: string;
-    context: string;
-    visibility: "private" | "shared" | "public" | "temporary";
-  } | null>(null);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<SavedQuery | null>(null);
   const [originalQueryString, setOriginalQueryString] = useState<string>("");
 
   // ========== ESTADOS DE UI ==========
@@ -241,18 +250,15 @@ export default function DBQLAdvancedSearch({
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
-  const [saveVisibility, setSaveVisibility] = useState<
-    "private" | "shared" | "public"
-  >("private");
+  const [saveVisibility, setSaveVisibility] = useState<Visibility>("private");
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
-  const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>(
-    {},
-  );
+  const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>({});
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
-  const [savedQueries, setSavedQueries] = useState<any[]>([]);
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchVisible, setIsSearchVisible] = useState(true);
 
   // Refs
   const savedButtonRef = useRef<HTMLButtonElement>(null);
@@ -262,96 +268,44 @@ export default function DBQLAdvancedSearch({
   const saveModalRef = useRef<HTMLDivElement>(null);
   const aiModalRef = useRef<HTMLDivElement>(null);
   const initialLoadDoneRef = useRef(false);
+  const lastValueRef = useRef<string | undefined>(undefined);
 
   // ============================================================
-  // 1. Carregar da URL (efeito principal)
+  // 1. Computar a query atual (baseada no estado de edição)
+  // ============================================================
+  const currentEditingQuery = useMemo(() => {
+    if (mode === "advanced") return inputValue;
+    return [...tags, inputValue].filter(Boolean).join(" ");
+  }, [mode, inputValue, tags]);
+
+  // ============================================================
+  // 2. Sincronização com valor externo (evita setState síncrono)
   // ============================================================
   useEffect(() => {
-    const loadFromUrl = async () => {
-      setIsLoading(true);
-      try {
-        if (rawUrlQueryId) {
-          const res = await fetch(`/api/saved-queries?id=${rawUrlQueryId}`, {
-            cache: "no-store",
-          });
-          if (res.ok) {
-            const data = await res.json();
-            // Agora data é um objeto, não array
-            const matched = Array.isArray(data) ? data[0] : data;
-            if (matched?.queryString) {
-              const query = matched;
-              // Atualiza o estado ativo
-              setActiveSavedQuery({
-                id: query._id,
-                name: query.name,
-                queryString: query.queryString,
-                context: query.context || context,
-                visibility: query.visibility || "private",
-              });
-              setOriginalQueryString(query.queryString);
-              setActiveQueryString(query.queryString);
-              // Atualiza o estado de edição
-              const targetMode = hasComplexSyntax(query.queryString)
-                ? "advanced"
-                : "tags";
-              setMode(targetMode);
-              if (targetMode === "advanced") {
-                setInputValue(query.queryString);
-                setTags([]);
-              } else {
-                setTags(parseInputToTags(query.queryString));
-                setInputValue("");
-              }
-              // Notifica o pai com a query
-              notifySearch(query.queryString);
-              setIsLoading(false);
-              initialLoadDoneRef.current = true;
-              return;
-            }
-          }
-        }
+    if (value === undefined || value === lastValueRef.current) return;
+    lastValueRef.current = value;
 
-        // Sem ID ou falha: estado vazio
-        setActiveSavedQuery(null);
-        setOriginalQueryString("");
-        setActiveQueryString("");
-        const initialMode =
-          urlModeParam === "a" || urlModeParam === "advanced"
-            ? "advanced"
-            : urlModeParam === "t" || urlModeParam === "tags"
-              ? "tags"
-              : "tags";
-        setMode(initialMode);
+    const applyExternalValue = () => {
+      if (!value) {
         setInputValue("");
         setTags([]);
-        notifySearch("");
-        // Se houver parâmetros q ou m, removê-los
-        const params = new URLSearchParams(searchParams.toString());
-        if (params.has("q") || params.has("m")) {
-          params.delete("q");
-          params.delete("m");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        }
-      } catch (err) {
-        console.error("Erro ao carregar query da URL:", err);
-      } finally {
-        setIsLoading(false);
-        initialLoadDoneRef.current = true;
+        setMode("tags");
+        return;
+      }
+
+      const targetMode = hasComplexSyntax(value) ? "advanced" : "tags";
+      setMode(targetMode);
+      if (targetMode === "advanced") {
+        setInputValue(value);
+        setTags([]);
+      } else {
+        setTags(parseInputToTags(value));
+        setInputValue("");
       }
     };
 
-    loadFromUrl();
-  }, [rawUrlQueryId, urlModeParam]); // Reage a mudanças na URL
-
-  // ============================================================
-  // 2. Computar a query atual (baseada no estado de edição)
-  // ============================================================
-  const currentEditingQuery = useMemo(() => {
-    if (mode === "advanced") {
-      return inputValue;
-    }
-    return [...tags, inputValue].filter(Boolean).join(" ");
-  }, [mode, inputValue, tags]);
+    Promise.resolve().then(applyExternalValue);
+  }, [value]);
 
   // ============================================================
   // 3. Notificar pai (evita duplicatas)
@@ -369,122 +323,80 @@ export default function DBQLAdvancedSearch({
   );
 
   // ============================================================
-  // 4. Função para executar a busca (clicar em Executar ou Enter)
+  // 4. Carregar da URL (efeito principal) - com microtasks
   // ============================================================
-  const executeSearch = useCallback(async () => {
-    const fullQuery = currentEditingQuery;
-    const currentMode = mode;
+  useEffect(() => {
+    const loadFromUrl = async () => {
+      Promise.resolve().then(() => setIsLoading(true));
 
-    // Se não houver query, limpar
-    if (!fullQuery) {
-      clearAllInternal();
-      return;
-    }
-
-    // Se a query não mudou em relação à ativa, não fazer nada
-    if (fullQuery === activeQueryString && currentMode === mode) {
-      // Apenas notificar caso necessário
-      notifySearch(fullQuery);
-      return;
-    }
-
-    // Persistir a query na API (criar/atualizar temporária ou salva)
-    try {
-      let id = activeSavedQuery?.id || null;
-      let visibility = activeSavedQuery?.visibility || "temporary";
-      let name = activeSavedQuery?.name || `Temporária (${context})`;
-
-      // Se não houver ID ou for temporária, criar/atualizar temporária
-      if (!id || visibility === "temporary") {
-        const payload = {
-          name,
-          queryString: fullQuery,
-          context,
-          visibility: "temporary",
-          userId,
-        };
-        const method = id ? "PUT" : "POST";
-        const body = id ? { ...payload, id } : payload;
-
-        const res = await fetch("/api/saved-queries", {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) {
-          const saved = await res.json();
-          setActiveSavedQuery({
-            id: saved._id,
-            name: saved.name,
-            queryString: saved.queryString,
-            context: saved.context,
-            visibility: saved.visibility,
-          });
-          setOriginalQueryString(saved.queryString);
-          setActiveQueryString(fullQuery);
-          // Atualizar URL
-          const params = new URLSearchParams(searchParams.toString());
-          params.set("q", saved._id);
-          params.set("m", currentMode === "advanced" ? "a" : "t");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-          notifySearch(fullQuery);
-        }
-      } else {
-        // Query salva (não temporária) – atualizar se mudou
-        if (fullQuery !== originalQueryString) {
-          const res = await fetch("/api/saved-queries", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id,
-              name: activeSavedQuery?.name,
-              queryString: fullQuery,
-              context,
-            }),
+      try {
+        if (rawUrlQueryId) {
+          const res = await fetch(`/api/saved-queries?id=${rawUrlQueryId}`, {
+            cache: "no-store",
           });
           if (res.ok) {
-            const updated = await res.json();
-            setActiveSavedQuery(updated);
-            setOriginalQueryString(updated.queryString);
-            setActiveQueryString(fullQuery);
-            // Atualizar URL (modo)
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("m", currentMode === "advanced" ? "a" : "t");
-            router.replace(`${pathname}?${params.toString()}`, {
-              scroll: false,
-            });
-            notifySearch(fullQuery);
+            const data = await res.json();
+            const matched = Array.isArray(data) ? data[0] : data;
+            if (matched?.queryString) {
+              const query = matched as SavedQuery;
+              Promise.resolve().then(() => {
+                setActiveSavedQuery({
+                  _id: query._id,
+                  name: query.name,
+                  queryString: query.queryString,
+                  context: query.context || context,
+                  visibility: query.visibility || "private",
+                });
+                setOriginalQueryString(query.queryString);
+                setActiveQueryString(query.queryString);
+                const targetMode = hasComplexSyntax(query.queryString) ? "advanced" : "tags";
+                setMode(targetMode);
+                if (targetMode === "advanced") {
+                  setInputValue(query.queryString);
+                  setTags([]);
+                } else {
+                  setTags(parseInputToTags(query.queryString));
+                  setInputValue("");
+                }
+                notifySearch(query.queryString);
+              });
+              return;
+            }
           }
-        } else {
-          // Query não mudou, apenas garantir modo
-          const params = new URLSearchParams(searchParams.toString());
-          const expectedMode = currentMode === "advanced" ? "a" : "t";
-          if (params.get("m") !== expectedMode) {
-            params.set("m", expectedMode);
-            router.replace(`${pathname}?${params.toString()}`, {
-              scroll: false,
-            });
-          }
-          setActiveQueryString(fullQuery);
-          notifySearch(fullQuery);
         }
+
+        // Sem ID ou falha: estado vazio
+        Promise.resolve().then(() => {
+          setActiveSavedQuery(null);
+          setOriginalQueryString("");
+          setActiveQueryString("");
+          const initialMode =
+            urlModeParam === "a" || urlModeParam === "advanced"
+              ? "advanced"
+              : urlModeParam === "t" || urlModeParam === "tags"
+                ? "tags"
+                : "tags";
+          setMode(initialMode);
+          setInputValue("");
+          setTags([]);
+          notifySearch("");
+          const params = new URLSearchParams(searchParams.toString());
+          if (params.has("q") || params.has("m")) {
+            params.delete("q");
+            params.delete("m");
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          }
+        });
+      } catch (err) {
+        console.error("Erro ao carregar query da URL:", err);
+      } finally {
+        Promise.resolve().then(() => setIsLoading(false));
+        initialLoadDoneRef.current = true;
       }
-    } catch (err) {
-      console.error("Erro ao persistir query:", err);
-    }
-  }, [
-    currentEditingQuery,
-    mode,
-    activeSavedQuery,
-    originalQueryString,
-    context,
-    userId,
-    searchParams,
-    pathname,
-    router,
-    notifySearch,
-    activeQueryString,
-  ]);
+    };
+
+    loadFromUrl();
+  }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, context, notifySearch]);
 
   // ============================================================
   // 5. Função para limpar (usada internamente e no botão)
@@ -506,7 +418,120 @@ export default function DBQLAdvancedSearch({
   }, [pathname, router, searchParams, notifySearch]);
 
   // ============================================================
-  // 6. Handler do botão Executar e Enter
+  // 6. Função para executar a busca (clicar em Executar ou Enter)
+  // ============================================================
+  const executeSearch = useCallback(async () => {
+    const fullQuery = currentEditingQuery;
+    const currentMode = mode;
+
+    if (!fullQuery) {
+      clearAllInternal();
+      return;
+    }
+
+    if (fullQuery === activeQueryString && currentMode === mode) {
+      notifySearch(fullQuery);
+      return;
+    }
+
+    try {
+      const id = activeSavedQuery?._id || null;
+      const visibility = activeSavedQuery?.visibility || "temporary";
+      const name = activeSavedQuery?.name || `Temporária (${context})`;
+
+      if (!id || visibility === "temporary") {
+        const payload = {
+          name,
+          queryString: fullQuery,
+          context,
+          visibility: "temporary",
+          userId,
+        };
+        const method = id ? "PUT" : "POST";
+        const body = id ? { ...payload, id } : payload;
+
+        const res = await fetch("/api/saved-queries", {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const saved = await res.json() as SavedQuery;
+          Promise.resolve().then(() => {
+            setActiveSavedQuery({
+              _id: saved._id,
+              name: saved.name,
+              queryString: saved.queryString,
+              context: saved.context,
+              visibility: saved.visibility,
+            });
+            setOriginalQueryString(saved.queryString);
+            setActiveQueryString(fullQuery);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("q", saved._id);
+            params.set("m", currentMode === "advanced" ? "a" : "t");
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+            notifySearch(fullQuery);
+          });
+        }
+      } else {
+        if (fullQuery !== originalQueryString) {
+          const res = await fetch("/api/saved-queries", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id,
+              name: activeSavedQuery?.name,
+              queryString: fullQuery,
+              context,
+            }),
+          });
+          if (res.ok) {
+            const updated = await res.json() as SavedQuery;
+            Promise.resolve().then(() => {
+              setActiveSavedQuery(updated);
+              setOriginalQueryString(updated.queryString);
+              setActiveQueryString(fullQuery);
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("m", currentMode === "advanced" ? "a" : "t");
+              router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+              notifySearch(fullQuery);
+            });
+          }
+        } else {
+          const params = new URLSearchParams(searchParams.toString());
+          const expectedMode = currentMode === "advanced" ? "a" : "t";
+          if (params.get("m") !== expectedMode) {
+            params.set("m", expectedMode);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          }
+          Promise.resolve().then(() => {
+            setActiveQueryString(fullQuery);
+            notifySearch(fullQuery);
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao persistir query:", err);
+    }
+  }, [
+    currentEditingQuery,
+    mode,
+    activeSavedQuery,
+    originalQueryString,
+    context,
+    userId,
+    searchParams,
+    pathname,
+    router,
+    notifySearch,
+    activeQueryString,
+  ]);
+
+  
+
+  // ============================================================
+  // 7. Handler do botão Executar e Enter
   // ============================================================
   const handleExecuteSearch = (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) {
@@ -519,19 +544,12 @@ export default function DBQLAdvancedSearch({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      // Se estiver no modo tags e houver texto no input, adicionar como tag
       if (mode === "tags" && inputValue.trim()) {
         const newTags = [...tags, inputValue.trim()];
         setTags(newTags);
         setInputValue("");
-        // Não executar automaticamente; o usuário pode executar depois
-        // Mas podemos executar? Vamos executar para manter comportamento.
-        // Para seguir a regra de "só executa ao clicar em Executar", podemos não executar.
-        // Mas o Enter no campo de texto pode ser esperado para executar.
-        // Vamos executar.
-        setTimeout(() => executeSearch(), 0);
+        executeSearch();
       } else {
-        // Se já estiver em advanced ou não houver texto, executar
         executeSearch();
       }
     } else if (
@@ -540,17 +558,15 @@ export default function DBQLAdvancedSearch({
       !inputValue &&
       tags.length > 0
     ) {
-      const newTags = tags.slice(0, -1);
-      setTags(newTags);
+      setTags(tags.slice(0, -1));
     }
   };
 
   // ============================================================
-  // 7. Outros handlers (removeTag, toggleMode, etc.)
+  // 8. Outros handlers
   // ============================================================
   const removeTag = (indexToRemove: number) => {
-    const newTags = tags.filter((_, idx) => idx !== indexToRemove);
-    setTags(newTags);
+    setTags(tags.filter((_, idx) => idx !== indexToRemove));
   };
 
   const toggleMode = (e: React.MouseEvent) => {
@@ -577,7 +593,7 @@ export default function DBQLAdvancedSearch({
   };
 
   // ============================================================
-  // 8. Carregar lista de queries salvas
+  // 9. Carregar lista de queries salvas
   // ============================================================
   useEffect(() => {
     const fetchSavedQueries = async () => {
@@ -586,7 +602,7 @@ export default function DBQLAdvancedSearch({
           cache: "no-store",
         });
         if (res.ok) {
-          const data = await res.json();
+          const data = await res.json() as SavedQuery[];
           setSavedQueries(data);
         }
       } catch (err) {
@@ -597,7 +613,7 @@ export default function DBQLAdvancedSearch({
   }, [context]);
 
   // ============================================================
-  // 9. Sugestões (mantido) - observe que o handleSuggestionSelect está definido antes
+  // 10. Sugestões
   // ============================================================
   const handleSuggestionSelect = (selectedValue: string) => {
     const tokenData = getEditingToken(inputValue);
@@ -620,27 +636,37 @@ export default function DBQLAdvancedSearch({
     setSuggestions([]);
     setActiveField(null);
   };
-  
+
   useEffect(() => {
     const tokenData = getEditingToken(inputValue);
-    if (!tokenData || !tokenData.fieldKey || tokenData?.query?.includes("*")) {
-      setSuggestions([]);
-      setIsOpen(false);
-      setActiveField(null);
-      return;
+    if (!tokenData || !tokenData.fieldKey || tokenData.query?.includes("*")) {
+      const resetTimeout = setTimeout(() => {
+        setSuggestions([]);
+        setIsOpen(false);
+        setActiveField(null);
+      }, 0);
+      return () => clearTimeout(resetTimeout);
     }
 
-    setActiveField(tokenData.fieldKey);
+    const activeFieldTimeout = setTimeout(
+      () => setActiveField(tokenData.fieldKey),
+      0,
+    );
     if (tokenData.fieldKey.toLowerCase() === "severity") {
       const severities = ["critical", "high", "medium", "low", "info"];
       const filtered = severities.filter(
         (s) =>
-          s.startsWith((tokenData?.query || '').toLowerCase()) &&
-          s !== tokenData?.query?.toLowerCase(),
+          s.startsWith((tokenData.query || "").toLowerCase()) &&
+          s !== tokenData.query?.toLowerCase(),
       );
-      setSuggestions(filtered);
-      setIsOpen(filtered.length > 0);
-      return;
+      const suggestionsTimeout = setTimeout(() => {
+        setSuggestions(filtered);
+        setIsOpen(filtered.length > 0);
+      }, 0);
+      return () => {
+        clearTimeout(activeFieldTimeout);
+        clearTimeout(suggestionsTimeout);
+      };
     }
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -650,7 +676,7 @@ export default function DBQLAdvancedSearch({
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/observation-filters?field=${encodeURIComponent(tokenData?.fieldKey || '')}&query=${encodeURIComponent(tokenData.query || '')}&context=${encodeURIComponent(context)}`,
+          `/api/observation-filters?field=${encodeURIComponent(tokenData.fieldKey || "")}&query=${encodeURIComponent(tokenData.query || "")}&context=${encodeURIComponent(context)}`,
           { signal: controller.signal },
         );
         if (res.ok) {
@@ -659,25 +685,27 @@ export default function DBQLAdvancedSearch({
             new Set(data.suggestions || data.values || []),
           ).filter((item): item is string => typeof item === "string");
           const filtered = list
-            .filter(
-              (item) => item.toLowerCase() !== tokenData?.query?.toLowerCase(),
-            )
+            .filter((item) => item.toLowerCase() !== tokenData.query?.toLowerCase())
             .slice(0, 10);
           setSuggestions(filtered);
           setIsOpen(filtered.length > 0);
         }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
           setSuggestions([]);
           setIsOpen(false);
         }
       }
     }, 250);
-    return () => clearTimeout(timeout);
-  }, [inputValue, context]);
+
+    return () => {
+      clearTimeout(activeFieldTimeout);
+      clearTimeout(timeout);
+    };
+  }, [inputValue, context, setSuggestions, setIsOpen]);
 
   // ============================================================
-  // 10. Salvamento e gerenciamento de queries salvas
+  // 11. Salvamento e gerenciamento de queries salvas
   // ============================================================
   const handleSaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -695,9 +723,9 @@ export default function DBQLAdvancedSearch({
         }),
       });
       if (res.ok) {
-        const saved = await res.json();
+        const saved = await res.json() as SavedQuery;
         setActiveSavedQuery({
-          id: saved._id,
+          _id: saved._id,
           name: saved.name,
           queryString: saved.queryString,
           context: saved.context,
@@ -707,17 +735,15 @@ export default function DBQLAdvancedSearch({
         setActiveQueryString(saved.queryString);
         setIsSaveModalOpen(false);
         setSaveName("");
-        // Atualizar URL
         const params = new URLSearchParams(searchParams.toString());
         params.set("q", saved._id);
         params.set("m", mode === "advanced" ? "a" : "t");
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        // Atualizar lista
         const listRes = await fetch(`/api/saved-queries?context=${context}`, {
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json();
+          const data = await listRes.json() as SavedQuery[];
           setSavedQueries(data);
         }
         notifySearch(currentEditingQuery);
@@ -735,23 +761,22 @@ export default function DBQLAdvancedSearch({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: activeSavedQuery.id,
+          id: activeSavedQuery._id,
           name: activeSavedQuery.name,
           queryString: currentEditingQuery,
           context,
         }),
       });
       if (res.ok) {
-        const updated = await res.json();
+        const updated = await res.json() as SavedQuery;
         setActiveSavedQuery(updated);
         setOriginalQueryString(updated.queryString);
         setActiveQueryString(updated.queryString);
-        // Atualizar lista
         const listRes = await fetch(`/api/saved-queries?context=${context}`, {
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json();
+          const data = await listRes.json() as SavedQuery[];
           setSavedQueries(data);
         }
         notifySearch(currentEditingQuery);
@@ -770,15 +795,14 @@ export default function DBQLAdvancedSearch({
         method: "DELETE",
       });
       if (res.ok) {
-        if (activeSavedQuery?.id === id) {
+        if (activeSavedQuery?._id === id) {
           clearAllInternal();
         }
-        // Atualizar lista
         const listRes = await fetch(`/api/saved-queries?context=${context}`, {
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json();
+          const data = await listRes.json() as SavedQuery[];
           setSavedQueries(data);
         }
       }
@@ -803,7 +827,7 @@ export default function DBQLAdvancedSearch({
   };
 
   // ============================================================
-  // 11. Gerador de prompt IA
+  // 12. Prompt IA
   // ============================================================
   const generatedAiPromptText = `Você é um assistente especialista na Debit Board Query Language (DBQL).
 Contexto atual da interface: ${context} (AdvancedQuery - DBQL).
@@ -835,7 +859,7 @@ Solicitação do usuário em linguagem natural:
 Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
 
   // ============================================================
-  // 12. Aviso de saída sem salvar
+  // 13. Aviso de saída sem salvar
   // ============================================================
   const isModified = useMemo(() => {
     if (!activeSavedQuery) return false;
@@ -856,16 +880,15 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
   }, [isModified]);
 
   // ============================================================
-  // 13. Renderização
+  // 14. Renderização
   // ============================================================
   const syntaxErrors = useMemo(
     () => validateDBQL(currentEditingQuery),
     [currentEditingQuery],
   );
+
   const realSavedQueries = savedQueries.filter((q) => q.visibility !== "temporary");
   const isQueryModified = isModified;
-
-  const [isSearchVisible, setIsSearchVisible] = useState(true);
 
   return (
     <div className="relative w-full flex flex-col gap-1.5">
@@ -1048,7 +1071,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                           e.preventDefault();
                           setIsSavedDropdownOpen(false);
                           if (onManageQueries) onManageQueries();
-                          else window.location.href = "/settings/saved-queries";
+                          else router.push("/settings/saved-queries");
                         }}
                         className="text-xs text-apple-blue hover:underline font-medium"
                       >
@@ -1065,7 +1088,6 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         <div
                           key={q._id}
                           onClick={() => {
-                            // Carregar a query salva na URL
                             const params = new URLSearchParams(
                               searchParams.toString(),
                             );
@@ -1078,11 +1100,10 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                               `${pathname}?${params.toString()}`,
                               { scroll: false },
                             );
-                            // O efeito de carregamento da URL vai atualizar o estado
                             setIsSavedDropdownOpen(false);
                           }}
                           className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
-                            activeSavedQuery?.id === q._id
+                            activeSavedQuery?._id === q._id
                               ? "bg-apple-blue/10 text-apple-blue font-semibold"
                               : "text-apple-label-light dark:text-apple-label-dark"
                           }`}
@@ -1229,7 +1250,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 </label>
                 <select
                   value={saveVisibility}
-                  onChange={(e) => setSaveVisibility(e.target.value as any)}
+                  onChange={(e) => setSaveVisibility(e.target.value as Visibility)}
                   className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
                 >
                   <option value="private">Privada (Apenas você)</option>

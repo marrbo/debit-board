@@ -7,8 +7,7 @@ import '@/utils/mongooseExtensions';
 import type { ObjectId } from 'mongoose';
 import { parseDBQL } from '@/lib/parseDBQL';
 import * as Sentry from '@sentry/nextjs';
-
-import { User } from '@/models/User'; // ajuste para seu modelo
+import { User } from '@/models/User';
 
     // Função para converter nomes de usuários em subs
 async function convertAssignedToSubs(query: string): Promise<string> {
@@ -74,39 +73,39 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get('all') === 'true';
 
     if (id) {
-      let issue = await Observation.findById(id).lean();
+      const issue = await Observation.findById(id).lean();
       if (!issue || issue.tenantId !== tenantId) {
         return NextResponse.json({ error: 'Issue não encontrada.' }, { status: 404 });
       }
 
       if (issue.patternId && issue?.patternId?.isValidAndNotNull() ) {
         const pattern = await VulnerabilityPattern.findById<ObjectId>(issue.patternId).lean();
-        issue.pattern = pattern || null; 
+        issue.patternId = pattern._id;
       } else {
         issue.pattern = null;
       }
       return NextResponse.json(issue);
     }
 
-    const query: any = { tenantId: tenantId };
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (branch) query.branch = branch;
-    if (severity) query.severity = severity;
-    if (projectId) query.project = projectId;
+    const DBQLQuery: any = { tenantId: tenantId };
+    if (status) DBQLQuery.status = status;
+    if (category) DBQLQuery.category = category;
+    if (branch) DBQLQuery.branch = branch;
+    if (severity) DBQLQuery.severity = severity;
+    if (projectId) DBQLQuery.project = projectId;
 
     // 🔥 APLICAÇÃO DA ÁRVORE DBQL GERADA PELO PARSER RECURSIVO
     if (search) {
       const searchWithSubs = await convertAssignedToSubs(search);
       const dbqlParsedQuery = parseDBQL(searchWithSubs);
       if (dbqlParsedQuery && Object.keys(dbqlParsedQuery).length > 0) {
-        query.$and = [
+        DBQLQuery.$and = [
           { tenantId: tenantId },
           dbqlParsedQuery
         ];
-        delete query.tenantId;
+        delete DBQLQuery.tenantId;
       } else {
-        query.$or = [
+        DBQLQuery.$or = [
           { fileName: { $regex: search, $options: 'i' } },
           { filePath: { $regex: search, $options: 'i' } },
           { category: { $regex: search, $options: 'i' } },
@@ -123,13 +122,13 @@ export async function GET(req: NextRequest) {
 
     // Se for all=true, retorna tudo sem paginação
     if (all) {
-      const allObservations = await Observation.find(query).sort({ firstSeen: -1 }).lean();
+      const allObservations = await Observation.find(DBQLQuery).sort({ firstSeen: -1 }).lean();
       return NextResponse.json({ observations: allObservations });
     }
 
     const [observations, total] = await Promise.all([
-      Observation.find(query).sort({ firstSeen: -1 }).skip(skip).limit(limit).lean(),
-      Observation.countDocuments(query)
+      Observation.find(DBQLQuery).sort({ firstSeen: -1 }).skip(skip).limit(limit).lean(),
+      Observation.countDocuments(DBQLQuery)
     ]);
 
     return NextResponse.json({
@@ -140,8 +139,9 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
     });
 
-  } catch (error: any) {
-    console.error('❌ Erro fatal na API de Observations:', error.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erro fatal na API de Observations:', message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   } finally {
     response_time = Date.now() - response_time;
@@ -175,8 +175,9 @@ export async function PATCH(req: NextRequest) {
     await observation.save();
 
     return NextResponse.json(observation, { status: 200 });
-  } catch (error: any) {
-    console.error('❌ Erro ao atualizar observation:', error.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Erro ao atualizar observation:', message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

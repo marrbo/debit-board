@@ -4,12 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import ObservationsPage from "./page";
 import { UserAvatar, ObservationsReport } from "./components";
-import type { IObservation } from "@/models/Observation";
 import { useSession } from "next-auth/react";
-
-// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-;
+import { IObservation } from "../../models/Observation";
 
 // =====================================================================
 // Mocks
@@ -227,6 +223,7 @@ beforeEach(() => {
         json: async () => ({
           observations: mockObservations,
           totalPages: 2,
+          total: mockObservations.length,
         }),
       });
     }
@@ -299,7 +296,7 @@ describe("ObservationsReport", () => {
         { _id: "o2", project: "P", repository: "R", branch: "b", fileName: "f2", filePath: "p", category: "c", status: "recurring", severity: "high", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: "2024-01-02", assignedTo: "" },
         { _id: "o3", project: "P", repository: "R", branch: "b", fileName: "f3", filePath: "p", category: "c", status: "resolved", severity: "medium", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: "2024-01-02", assignedTo: "" },
         { _id: "o4", project: "P", repository: "R", branch: "b", fileName: "f4", filePath: "p", category: "c", status: "wont_fix", severity: "low", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: "2024-01-02", assignedTo: "" },
-    ] as unknown as IObservation[];
+    ] as unknown as Parameters<typeof ObservationsReport>[0]["observations"];
 
     render(<ObservationsReport observations={observations} usersMap={{}} />);
 
@@ -315,7 +312,8 @@ describe("ObservationsReport", () => {
   });
 
   it("deve renderizar os totais e a tabela agrupada", () => {
-    const observations = mockObservations as unknown as IObservation[];
+    const observations =
+      mockObservations as unknown as Parameters<typeof ObservationsReport>[0]["observations"];
     render(
       <ObservationsReport
         observations={observations}
@@ -550,7 +548,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 2 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -571,7 +573,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 2 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
         });
       }
       if (url.toString().includes("/api/observations")) {
@@ -627,7 +633,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: [], totalPages: 1 }),
+          json: async () => ({
+            observations: [],
+            totalPages: 1,
+            total: 0,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -665,7 +675,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 2 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -701,7 +715,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: [], totalPages: 1 }),
+          json: async () => ({
+            observations: [],
+            totalPages: 1,
+            total: 0,
+          }),
         });
       }
       return Promise.resolve({
@@ -745,7 +763,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 2 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -778,7 +800,11 @@ describe("ObservationsPage - Fluxos de erro", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 2 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -812,7 +838,11 @@ describe("ObservationsPage - Cenários vazios, paginação e busca", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: [], totalPages: 1 }),
+          json: async () => ({
+            observations: [],
+            totalPages: 1,
+            total: 0,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -833,7 +863,11 @@ describe("ObservationsPage - Cenários vazios, paginação e busca", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ observations: mockObservations, totalPages: 1 }),
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 1,
+            total: mockObservations.length,
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
@@ -1124,7 +1158,8 @@ describe("ObservationsPage", () => {
     expect(screen.getByText("file2.py")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Code Quality")).toBeInTheDocument();
-    expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+    // ✅ Usa função para encontrar o elemento que contém o texto combinado
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes('Exibindo 1 – 2 de 2') ?? false).length).toBeGreaterThan(0);
   });
 
   it('deve limpar a busca quando o campo é esvaziado', async () => {
@@ -1163,8 +1198,9 @@ describe("ObservationsPage", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const nextButton = screen.getByRole("button", { name: /próxima página/i });
-    await user.click(nextButton);
+    // ✅ usar getAllByRole e pegar o primeiro botão
+    const nextButtons = screen.getAllByRole("button", { name: /próxima página/i });
+    await user.click(nextButtons[0]);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("page=2"));
@@ -1238,13 +1274,13 @@ describe("ObservationsPage - Paginação", () => {
     await screen.findByText("file1.js");
 
     // Vai para página 2
-    const nextButton = screen.getByRole("button", { name: /próxima página/i });
-    await user.click(nextButton);
+    const nextButtons = screen.getAllByRole("button", { name: /próxima página/i });
+    await user.click(nextButtons[0]);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("page=2")));
 
     // Volta para página 1
-    const prevButton = screen.getByRole("button", { name: /página anterior/i });
-    await user.click(prevButton);
+    const prevButtons = screen.getAllByRole("button", { name: /página anterior/i });
+    await user.click(prevButtons[0]);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("page=1")));
   });
 });
@@ -1283,6 +1319,7 @@ describe("ObservationsPage - SLA ausente", () => {
             },
           ],
           totalPages: 1,
+          total: 1,
         }),
       });
     }
@@ -1345,6 +1382,7 @@ describe("ObservationsPage - Renderização de status e severidade", () => {
               { _id: "r1", project: "P", repository: "R", branch: "b", fileName: "recur.js", filePath: "p", category: "c", status: "recurring", severity: "high", slaHours: 1, hitCount: 2, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: null, assignedTo: "" },
             ],
             totalPages: 1,
+            total: 2,
           }),
         });
       }
@@ -1373,6 +1411,7 @@ describe("ObservationsPage - Renderização de status e severidade", () => {
               { _id: "m1", project: "P", repository: "R", branch: "b", fileName: "med.js", filePath: "p", category: "c", status: "open", severity: "medium", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: null, assignedTo: "" },
             ],
             totalPages: 1,
+            total: 2,
           }),
         });
       }
@@ -1427,8 +1466,9 @@ describe("ObservationsPage - Paginação com botões desabilitados", () => {
     render(<ObservationsPage />);
     await screen.findByText("file1.js");
 
-    const prevButton = screen.getByRole("button", { name: /página anterior/i });
-    expect(prevButton).toBeDisabled();
+    // ✅ usar getAllByRole e pegar o primeiro
+    const prevButtons = screen.getAllByRole("button", { name: /página anterior/i });
+    expect(prevButtons[0]).toBeDisabled();
   });
 
   it("deve desabilitar o botão próximo na última página", async () => {
@@ -1437,13 +1477,13 @@ describe("ObservationsPage - Paginação com botões desabilitados", () => {
     await screen.findByText("file1.js");
 
     // Vai para a página 2
-    const nextButton = screen.getByRole("button", { name: /próxima página/i });
-    await user.click(nextButton);
+    const nextButtons = screen.getAllByRole("button", { name: /próxima página/i });
+    await user.click(nextButtons[0]);
 
     // Após navegar, o botão próximo deve estar desabilitado (página 2 de 2)
     await waitFor(() => {
-      const nextButtonAfter = screen.getByRole("button", { name: /próxima página/i });
-      expect(nextButtonAfter).toBeDisabled();
+      const nextButtonsAfter = screen.getAllByRole("button", { name: /próxima página/i });
+      expect(nextButtonsAfter[0]).toBeDisabled();
     });
   });
 });
@@ -1528,8 +1568,8 @@ describe("ObservationsPage - Busca e paginação combinadas", () => {
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("search=severity%3Ahigh"));
     });
 
-    const nextButton = screen.getByRole("button", { name: /próxima página/i });
-    await user.click(nextButton);
+    const nextButtons = screen.getAllByRole("button", { name: /próxima página/i });
+    await user.click(nextButtons[0]);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
@@ -1552,7 +1592,15 @@ describe("ObservationsPage - Erro na busca de usuários com exportação PDF", (
         if (url.toString().includes("all=true")) {
           return Promise.resolve({ ok: true, status: 200, json: async () => ({ observations: mockObservations }) });
         }
-        return Promise.resolve({ ok: true, status: 200, json: async () => ({ observations: mockObservations, totalPages: 2 }) });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            observations: mockObservations,
+            totalPages: 2,
+            total: mockObservations.length,
+          }),
+        });
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
     });

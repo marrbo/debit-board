@@ -87,10 +87,6 @@ export default function StatsClient({
   const [users, setUsers] = useState<IUser[]>([]);
   const [selectedObservation, setSelectedObservation] = useState<IObservation | null>(null);
 
-  // Filtros ativos (clicáveis)
-  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
-  const [activeSeverityFilter, setActiveSeverityFilter] = useState<string | null>(null);
-
   // Refs
   const lastSearchQueryRef = useRef<string>('');
   const originalQueryRef = useRef<string>('');
@@ -196,34 +192,7 @@ export default function StatsClient({
     setSearchQuery(newQuery);
     lastSearchQueryRef.current = newQuery;
     setObsPage(1);
-    setActiveStatusFilter(null);
-    setActiveSeverityFilter(null);
   }, []);
-
-  // ================= APLICAR FILTROS VIA KPI =================
-  const applyFilters = (newStatus: string | null, newSeverity: string | null) => {
-    let newQuery = searchQuery;
-    newQuery = newQuery.replace(/\bstatus:\S+/g, '').replace(/\bseverity:\S+/g, '').trim();
-
-    if (newStatus) newQuery += ` status:${newStatus}`;
-    if (newSeverity) newQuery += ` severity:${newSeverity}`;
-
-    setSearchQuery(newQuery.trim());
-    setObsPage(1);
-    lastSearchQueryRef.current = newQuery.trim();
-  };
-
-  const handleStatusFilter = (status: string) => {
-    const newStatus = activeStatusFilter === status ? null : status;
-    setActiveStatusFilter(newStatus);
-    applyFilters(newStatus, activeSeverityFilter);
-  };
-
-  const handleSeverityFilter = (severity: string) => {
-    const newSeverity = activeSeverityFilter === severity ? null : severity;
-    setActiveSeverityFilter(newSeverity);
-    applyFilters(activeStatusFilter, newSeverity);
-  };
 
   // ================= ATUALIZAR RESPONSÁVEL =================
   const updateAssignee = async (issueId: string, assignedTo: string | null) => {
@@ -450,7 +419,12 @@ export default function StatsClient({
         subtitle="Visão geral das observations de segurança do seu Tenant."
         searchBar={
           <div className="relative">
-            <DBQLAdvancedSearch onSearch={handleSearch} userId={session.user.id || ''} placeholder="Search stats, e.g. severity:critical OR project:my-api" context="observations" />
+            <DBQLAdvancedSearch 
+              onSearch={handleSearch} 
+              userId={session.user.id || ''} 
+              placeholder="Search stats, e.g. severity:critical OR project:my-api" 
+              context="observations"
+            />
             {lastCategory && (
               <button onClick={clearCategoryFilter} className="absolute -top-2 -right-2 bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-full p-1 shadow-md text-apple-tertiary-light hover:text-apple-red transition-colors" title="Limpar filtro de categoria">
                 <X className="w-4 h-4" />
@@ -460,31 +434,26 @@ export default function StatsClient({
         }
       />
 
-      {/* KPIs clicáveis (Status) */}
-      <div className="grid grid-cols-2 md:grid-cols-6 text-center gap-4">
+      {/* KPIs de Status (somente exibição, sem filtro) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 text-center gap-4">
         {[
           { key: 'total', label: 'Ocorrências', value: stats!.kpi.total, color: 'text-apple-label-light' },
-          { key: 'open', label: 'Abertas', value: stats!.kpi.accepted, color: 'text-apple-blue', status: 'open' },
-          { key: 'recurring', label: 'Recorrentes', value: stats!.kpi.recurring, color: 'text-apple-orange', status: 'recurring' },
-          { key: 'resolved', label: 'Resolvidas', value: stats!.kpi.resolved, color: 'text-apple-green', status: 'resolved' },
-          { key: 'expired', label: 'Expirado', value: stats!.kpi.expired, color: 'text-purple-600', status: 'expired' },
-          { key: 'wontFix', label: 'Não Corrigir', value: stats!.kpi.wontFix, color: 'text-apple-tertiary-light', status: 'wont_fix' },
+          { key: 'open', label: 'Abertas', value: stats!.kpi.accepted, color: 'text-apple-blue' },
+          { key: 'recurring', label: 'Recorrentes', value: stats!.kpi.recurring, color: 'text-apple-orange' },
+          { key: 'resolved', label: 'Resolvidas', value: stats!.kpi.resolved, color: 'text-apple-green' },
+          { key: 'wontFix', label: 'Não Corrigir', value: stats!.kpi.wontFix, color: 'text-apple-tertiary-light' },
         ].map((card) => (
-          <button
+          <div
             key={card.key}
-            onClick={() => card.status && handleStatusFilter(card.status)}
-            disabled={!card.status}
-            className={`bg-apple-card-light dark:bg-apple-card-dark border rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all ${
-              activeStatusFilter === card.status ? 'border-apple-blue ring-2 ring-apple-blue/20' : 'border-apple-border-light dark:border-apple-border-dark'
-            } ${card.status ? 'cursor-pointer hover:bg-apple-border-light/10' : 'cursor-default'}`}
+            className={`bg-apple-card-light dark:bg-apple-card-dark border rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all border-apple-border-light dark:border-apple-border-dark`}
           >
             <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
             <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light tracking-wider">{card.label}</p>
-          </button>
+          </div>
         ))}
       </div>
 
-      {/* Severidade clicável */}
+      {/* Cards de Severidade (somente exibição, sem filtro) */}
       <div className="grid grid-cols-2 md:grid-cols-4 text-center gap-4">
         {[
           { key: 'critical', label: 'Crítico', value: severityTotals.critical || 0, color: 'border-apple-red' },
@@ -492,16 +461,13 @@ export default function StatsClient({
           { key: 'medium', label: 'Médio', value: severityTotals.medium || 0, color: 'border-apple-yellow' },
           { key: 'low', label: 'Baixo', value: severityTotals.low || 0, color: 'border-apple-blue' },
         ].map((card) => (
-          <button
+          <div
             key={card.key}
-            onClick={() => handleSeverityFilter(card.key)}
-            className={`bg-apple-card-light dark:bg-apple-card-dark border border-l-4 ${card.color} rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all cursor-pointer hover:bg-apple-border-light/10 ${
-              activeSeverityFilter === card.key ? 'ring-2 ring-apple-blue/20 bg-apple-blue/5' : ''
-            }`}
+            className={`bg-apple-card-light dark:bg-apple-card-dark border border-l-4 ${card.color} rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all`}
           >
             <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{card.value}</p>
             <p className="text-[10px] uppercase font-bold text-apple-tertiary-light">{card.label}</p>
-          </button>
+          </div>
         ))}
       </div>
 
@@ -639,7 +605,7 @@ export default function StatsClient({
                       }`}>{issue.severity}</span>
                     </td>
 
-                    {/* Categoria */}
+                    {/* Status */}
                     <td className="px-4 py-3 text-center overflow-hidden">
                       <span className={`inline-block px-2 py-0.5 min-w-20 text-[10px] font-bold uppercase rounded ${
                         issue.status === 'recurring' ? 'bg-orange-100 text-orange-800' :

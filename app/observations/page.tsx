@@ -21,13 +21,14 @@ import type { IObservation } from "@/models/Observation";
 import { ObservationsReport } from "./components";
 import ExportSplitButton from "@/components/ExportSplitButton";
 import { PaginationInfo } from "@/components/PaginationInfo";
+import type { IUser } from "@/models/User";
 
 export default function ObservationsPage() {
   const { data: session, status } = useSession();
 
   const [observations, setObservations] = useState<IObservation[]>([]);
 
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<IUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,8 +67,9 @@ export default function ObservationsPage() {
       try {
         const usersRes = await fetch("/api/users");
         if (usersRes.ok) setUsers(await usersRes.json());
-      } catch (err) {
-        console.error("Erro ao carregar usuários:", err);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("Erro ao carregar usuários: ", message);
       }
     };
     fetchBaseData();
@@ -89,8 +91,9 @@ export default function ObservationsPage() {
         setObservations(data.observations);
         setTotalPages(data.totalPages || 1);
         setTotalItems(data.total || 0); // ← novo campo
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
       } finally {
         setLoading(false);
       }
@@ -107,7 +110,13 @@ export default function ObservationsPage() {
 
   // Buscar sempre que page ou searchQuery mudar
   useEffect(() => {
-    fetchObservations(page, searchQuery);
+    const task = queueMicrotask(() => {
+      void fetchObservations(page, searchQuery);
+    });
+
+    return () => {
+      void task;
+    };
   }, [page, searchQuery, fetchObservations]);
 
   // Mapa de usuários para exibição
@@ -132,8 +141,8 @@ export default function ObservationsPage() {
   const sortedItems = useMemo(() => {
     const items = [...observations];
     return items.sort((a, b) => {
-      let valA: any = a[sortBy as keyof IObservation];
-      let valB: any = b[sortBy as keyof IObservation];
+      let valA: unknown = a[sortBy as keyof IObservation];
+      let valB: unknown = b[sortBy as keyof IObservation];
 
       if (valA === null || valA === undefined) valA = "";
       if (valB === null || valB === undefined) valB = "";
@@ -143,8 +152,8 @@ export default function ObservationsPage() {
         sortBy === "lastSeen" ||
         sortBy === "slaDueAt"
       ) {
-        const timeA = valA ? new Date(valA).getTime() : 0;
-        const timeB = valB ? new Date(valB).getTime() : 0;
+        const timeA = valA ? new Date(String(valA)).getTime() : 0;
+        const timeB = valB ? new Date(String(valB)).getTime() : 0;
         return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
       }
 
@@ -152,11 +161,11 @@ export default function ObservationsPage() {
         return sortOrder === "asc" ? valA - valB : valB - valA;
       }
 
-      valA = valA.toString().toLowerCase();
-      valB = valB.toString().toLowerCase();
+      const stringA = String(valA).toLowerCase();
+      const stringB = String(valB).toLowerCase();
 
-      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      if (stringA < stringB) return sortOrder === "asc" ? -1 : 1;
+      if (stringA > stringB) return sortOrder === "asc" ? 1 : -1;
       return 0;
     });
   }, [observations, sortBy, sortOrder]);
@@ -178,8 +187,9 @@ export default function ObservationsPage() {
         body: JSON.stringify({ issueId, assignedTo: value || null }),
       });
       if (!res.ok) throw new Error("Erro ao atualizar");
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Erro ao atualizar observação: " + message);
       fetchObservations(page, searchQuery);
     }
   };
@@ -412,8 +422,9 @@ export default function ObservationsPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err: any) {
-      alert("Erro na exportação Excel: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Erro na exportação Excel: " + message);
     }
   };
 
@@ -429,8 +440,9 @@ export default function ObservationsPage() {
       setLoading(true);
       const fullObservations = await fetchAllFilteredObservations();
       setReportObservations(fullObservations);
-    } catch (err: any) {
-      alert("Erro na geração do PDF: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Erro na geração do PDF: " + message);
       setLoading(false);
     }
   };

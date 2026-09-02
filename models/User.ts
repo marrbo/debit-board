@@ -1,7 +1,7 @@
 // models/User.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IUser extends Document {
+export type IUser = Document & {
   sub: string;
   email: string;
   name?: string;

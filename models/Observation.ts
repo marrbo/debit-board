@@ -1,11 +1,11 @@
 // models/Observation.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IObservation extends Document {
+export type IObservation = Document & {
   tenantId: string;
   scanId: mongoose.Types.ObjectId;
   patternId: mongoose.Types.ObjectId;
-  pattern?: any;
+  pattern?: string;
   query: string;
   category: string;
   fileName: string;
@@ -76,13 +76,13 @@ interface IObservationModel extends mongoose.Model<IObservation> {
    * - Se `slaDueAt` <= data/hora atual => `computedStatus = "expired"`
    * - Caso contrário => `computedStatus` = valor do campo `status` persistido.
    */
-  findWithComputedStatus(filter?: Record<string, any>): Promise<IObservation[] & { computedStatus: string }[]>;
+  findWithComputedStatus(filter?: Record<string, unknown>): Promise<IObservation[] & { computedStatus: string }[]>;
 
   /**
    * Busca apenas observações que já expiraram (status calculado = "expired").
    * Útil para listas de vencidos, notificações ou dashboards.
    */
-  findExpiredObservations(filter?: Record<string, any>): Promise<IObservation[]>;
+  findExpiredObservations(filter?: Record<string, unknown>): Promise<IObservation[]>;
 
   /**
    * Busca uma observação por ID e retorna com o status calculado.
@@ -97,7 +97,7 @@ interface IObservationModel extends mongoose.Model<IObservation> {
    * @param sort - Ordenação (ex: { slaDueAt: 1 })
    */
   findPaginatedWithComputedStatus(
-    filter?: Record<string, any>,
+    filter?: Record<string, unknown>,
     page?: number,
     limit?: number,
     sort?: Record<string, 1 | -1>
@@ -111,7 +111,7 @@ interface IObservationModel extends mongoose.Model<IObservation> {
 
 // Implementação dos métodos estáticos
 ObservationSchema.statics.findWithComputedStatus = async function (
-  filter: Record<string, any> = {}
+  filter: Record<string, unknown> = {}
 ): Promise<any[]> {
   return await this.aggregate([
     { $match: filter },
