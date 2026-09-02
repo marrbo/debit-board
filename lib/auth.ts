@@ -56,7 +56,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           await connectToDatabase();
 
-          const isAdmin = token.email === process.env.ADMIN_EMAIL;
+          const isAdmin = token.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
           token.isAdmin = isAdmin;
 
           const cookieStore = await cookies();
@@ -89,7 +89,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           // 2. Lógica de AUTO-RESET (Admin saindo da impersonação)
           // ========================================================
           if (isAdmin && token.impersonating && !impersonatingCookie) {
-            const realAdmin = await (User as any).findOne({ email: process.env.ADMIN_EMAIL });
+            const realAdmin = await (User as any).findOne({ email: process.env.NEXT_PUBLIC_ADMIN_EMAIL });
             if (realAdmin) {
               token.sub = realAdmin.sub;
               token.email = realAdmin.email;

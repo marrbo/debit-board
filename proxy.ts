@@ -18,7 +18,7 @@ export async function proxy(request: NextRequest) {
 
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   const isLoggedIn = !!token;
-  const isAdmin = token?.email === process.env.ADMIN_EMAIL;
+  const isAdmin = token?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   const tenantId = token?.tenantId;
   const userId = token?.sub || '';
 

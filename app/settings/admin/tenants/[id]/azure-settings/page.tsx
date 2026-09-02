@@ -13,7 +13,7 @@ import { Settings } from "lucide-react";
 export default async function TenantAzureSettings(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await getServerAuthSession();
-  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   if (session?.user?.email !== adminEmail) {
     redirect("/stats");

@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
 
   await connectToDatabase();
 
+  console.log('Database dump completed.');
+
   const { searchParams } = new URL(req.url);
   const range = searchParams.get('range') || '30d';
   const projectId = searchParams.get('projectId');

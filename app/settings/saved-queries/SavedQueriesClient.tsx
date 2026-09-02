@@ -28,10 +28,10 @@ export default function SavedQueriesClient({ initialQueries }: Props) {
     try {
       const res = await fetch('/api/saved-queries');
       if (res.ok) {
-        let data = await res.json();
+        let data = (await res.json()) as SavedQueryItem[];
         data = data
-          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .filter((q: any) => q.visibility !== 'temporary');
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .filter((q) => q.visibility !== 'temporary');
         setQueries(data);
       }
     } catch (err) {
@@ -61,7 +61,7 @@ export default function SavedQueriesClient({ initialQueries }: Props) {
 
   const handleVisibilityChange = (value: string) => {
     const validVisibilities: SavedQueryItem['visibility'][] = ['private', 'shared', 'public', 'temporary'];
-    if (validVisibilities.includes(value as any)) {
+    if (validVisibilities.includes(value as SavedQueryItem['visibility'])) {
       setVisibility(value as SavedQueryItem['visibility']);
     }
   };
@@ -90,7 +90,7 @@ export default function SavedQueriesClient({ initialQueries }: Props) {
         const err = await res.json();
         alert('Erro ao salvar: ' + (err.error || 'Erro desconhecido'));
       }
-    } catch (err) {
+    } catch  {
       alert('Erro de rede.');
     }
   };
@@ -100,7 +100,7 @@ export default function SavedQueriesClient({ initialQueries }: Props) {
     try {
       const res = await fetch(`/api/saved-queries?id=${id}`, { method: 'DELETE' });
       if (res.ok) await refreshQueries();
-    } catch (err) {
+    } catch {
       alert('Erro ao deletar.');
     }
   };

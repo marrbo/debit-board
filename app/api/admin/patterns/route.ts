@@ -6,7 +6,7 @@ import { getServerAuthSession } from '@/lib/auth';
 
 export async function GET() {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   await connectToDatabase();
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const body = await req.json();
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { searchParams } = new URL(req.url);
@@ -41,7 +41,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { searchParams } = new URL(req.url);

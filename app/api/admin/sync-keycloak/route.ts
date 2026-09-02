@@ -9,7 +9,7 @@ import crypto from 'crypto';
 export async function POST() {
   const session = await getServerAuthSession();
   // Apenas o Admin pode disparar a sincronização
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

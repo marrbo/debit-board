@@ -11,7 +11,7 @@ import crypto from 'crypto';
 // --- Helper: verifica se o usuário atual é Admin ---
 async function checkAdmin() {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     throw new Error("Unauthorized");
   }
 }

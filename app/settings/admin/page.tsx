@@ -11,7 +11,7 @@ export default async function AdminPage() {
   const session = await getServerAuthSession();
 
   // Remova o comentário abaixo se quiser proteger a rota
-  if (!session || session.user?.email !== process.env.ADMIN_EMAIL) { redirect("/settings"); }
+  if (!session || session.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) { redirect("/settings"); }
 
   await connectToDatabase();
   const tenants = await Tenant.find({}).sort({ name: 1 }).lean();

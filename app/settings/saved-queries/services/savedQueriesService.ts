@@ -14,8 +14,14 @@ export async function getSavedQueries(
     }
 
     return data.filter((q) => q.visibility !== 'temporary');
-  } catch (error: any) {
-    if (error?.cause?.status === 401) {
+  } catch (error: unknown) {
+    const cause = error instanceof Error ? error.cause : undefined;
+    const status =
+      typeof cause === 'object' && cause !== null && 'status' in cause
+        ? cause.status
+        : undefined;
+
+    if (status === 401) {
       // Opcional: redirecionar ou lançar erro específico
       throw new Error('Não autenticado');
     }
