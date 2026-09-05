@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   });
 
   await Project.updateMany(
-    { _id: { $in: projectIds || [] }, tenantId },
+    { _id: { $in: projectIds || [] }, tenantId: { $eq: tenantId } },
     { $set: { teamId: newTeam._id } }
   );
 
