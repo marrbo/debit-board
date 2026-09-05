@@ -7,10 +7,10 @@
     "dev": "next dev --turbopack --experimental-https",
     "build": "next build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/",
     "start": "node start-standalone.js",
-    "lint": "eslint .",
+    "lint": "npx eslint . --fix",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "npx vitest run --coverage --reporter=junit,html --outputFile=./coverage/test-report.junit.xml && open coverage/index.html"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.72.0",
@@ -47,6 +47,7 @@
     "@typescript-eslint/parser": "^8.68.0",
     "@vitejs/plugin-react": "^6.1.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.4.19",
     "eslint": "^9",
     "eslint-config-next": "^16.3.3",

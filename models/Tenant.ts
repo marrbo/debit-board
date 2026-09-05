@@ -1,35 +1,9 @@
 // models/Tenant.ts
-import mongoose, { Schema, Document, Model, Types } from 'mongoose';
+import type { IAzureSettings } from '@/types/IAzureSettings';
+import type { ITenant } from '@/types/ITenant';
+import mongoose, { Schema, type Model } from 'mongoose';
 
-
-export interface IAzureSettings {
-  instanceUrl: string;
-  azureCollection: string;
-  pat: string;
-  username?: string;
-  defaultProject?: string;
-  defaultRepository?: string;
-  reportTitle?: string;
-  ignoreTlsErrors: boolean,
-};
-
-export interface ITenant extends Document {
-  _id: Types.ObjectId;
-  uuid: string;          // Identificador único gerado por nós (UUID)
-  name: string;          // Nome da empresa, único
-  createdAt: Date;
-  // Campos de autenticação
-  keycloakIssuer?: string;
-  keycloakClientId?: string;
-  keycloakClientSecret?: string;
-
-  dominio: string;
-  isActive: boolean;
-
-  azureSettings: IAzureSettings;
-}
-
-const azureSettings: IAzureSettings = {
+export const azureSettings: IAzureSettings = {
     instanceUrl: 'https://example.com',
     azureCollection: 'defaultCollection',
     pat: 'pat',
@@ -45,6 +19,9 @@ const TenantSchema = new Schema<ITenant>({
   uuid: { type: String, required: true, unique: true }, // Garante unicidade no banco
   name: { type: String, required: true, unique: true }, // Garante unicidade do nome
   dominio: { type: String, unique: true, sparse: true },
+
+  onboardingCompleted: { type: Boolean, default: false },
+
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
 

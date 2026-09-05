@@ -1,188 +1,147 @@
-"use client";
+'use client';
 
-import { useState, useRef, useEffect } from "react";
-import { Check, User, SearchCode } from "lucide-react";
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Search } from 'lucide-react';
+import Image from 'next/image';
+import type { IUser } from '@/types/IUser';
 
 interface AssigneeSelectProps {
-  users: any[];
-  value?: string | null;
-  onChange: (userId: string | null) => void;
+  users: IUser[];
+  value?: string;
+  onChange: (value: string | null) => void;
   className?: string;
 }
 
-export default function AssigneeSelect({
-  users = [],
-  value = null,
-  onChange,
-  className = "",
-}: AssigneeSelectProps) {
+export default function AssigneeSelect({ users, value, onChange, className = "" }: AssigneeSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0, openUpwards: false });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(event.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+  const handleToggle = () => {
+    if (!isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const dropdownHeight = 300; // Altura estimada do dropdown
+      const spaceBelow = window.innerHeight - rect.bottom;
+      
+      // ✅ LÓGICA DE POSIÇÃO: Se não houver espaço abaixo, abre para cima
+      const shouldOpenUpwards = spaceBelow < dropdownHeight;
+
+      setCoords({
+        top: shouldOpenUpwards 
+          ? rect.top + window.scrollY - dropdownHeight 
+          : rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        openUpwards: shouldOpenUpwards,
+      });
     }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  const filteredUsers = users.filter((u) => {
-    const name = u.name || u.email || "";
-    const email = u.email || "";
-    return (
-      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  });
-
-  const handleSelect = (userId: string | null) => {
-    onChange(userId);
-    setIsOpen(false);
+    setIsOpen(!isOpen);
   };
 
-  const currentUser = users.find((u) => (u.sub || u.id || u._id) === value);
-  const userName = currentUser
-    ? currentUser.name || currentUser.email || "Desconhecido"
-    : "";
-  const sub = currentUser
-    ? currentUser.sub || currentUser.id || currentUser._id
-    : "";
+  const filteredUsers = users.filter(u => 
+    u.name?.toLowerCase().includes(search.toLowerCase()) || 
+    u.email?.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const colors = [
-    "bg-blue-600",
-    "bg-red-600",
-    "bg-emerald-600",
-    "bg-purple-600",
-    "bg-amber-600",
-    "bg-pink-600",
-  ];
-  const colorIndex = (sub || userName || "").length % colors.length;
-  const initial = userName ? userName.charAt(0).toUpperCase() : "U";
+  const selectedUser = users.find(u => u.sub === value);
+
+  // ✅ FALLBACK DE IMAGEM: Lógica idêntica ao ProjectDrawer
+  const getAvatarUrl = (user?: IUser) => {
+    if (user?.avatar) return user.avatar;
+    const name = user?.name || 'U';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&length=2&background=0D8ABC&color=fff&width=28&height=28`;
+  };
 
   return (
-    <div
-      ref={popoverRef}
-      className={`relative align-middle text-center ${className}`}
-    >
-      {/* Gatilho Integrado: Exibe o Avatar/Nome se atribuído ou o botão tracejado se vazio */}
-      {currentUser ? (
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="flex items-center gap-2 group focus:outline-none text-left"
-          title="Alterar responsável"
+    <div ref={containerRef} className={`relative inline-block ${className}`}>
+      {/* BOTÃO GATILHO: */}
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="relative group focus:outline-none"
+      >
+        <Image 
+          src={getAvatarUrl(selectedUser)} 
+          alt="Assignee" 
+          width={28}
+          height={28}
+          className="w-7 h-7 rounded-full border-2 border-transparent group-hover:border-apple-blue transition-all object-cover"
+        />
+        {/* Tooltip simples para indicar que é clicável */}
+        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          Atribuir Responsável
+        </span>
+      </button>
+
+      {/* DROPDOWN VIA PORTAL */}
+      {isOpen && createPortal(
+        <div 
+          className="fixed z-[9999] w-64 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-2xl overflow-hidden"
+          style={{ 
+            top: `${coords.top}px`, 
+            left: `${coords.left}px`,
+            position: 'absolute' 
+          }}
         >
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${colors[colorIndex]}`}
-          >
-            {initial}
-          </div>
-          <span className="text-xs font-medium text-apple-label-light dark:text-apple-label-dark truncate max-w-[90px] group-hover:text-apple-blue transition-colors">
-            {userName}
-          </span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="w-8 h-8 rounded-full bg-apple-border-light/50 dark:bg-[#2C2C2E] flex items-center justify-center border border-dashed border-apple-tertiary-light/50 hover:border-apple-blue hover:bg-apple-blue/10 transition-all focus:outline-none"
-          title="Atribuir responsável"
-        >
-          <User className="w-3.5 h-3.5 text-apple-tertiary-light" />
-        </button>
-      )}
-
-      {/* Popover Flutuante */}
-      {isOpen && (
-        <div className="absolute righ-250 top-full mt-2 w-72 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-2xl z-[9999] p-3 flex flex-col gap-3 font-sans">
-          <div className="flex items-center justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-2">
-            <span className="text-xs font-bold text-apple-label-light dark:text-apple-label-dark">
-              Atribuir Responsável
-            </span>
-            {value && (
-              <button
-                type="button"
-                onClick={() => handleSelect(null)}
-                className="text-[11px] font-medium text-apple-tertiary-light hover:text-apple-red transition-colors"
-              >
-                Limpar
-              </button>
-            )}
+          <div className="p-2 border-b border-apple-border-light dark:border-apple-border-dark">
+            <div className="relative">
+              <Search className="absolute left-2 top-2 w-3 h-3 text-apple-tertiary-light" />
+              <input
+                autoFocus
+                className="w-full pl-7 pr-2 py-1 text-xs bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg focus:outline-none"
+                placeholder="Buscar usuários..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="relative flex items-center">
-            <SearchCode className="w-3.5 h-3.5 absolute left-3 text-apple-tertiary-light pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar usuários..."
-              className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl pl-8 pr-3 py-1.5 text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark placeholder:text-apple-tertiary-light"
-              autoFocus
-            />
-          </div>
-
-          <div className="max-h-52 overflow-y-auto flex flex-col gap-1 pr-1">
-            {filteredUsers.length === 0 ? (
-              <div className="text-xs text-apple-tertiary-light text-center py-4">
+          <div className="max-h-60 overflow-y-auto p-1">
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map(user => (
+                <button
+                  key={user.sub}
+                  onClick={() => { onChange(user.sub); setIsOpen(false); }}
+                  className="w-full flex items-center gap-2 px-2 py-2 hover:bg-apple-blue/10 rounded-lg transition-colors text-left"
+                >
+                  <Image 
+                    src={getAvatarUrl(user)} 
+                    width={28}
+                    height={28}
+                    className="w-6 h-6 rounded-full object-cover" 
+                    alt={user.name} 
+                  />
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-xs font-medium truncate">{user.name}</span>
+                    <span className="text-[10px] text-apple-tertiary-light truncate">{user.email}</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-apple-tertiary-light">
                 Nenhum usuário encontrado.
               </div>
-            ) : (
-              filteredUsers.map((u) => {
-                const userId = u.sub || u.id || u._id;
-                const isSelected = value === userId;
-                const uName = u.name || u.email || "Desconhecido";
-                const uSub = u.sub || userId;
-                const uColorIndex =
-                  (uSub || uName || "").length % colors.length;
-
-                return (
-                  <button
-                    key={userId}
-                    type="button"
-                    onClick={() => handleSelect(userId)}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors text-left ${
-                      isSelected
-                        ? "bg-apple-blue/10 text-apple-blue font-semibold"
-                        : "hover:bg-apple-border-light/30 dark:hover:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`w-6 h-6 rounded-full text-white font-medium text-[10px] flex items-center justify-center shrink-0 ${colors[uColorIndex]}`}
-                      >
-                        {uName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="truncate font-medium">{uName}</span>
-                        {u.email && (
-                          <span className="text-[10px] text-apple-tertiary-light truncate">
-                            {u.email}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <Check className="w-3.5 h-3.5 shrink-0 text-apple-blue" />
-                    )}
-                  </button>
-                );
-              })
             )}
+            <button 
+              onClick={() => { onChange(null); setIsOpen(false); }}
+              className="w-full text-left px-2 py-2 text-xs text-apple-red hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+            >
+              Limpar Responsável
+            </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

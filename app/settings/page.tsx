@@ -51,7 +51,7 @@ export default function SettingsDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {group.items.map((item) => (
                 <Link
-                  key={item.href}
+                  key={item.label.replace(/\s+/g, '-').toLowerCase()}
                   href={item.href}
                   className="group bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 hover:bg-apple-bg-light dark:hover:bg-apple-card-dark/80 transition-all duration-200 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none"
                 >

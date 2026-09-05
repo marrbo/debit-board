@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { getServerAuthSession } from '@/lib/auth';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function GET(request: Request, props: { params: Promise<{ slug: string[] }> }) {
   const params = await props.params;

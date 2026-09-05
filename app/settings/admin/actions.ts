@@ -4,9 +4,9 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
-import { getServerAuthSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import crypto from 'crypto';
+import { getServerAuthSession } from "@/lib/auth-server";
 
 // --- Helper: verifica se o usuário atual é Admin ---
 async function checkAdmin() {
@@ -74,7 +74,7 @@ export async function assignUsersToTenant(userIds: string[], tenantId: string) {
   if (!tenantId || userIds.length === 0) return;
 
   await connectToDatabase();
-  await (User as any).updateMany(
+  await User.updateMany(
     { sub: { $in: userIds } },
     { $set: { tenantId: tenantId } }
   );
@@ -89,7 +89,7 @@ export async function updateUser(userSub: string, formData: FormData) {
   const onboardingCompleted = formData.get("onboardingCompleted") === "true";
 
   await connectToDatabase();
-  await (User as any).updateOne(
+  await User.updateOne(
     { sub: userSub },
     { $set: { name, email, tenantId, onboardingCompleted } }
   );
@@ -108,7 +108,7 @@ export async function createUser(formData: FormData) {
   }
 
   await connectToDatabase();
-  const existingUser = await (User as any).findOne({ email });
+  const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new Error("Já existe um usuário com este e-mail no sistema.");
   }
@@ -137,6 +137,6 @@ export async function toggleTenantStatus(tenantId: string, isActive: boolean) {
 export async function toggleUserStatus(userSub: string, isActive: boolean) {
   await checkAdmin();
   await connectToDatabase();
-  await (User as any).updateOne({ sub: userSub }, { $set: { isActive } });
+  await User.updateOne({ sub: userSub }, { $set: { isActive } });
   revalidatePath("/settings/admin");
 }

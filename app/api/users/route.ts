@@ -8,7 +8,7 @@ export async function GET() {
   const { tenantId } = await getServerSessionIds();
 
   await connectToDatabase();
-  const users = await (User as any).find({ tenantId })
+  const users = await User.find({ tenantId })
     .select('sub name email')
     .lean();
 

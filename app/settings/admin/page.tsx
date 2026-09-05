@@ -1,11 +1,11 @@
 // app/admin/page.tsx
-import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 import { redirect } from "next/navigation";
 import AdminTabs from "./AdminTabs";
 import { UserCog } from "lucide-react";
+import { getServerAuthSession } from "@/lib/auth-server";
 
 export default async function AdminPage() {
   const session = await getServerAuthSession();
@@ -15,7 +15,7 @@ export default async function AdminPage() {
 
   await connectToDatabase();
   const tenants = await Tenant.find({}).sort({ name: 1 }).lean();
-  const users = await (User as any).find({}).sort({ name: 1 }).lean();
+  const users = await User.find({}).sort({ name: 1 }).lean();
 
   const serializedTenants = JSON.parse(JSON.stringify(tenants));
   const serializedUsers = JSON.parse(JSON.stringify(users));

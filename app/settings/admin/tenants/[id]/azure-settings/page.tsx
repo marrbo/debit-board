@@ -1,14 +1,10 @@
 // app/settings/admin/tenants/[id]/azure-settings/page.tsx
-import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Tenant } from "@/models/Tenant";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Settings } from "lucide-react";
-
-// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-;
+import { getServerAuthSession } from "@/lib/auth-server";
 
 export default async function TenantAzureSettings(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;

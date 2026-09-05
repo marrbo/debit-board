@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
-import { getServerAuthSession } from '@/lib/auth';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function GET() {
   const session = await getServerAuthSession();

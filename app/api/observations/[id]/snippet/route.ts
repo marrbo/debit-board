@@ -1,5 +1,6 @@
 // app/api/observations/[id]/snippet/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
 import { Tenant } from '@/models/Tenant';

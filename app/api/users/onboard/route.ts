@@ -1,10 +1,10 @@
 // app/api/users/onboard/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Tenant } from "@/models/Tenant";
-import { getServerAuthSession } from "@/lib/auth";
 import crypto from 'crypto';
+import { getServerAuthSession } from "@/lib/auth-server";
 
 export async function POST(req: NextRequest) {
   const session = await getServerAuthSession();
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Atualiza o Usuário com o tenantUuid
-  await (User as any).findOneAndUpdate(
+  await User.findOneAndUpdate(
     { sub: session.user.id },
     {
       sub: session.user.id,

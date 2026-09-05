@@ -1,7 +1,7 @@
 import { connectToDatabase } from '../lib/mongodb';
 import { Observation } from '../models/Observation';
 import { VulnerabilityPattern } from '../models/VulnerabilityPattern';
-import mongoose from 'mongoose';
+import type mongoose from 'mongoose';
 
 async function runMigration() {
   console.log('🚀 Conectando ao MongoDB...');

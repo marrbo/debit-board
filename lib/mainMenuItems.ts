@@ -5,7 +5,8 @@ import {
   SearchCode, 
   BookOpen, 
   Settings,
-  Binoculars
+  Binoculars,
+  ChartAreaIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -17,6 +18,7 @@ export interface MenuItem {
 
 // Itens do topo (Navegação principal)
 export const topNavItems: MenuItem[] = [
+  { href: '/', label: 'Dashboard', icon: ChartAreaIcon },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
   { href: '/observations', label: 'Observations', icon: Binoculars },
   { href: '/sast', label: 'SAST', icon: ShieldKeyhole },

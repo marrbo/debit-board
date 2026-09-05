@@ -1,51 +1,51 @@
-// app/api/teams/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Team } from '@/models/Team';
-import { useClientSessionIds } from '@/lib/utils';
+import { Project } from '@/models/Project';
+import { getServerSessionIds } from '@/lib/session-server';
 
-export async function GET() {
-  const {tenantId} = useClientSessionIds();
+export async function GET(req: NextRequest) {
+  const sessionIds = await getServerSessionIds();
+  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  await connectToDatabase();
 
-  try { 
-    await connectToDatabase();
-    const teams = await Team.find({ tenantId }).lean();
-    return NextResponse.json(teams);
-  } catch (error) {
-    return NextResponse.json({error: 'Erro ao buscar Teams'}, { status: 500 });
-  }
+  const teams = await Team.find({ tenantId: tenantId })
+    .select('_id name description projectIds tenantId isGlobal createdAt updatedAt')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // Adiciona contagem para o grid
+  const data = teams.map(team => ({
+    ...team,
+    projectCount: team.projectIds?.length || 0,
+    projectIds: team.projectIds || []
+  }));
+
+  return NextResponse.json({ data, total: data.length });
 }
 
 export async function POST(req: NextRequest) {
-  try { 
-    const {tenantId} = useClientSessionIds();
+  const sessionIds = await getServerSessionIds();
+  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  await connectToDatabase();
 
-    const body = await req.json();
-    if (!body.name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+  const body = await req.json();
+  const { name, description, projectIds, isGlobal } = body;
 
-    await connectToDatabase();
-    const newTeam = new Team({
-      tenantId,
-      name: body.name,
-      members: body.members || [],
-    });
-    await newTeam.save();
-    return NextResponse.json(newTeam);
-  } catch (error) {
-    return NextResponse.json({error: 'Erro ao gravar Teams'}, { status: 500 });
-  }
-}
+  if (!name) return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
 
-export async function DELETE(req: NextRequest) {
-  try { 
-    const { searchParams } = new URL(req.url);
-    const teamId = searchParams.get('id');
-    if (!teamId) return NextResponse.json({ error: 'Team ID required' }, { status: 400 });
+  const newTeam = await Team.create({
+    name,
+    description: description || '',
+    projectIds: projectIds || [],
+    tenantId,
+    isGlobal: isGlobal || false,
+  });
 
-    await connectToDatabase();
-    await Team.findByIdAndDelete(teamId);
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({error: 'Erro ao excluir Teams'}, { status: 500 });
-  }
+  await Project.updateMany(
+    { _id: { $in: projectIds || [] }, tenantId },
+    { $set: { teamId: newTeam._id } }
+  );
+
+  return NextResponse.json(newTeam, { status: 201 });
 }

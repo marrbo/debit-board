@@ -1,32 +1,13 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Next.js: Tudo (Client & Server)",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "npm run dev",
-      "serverReadyAction": {
-        "action": "debugWithChrome",
-        "pattern": "Listening on  ${protocol}://${address}:${port}",
-        "webRoot": "${workspaceFolder}",
-      },
-      "sourceMaps": true
-
-    },
-    {
-      "name": "Next.js: Apenas Servidor",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "npm run dev"
-    },
-    {
-      "name": "Next.js: Apenas Cliente",
-      "type": "chrome",
-      "request": "launch",
-      "url": "https://localhost:3000",
-      "webRoot": "${workspaceFolder}",
-      "trace": true
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node-terminal",
+            "name": "Run Script: dev (debit-board)",
+            "request": "launch",
+            "command": "npm run dev",
+            "cwd": "${workspaceFolder}",
+            "sourceMaps": true
+        }
+    ]
 }

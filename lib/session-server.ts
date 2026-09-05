@@ -1,5 +1,5 @@
-import type { IAzureSettings } from '@/models/Tenant';
-import { getServerAuthSession } from './auth';
+import type { IAzureSettings } from '@/types/IAzureSettings';
+import { getServerAuthSession } from './auth-server';
 
 export async function getServerSessionIds(): Promise<{
   userId: string;

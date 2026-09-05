@@ -45,6 +45,20 @@ const nextConfig = {
     return [];
   },
 
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'ui-avatars.com',
+      },
+      // Adicione também o domínio do Azure DevOps se as imagens vierem de lá
+      {
+        protocol: 'https',
+        hostname: 'dev.azure.com',
+      },
+    ],
+  },
+
   webpack: (config, { dev }) => {
     // 🔹 NÃO sobrescreva o devtool em desenvolvimento – isso causa
     //    regressões de performance. O Next.js já usa 'eval-source-map'

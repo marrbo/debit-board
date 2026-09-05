@@ -1,7 +1,7 @@
 // app/api/admin/impersonate/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerAuthSession } from '@/lib/auth';
+import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function POST(req: NextRequest) {
   // Verifica se quem está fazendo a requisição é o Admin

@@ -19,7 +19,7 @@ async function fixEmptyPatternIds() {
     return;
   }
 
-  let resolvedCount = 0;
+  const resolvedCount = 0;
 
   console.log(`✅ ${resolvedCount} observations corrigidas com sucesso.`);
   console.log('🎉 Limpeza concluída!');

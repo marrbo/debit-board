@@ -1,5 +1,6 @@
 // app/api/sast/scans/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { SASTScan } from '@/models/SASTScan';
 

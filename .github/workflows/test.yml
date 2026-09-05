@@ -26,15 +26,17 @@ jobs:
         npm run build
 
     - name: Run tests with coverage and generate JUnit report
+      env:
+        VITE_CONFIG_NATIVE_IGNORE_WARNING: true
       run: |
         npx vitest run --coverage --reporter=junit --outputFile=./coverage/test-report.junit.xml
 
     - name: Upload test results to Codecov
-      if: ${{ !cancelled() }}
+      
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./frontend/test-report.junit.xml
+        files: ./coverage/test-report.junit.xml
         report_type: test_results
 
     - name: Upload coverage to Codecov

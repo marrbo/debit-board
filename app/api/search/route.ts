@@ -1,5 +1,6 @@
 // app/api/search/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { executeSearch } from '@/lib/azureSearch';
 import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/models/User';
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     // 🔥 CORREÇÃO: Garante que o Tenant exista para validar a sessão
     await connectToDatabase();
-    const dbUser = await (User as any).findOne({ sub: userId }).lean();
+    const dbUser = await User.findOne({ sub: userId }).lean();
 
     let tenant = null;
     const tenantIdCandidate = dbUser?.tenantId;

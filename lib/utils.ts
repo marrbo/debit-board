@@ -1,7 +1,7 @@
 //lib/util.ts
+import type { IAzureSettings } from '@/types/IAzureSettings';
 import type { SearchItem } from './types';
 import { useSession } from 'next-auth/react';
-import type { IAzureSettings } from '@/models/Tenant';
 
 
 export function useClientSessionIds(): {

@@ -1,24 +1,12 @@
 // models/User.ts
-import mongoose, { Schema, Document } from 'mongoose';
-
-export type IUser = Document & {
-  sub: string;
-  email: string;
-  name?: string;
-  company?: string;        // Dado pessoal do usuário
-  jobTitle?: string;       // Novo campo pessoal
-  phone?: string;          // Novo campo pessoal
-  tenantId: string;
-  onboardingCompleted: boolean;
-  isActive: boolean;
-  roles?: string[];
-  createdAt: Date;
-}
+import type { IUser } from '@/types/IUser';
+import mongoose, { Schema } from 'mongoose';
 
 const UserSchema = new Schema<IUser>({
   sub: { type: String, required: true, unique: true },
   email: { type: String, required: true },
   name: String,
+  avatar: String,
   company: String,
   jobTitle: String,
   phone: String,
@@ -27,6 +15,14 @@ const UserSchema = new Schema<IUser>({
   isActive: { type: Boolean, default: true },
   roles: [String],
   createdAt: { type: Date, default: Date.now },
+  isAdmin: { type: Boolean, default: false },
 });
 
-export const User = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+interface UserModel extends mongoose.Model<IUser> {
+  findBySub(sub: string): Promise<IUser>;
+}
+
+export const User = (
+  mongoose.models.User || 
+  mongoose.model<IUser, UserModel>('User', UserSchema)
+) as UserModel; 

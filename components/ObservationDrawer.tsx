@@ -2,12 +2,14 @@
 
 import { X, ExternalLink, Database } from 'lucide-react';
 import AssigneeSelect from './AssigneeSelect';
-import type { IObservation } from '@/models/Observation';
-import type { IUser } from '@/models/User';
+import type { IObservation } from '@/types/IObservation';
+import type { IAzureSettings } from '@/types/IAzureSettings';
+import type { IUser } from '@/types/IUser';
 
-interface ObservationDrawerProps {
+export interface ObservationDrawerProps {
   observation: IObservation | null;
   users: IUser[];
+  azureSettings: IAzureSettings | null;
   onClose: () => void;
   onUpdateAssignee: (issueId: string, assignedTo: string | null) => void;
 }
@@ -34,6 +36,7 @@ function getRecommendation(severity: string): string {
 export default function ObservationDrawer({
   observation,
   users,
+  azureSettings,
   onClose,
   onUpdateAssignee,
 }: ObservationDrawerProps) {
@@ -48,7 +51,7 @@ export default function ObservationDrawer({
     category,
     severity,
     status,
-    slaDueAt,
+    // slaDueAt,
     hitCount,
     assignedTo,
     _id,
@@ -57,7 +60,17 @@ export default function ObservationDrawer({
   const description = getDescription(category);
   const recommendation = getRecommendation(severity);
   const externalId = `DB-${_id.toString().slice(-6).toUpperCase()}`;
-  const externalLink = `https://dev.azure.com/${project}/${repository}/_search?text=${encodeURIComponent(fileName)}`;
+  
+  // ✅ Lógica de construção da URL usando as configurações do Tenant
+  const buildAzureLink = () => {
+    if (!azureSettings || !project || !repository) return null;
+    
+    const { instanceUrl, azureCollection = 'DefaultCollection' } = azureSettings;
+    // Padrão: {url}/tfs/{collection}/{projeto}/_git/{repo}?path={arquivo}&version=GB{branch}
+    return `${instanceUrl}/tfs/${azureCollection}/${project}/_git/${repository}?path=${encodeURIComponent(filePath)}&version=GB${branch}&_a=contents`;
+  };
+
+  const externalLink = buildAzureLink();
 
   return (
     <div className="fixed inset-0 -top-6 z-[9999] flex justify-end">
@@ -67,8 +80,8 @@ export default function ObservationDrawer({
       {/* Drawer - altura total, sem espaço no topo */}
       <div className="relative w-full max-w-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl h-screen overflow-y-auto p-6">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-4 mb-10">
-          <div className="max-w-10">
+        <div className="flex items-start justify-between border-b border-apple-border-light dark:border-apple-border-dark pb-4 mb-2">
+          <div className="max-w-100">
             <h3 className="text-lg font-bold text-apple-label-light dark:text-apple-label-dark">
               {fileName}
             </h3>
@@ -80,7 +93,7 @@ export default function ObservationDrawer({
         </div>
 
         {/* Conteúdo compacto */}
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-2">
           {/* Identificação */}
           <div>
             <h4 className="text-xs font-semibold uppercase text-apple-tertiary-light mb-2">Identificação</h4>
@@ -120,10 +133,10 @@ export default function ObservationDrawer({
                 <span className="text-[10px] uppercase text-apple-tertiary-light">Status</span>
                 <p className="text-sm">{status || '—'}</p>
               </div>
-              <div>
+              {/* <div>
                 <span className="text-[10px] uppercase text-apple-tertiary-light">SLA</span>
                 <p className="text-sm">{slaDueAt ? new Date(slaDueAt).toLocaleDateString('pt-BR') : '—'}</p>
-              </div>
+              </div> */}
               <div>
                 <span className="text-[10px] uppercase text-apple-tertiary-light">Hits</span>
                 <p className="text-sm">{hitCount}</p>
@@ -147,7 +160,7 @@ export default function ObservationDrawer({
               <span>Azure DevOps Search Code</span>
             </div>
             <div className="mt-2">
-              <a href={externalLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-apple-blue hover:underline">
+              <a href={externalLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 cursor-pointer text-xs text-apple-blue hover:underline">
                 <ExternalLink className="w-3 h-3" />
                 Ver no Azure DevOps
               </a>

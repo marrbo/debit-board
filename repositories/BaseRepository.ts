@@ -1,5 +1,5 @@
 // repositories/BaseRepository.ts
-import { Model, Document } from 'mongoose';
+import type { Model, Document } from 'mongoose';
 
 // Tipos robustos que funcionam em qualquer versão do Mongoose (v5 ao v8)
 export type Filter<T> = Record<keyof T, any> | Record<string, any>;

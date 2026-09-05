@@ -1,7 +1,6 @@
 // app/api/sast/run/route.ts
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { getServerAuthSession } from '@/lib/auth';
 import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
@@ -10,6 +9,7 @@ import { Observation } from '@/models/Observation';
 import { executeSearch } from '@/lib/azureSearch';
 import mongoose from 'mongoose';
 import type { SearchItem } from '@/lib/types';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function POST() {
   try {
@@ -19,7 +19,7 @@ export async function POST() {
     }
 
     await connectToDatabase();
-    const dbUser = await (User as any).findOne({ sub: session.user.id });
+    const dbUser = await User.findOne({ sub: session.user.id });
 
     let tenant = null;
     const tenantIdCandidate = dbUser?.tenantId;

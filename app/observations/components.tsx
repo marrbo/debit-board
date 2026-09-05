@@ -1,6 +1,6 @@
 // app/observations/components.tsx
+import type { IObservation } from '@/types/IObservation';
 import React from 'react';
-import type { IObservation } from '@/models/Observation';
 
 /**
  * Renderiza o Avatar do usuário de forma padronizada.
@@ -19,8 +19,8 @@ export function UserAvatar({ name, sub, className = "" }: { name?: string; sub?:
 /**
  * Componente do Relatório PDF com agrupamentos e timbrado executivo.
  */
-export const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
-  if (!observations.length) return null;
+export const ObservationsReport = ({ observations, usersMap }: { observations?: IObservation[]; usersMap: Record<string, string> }) => {
+  if (!observations || observations.length === 0) return null;
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 

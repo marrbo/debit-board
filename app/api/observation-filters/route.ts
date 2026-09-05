@@ -1,5 +1,6 @@
 // app/api/observation-filters/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
 import type { PipelineStage } from 'mongoose';
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   // Caso especial: assignedTo -> retornar nomes de usuários
   if (field === 'assignedTo') {
-    const users = await (User as any).find({
+    const users = await User.find({
       $or: [
         { name: { $regex: query, $options: 'i' }, tenantId },
         { email: { $regex: query, $options: 'i' }, tenantId },

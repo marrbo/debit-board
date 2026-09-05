@@ -1,5 +1,5 @@
 import { serverFetch } from '@/lib/serverFetch';
-import type { IObservation } from '@/models/Observation';
+import type { IObservation } from '@/types/IObservation';
 
 export interface ObservationsResponse {
   observations: IObservation[];
