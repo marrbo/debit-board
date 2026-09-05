@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   // 🔥 Atualiza a lista de projectIds do time
   await Team.updateOne(
-    { _id: targetTeamId, tenantId },
+    { _id: { $eq: targetTeamId }, tenantId: { $eq: tenantId } },
     { $addToSet: { projectIds: { $each: projectIds } } }
   );
 
