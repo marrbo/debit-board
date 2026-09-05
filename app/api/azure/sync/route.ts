@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
       // 1. Upsert Project
       const savedProject = await Project.findOneAndUpdate(
-        { tenantId, azureProjectId },
+        { tenantId: { $eq: tenantId }, azureProjectId: { $eq: azureProjectId } },
         {
           name: projectName,
           azureProjectId,
