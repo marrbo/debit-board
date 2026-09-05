@@ -213,6 +213,7 @@ function DashboardContent() {
               total={stats.teamStats.total}
               category={stats.teamStats.categoryTotals}
               categoryGroup={stats.teamStats.categoryGroupTotals}
+              categoryDetails={stats.categoryDetails}
             />
           </div>
 

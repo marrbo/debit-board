@@ -5,6 +5,7 @@ import { Observation } from '@/models/Observation';
 import { Project } from '@/models/Project';
 import { Team } from '@/models/Team';
 import { SavedQuery } from '@/models/SavedQuery';
+import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { getServerSessionIds } from '@/lib/session-server';
 import { parseDBQL } from '@/lib/parseDBQL';
 import { subDays } from 'date-fns';
@@ -20,7 +21,6 @@ export async function GET(req: NextRequest) {
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
 
-  // 1. Resolve DBQL
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
     try {
@@ -29,7 +29,6 @@ export async function GET(req: NextRequest) {
     } catch {}
   }
 
-  // 2. Determina os projetos permitidos (para filtrar as observations)
   let allowedProjectNames: string[] | null = null;
   let allowedProjectIds: any[] | null = null;
 
@@ -42,7 +41,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. Filtro de Observations por DBQL
   const obsMatch: any = { tenantId };
   
   if (finalSearchQuery) {
@@ -56,12 +54,10 @@ export async function GET(req: NextRequest) {
   else if (range === '14d') obsMatch.firstSeen = { $gte: subDays(new Date(), 14) };
   else if (range === '30d') obsMatch.firstSeen = { $gte: subDays(new Date(), 30) };
 
-  // Se tem time, filtra pelos nomes dos projetos
   if (allowedProjectNames) {
     obsMatch.project = { $in: allowedProjectNames };
   }
 
-  // 4. Stats do Time (Cards)
   const teamPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -79,7 +75,6 @@ export async function GET(req: NextRequest) {
         total: 1,
         statusTotals: { $arrayToObject: { $map: { input: { $setUnion: "$statuses" }, as: "st", in: { k: "$$st", v: { $size: { $filter: { input: "$statuses", as: "sta", cond: { $eq: ["$$sta", "$$st"] } } } } } } } },
         severityTotals: { $arrayToObject: { $map: { input: { $setUnion: "$severities" }, as: "sev", in: { k: "$$sev", v: { $size: { $filter: { input: "$severities", as: "s", cond: { $eq: ["$$s", "$$sev"] } } } } } } } },
-        // 🔹 categoryTotals = contagem simples (observations por categoria)
         categoryTotals: { $arrayToObject: { $map: { input: { $setUnion: "$categories" }, as: "cat", in: { k: "$$cat", v: { $size: { $filter: { input: "$categories", as: "c", cond: { $eq: ["$$c", "$$cat"] } } } } } } } }
       }
     }
@@ -87,7 +82,6 @@ export async function GET(req: NextRequest) {
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
 
-  // 4.1 - Nova agregação para contar patternId distintos por categoria (Grouped)
   const categoryPipeline = [
     { $match: obsMatch },
     { $group: { _id: { category: "$category", patternId: "$patternId" } } },
@@ -101,14 +95,43 @@ export async function GET(req: NextRequest) {
     categoryGroupTotals[item.category] = item.count;
   });
 
-  // Base do teamStats (inclui categoryTotals original)
   const teamStats = teamStatsResult[0] || { total: 0, statusTotals: {}, severityTotals: {}, categoryTotals: {} };
-  
-  // 🔹 Adiciona ambos os mapas
-  teamStats.categoryTotals = teamStats.categoryTotals || {};   // SINGLE
-  teamStats.categoryGroupTotals = categoryGroupTotals;         // GROUPED
+  teamStats.categoryTotals = teamStats.categoryTotals || {};
+  teamStats.categoryGroupTotals = categoryGroupTotals;
 
-  // 5. Stats por Projeto (Grid)
+  const detailPipeline = [
+    { $match: obsMatch },
+    { $group: { _id: { category: "$category", patternId: "$patternId" }, count: { $sum: 1 } } },
+    { $project: { _id: 0, category: "$_id.category", patternId: "$_id.patternId", count: 1 } }
+  ];
+  const detailResults = await Observation.aggregate(detailPipeline);
+  const categoryDetails: Record<string, Record<string, number>> = {};
+  detailResults.forEach((item: any) => {
+    if (!categoryDetails[item.category]) categoryDetails[item.category] = {};
+    categoryDetails[item.category][item.patternId] = item.count;
+  });
+
+  // 🔥 Converte patternId para nome do pattern usando VulnerabilityPattern
+  const allPatternIds = new Set<string>();
+  Object.values(categoryDetails).forEach((patterns) => {
+    Object.keys(patterns).forEach((id) => allPatternIds.add(id));
+  });
+
+  const patterns = await VulnerabilityPattern.find({ _id: { $in: Array.from(allPatternIds) } }).select('_id name').lean();
+  const patternNameMap: Record<string, string> = {};
+  patterns.forEach((p: any) => {
+    patternNameMap[p._id.toString()] = p.name;
+  });
+
+  const categoryDetailsWithNames: Record<string, Record<string, number>> = {};
+  Object.entries(categoryDetails).forEach(([category, patterns]) => {
+    categoryDetailsWithNames[category] = {};
+    Object.entries(patterns).forEach(([patternId, count]) => {
+      const patternName = patternNameMap[patternId] || patternId;
+      categoryDetailsWithNames[category][patternName] = count;
+    });
+  });
+
   const projectPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -143,5 +166,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ teamStats, projectStats });
+  return NextResponse.json({ teamStats, projectStats, categoryDetails: categoryDetailsWithNames });
 }
