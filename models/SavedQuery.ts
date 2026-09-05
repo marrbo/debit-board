@@ -1,27 +1,27 @@
-import mongoose, { Schema, Document } from 'mongoose';
+// models/SavedQuery.ts
+import type { ISavedQuery } from '@/types/ISavedQuery';
+import { model, models, Schema, type Model } from 'mongoose';
 
-export interface ISavedQuery extends Document {
-  tenantId: string;
-  sub: string;
-  name: string;
-  queryString: string;
-  context: string;
-  visibility: 'private' | 'shared' | 'public' | 'temporary';
-  createdAt: Date;
+export interface SavedQueryModel extends Model<ISavedQuery> {
+  findCriticals(): Promise<ISavedQuery[]>;
 }
 
-const SavedQuerySchema: Schema = new Schema({
-  tenantId: { type: String, required: true, index: true, ref: 'Tenant' },
-  sub: { type: String, required: true, index: true, ref: 'User' },
+const SavedQuerySchema = new Schema<ISavedQuery>({
   name: { type: String, required: true },
   queryString: { type: String, required: true },
-  context: { type: String, default: 'observations' },
-  visibility: { 
-    type: String, 
-    enum: ['private', 'shared', 'public', 'temporary'], 
-    default: 'private' 
+  context: {
+    type: String,
+    enum: ['observations', 'projects', 'repositories', 'stats'],
+    required: true
   },
+  visibility: {
+    type: String,
+    enum: ['private', 'shared', 'public', 'temporary'],
+    default: 'private'
+  },
+  tenantId: { type: String, required: true, index: true },
+  userId: { type: String, required: true, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 
-export const SavedQuery = mongoose.models.SavedQuery || mongoose.model<ISavedQuery>('SavedQuery', SavedQuerySchema);
+export const SavedQuery = (models.SavedQuery || model<ISavedQuery, SavedQueryModel>('SavedQuery', SavedQuerySchema)) as SavedQueryModel;

@@ -1,7 +1,7 @@
 // components/KPICards.tsx
 'use client';
 
-import { SearchItem } from '@/lib/types';
+import type { SearchItem } from '@/lib/types';
 import { FileCode, FolderTree, GitBranch, Target } from 'lucide-react';
 
 interface KPICardsProps {

@@ -1,15 +1,15 @@
 // app/api/admin/sync-keycloak/route.ts
 import { NextResponse } from 'next/server';
-import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Tenant } from "@/models/Tenant";
 import crypto from 'crypto';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function POST() {
   const session = await getServerAuthSession();
   // Apenas o Admin pode disparar a sincronização
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -76,8 +76,8 @@ export async function POST() {
           sub: kcUser.id,
           email: kcUser.email,
           name: kcUser.firstName + ' ' + kcUser.lastName,
-          tenantId: tenant._id,
-          onboardingCompleted: false, // Pela primeira vez, ele fará o setup de perfil
+          tenantId: tenant._id.toString(),
+          onboardingCompleted: false,
           isActive: true,
         });
         created++;

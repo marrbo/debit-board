@@ -4,14 +4,14 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
-import { getServerAuthSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import crypto from 'crypto';
+import { getServerAuthSession } from "@/lib/auth-server";
 
 // --- Helper: verifica se o usuário atual é Admin ---
 async function checkAdmin() {
   const session = await getServerAuthSession();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     throw new Error("Unauthorized");
   }
 }

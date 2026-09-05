@@ -1,76 +1,105 @@
-// app/sast/page.tsx
-'use client';
+"use client";
 
-import { useState, useRef, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
-import { Play, FileText, CheckCircle, XCircle, ShieldKeyhole } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
-import PageHeader from '@/components/PageHeader';
+import { useState, useRef, useMemo } from "react";
+import { useSession } from "next-auth/react";
+import { Play, FileText, CheckCircle, XCircle, ShieldKeyhole } from "lucide-react";
+import { useReactToPrint } from "react-to-print";
+import PageHeader from "@/components/PageHeader";
 
-const SASTReport = ({ result }: { result: any }) => {
+// ============================================================
+// Tipos
+// ============================================================
+interface PatternResult {
+  category: string;
+  severity: "critical" | "high" | "medium" | "low";
+  slaHours: number;
+  hitCount?: number;
+  error?: string;
+  query?: string; // apenas admin
+}
+
+interface SASTResult {
+  totalOccurrences: number;
+  patternsExecuted: number;
+  failedPatterns: number;
+  patterns: PatternResult[];
+}
+
+const SASTReport = ({ result }: { result: SASTResult | null }) => {
   if (!result) return null;
   return (
-    <div className="p-10 bg-white text-black" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div className="p-10 bg-white text-black" style={{ fontFamily: "Arial, sans-serif" }}>
       <div className="mb-8 border-b border-gray-300 pb-4">
         <h1 className="text-3xl font-bold text-blue-600">Relatório SAST</h1>
         <p className="text-gray-500 text-sm mt-1">Scanner Automático de Segurança</p>
-        <p className="text-xs text-gray-400 mt-2">Gerado em: {new Date().toLocaleString()}</p>
+        <p className="text-xs text-gray-400 mt-2">
+          Gerado em: {new Date().toLocaleString()}
+        </p>
       </div>
       <div className="mb-6 bg-gray-50 p-4 rounded border border-gray-200">
-        <p className="text-lg font-bold">Total de ocorrências: <span className="text-blue-600">{result.totalOccurrences}</span></p>
+        <p className="text-lg font-bold">
+          Total de ocorrências: <span className="text-blue-600">{result.totalOccurrences}</span>
+        </p>
         <p className="text-sm text-gray-600">Padrões executados: {result.patternsExecuted}</p>
-        {result.failedPatterns > 0 && <p className="text-sm text-red-600">Padrões com falha: {result.failedPatterns}</p>}
+        {result.failedPatterns > 0 && (
+          <p className="text-sm text-red-600">Padrões com falha: {result.failedPatterns}</p>
+        )}
       </div>
       <table className="w-full text-sm border-collapse border border-gray-200">
-        <thead><tr className="bg-gray-100 text-left">
-          <th className="border border-gray-200 p-2 font-semibold">Categoria</th>
-          <th className="border border-gray-200 p-2 font-semibold">Severidade</th>
-          <th className="border border-gray-200 p-2 font-semibold">SLA</th>
-          <th className="border border-gray-200 p-2 font-semibold text-center">Hits</th>
-        </tr></thead>
+        <thead>
+          <tr className="bg-gray-100 text-left">
+            <th className="border border-gray-200 p-2 font-semibold">Categoria</th>
+            <th className="border border-gray-200 p-2 font-semibold">Severidade</th>
+            <th className="border border-gray-200 p-2 font-semibold">SLA</th>
+            <th className="border border-gray-200 p-2 font-semibold text-center">Hits</th>
+          </tr>
+        </thead>
         <tbody>
-          {result.patterns.map((p: any, idx: number) => (
+          {result.patterns.map((p, idx) => (
             <tr key={idx} className="hover:bg-gray-50">
               <td className="border border-gray-200 p-2 font-medium">{p.category}</td>
               <td className="border border-gray-200 p-2 font-medium uppercase">{p.severity}</td>
               <td className="border border-gray-200 p-2 font-medium">{p.slaHours}h</td>
-              <td className="border border-gray-200 p-2 text-center font-bold">{p.error ? 'Erro' : p.hitCount}</td>
+              <td className="border border-gray-200 p-2 text-center font-bold">
+                {p.error ? "Erro" : p.hitCount}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-gray-400 mt-4 text-center">Relatório gerado automaticamente.</p>
+      <p className="text-xs text-gray-400 mt-4 text-center">
+        Relatório gerado automaticamente.
+      </p>
     </div>
   );
 };
 
 export default function SASTPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<SASTResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const componentRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: 'Relatorio_SAST',
+    documentTitle: "Relatorio_SAST",
   });
 
-  // 🔥 Resumo Executivo agrupado por Categoria
   const executiveSummary = useMemo(() => {
-    if (!result || !result.patterns) return [];
+    if (!result) return [];
     const grouped: Record<string, { total: number; severity: string; slaHours: number }> = {};
-    result.patterns.forEach((p: any) => {
-      if (!grouped[p.category]) grouped[p.category] = { total: 0, severity: 'low', slaHours: 72 };
+    result.patterns.forEach((p) => {
+      if (!grouped[p.category]) {
+        grouped[p.category] = { total: 0, severity: "low", slaHours: 72 };
+      }
       grouped[p.category].total += p.hitCount || 0;
-      // Pega a severidade mais alta do grupo
-      const severityOrder = ['low', 'medium', 'high', 'critical'];
+      const severityOrder = ["low", "medium", "high", "critical"];
       if (severityOrder.indexOf(p.severity) > severityOrder.indexOf(grouped[p.category].severity)) {
         grouped[p.category].severity = p.severity;
       }
-      // Pega o menor SLA do grupo (mais crítico)
       if (p.slaHours < grouped[p.category].slaHours) {
         grouped[p.category].slaHours = p.slaHours;
       }
@@ -83,24 +112,28 @@ export default function SASTPage() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch('/api/sast/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/sast/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
-        let errorMsg = 'Erro ao executar Advanced Code Scanner';
+        let errorMsg = "Erro ao executar Advanced Code Scanner";
         try {
           const errorData = await res.json();
           errorMsg = errorData.error || errorMsg;
-        } catch (parseErr) {
+        } catch {
           errorMsg = `Erro ${res.status}: ${res.statusText}`;
         }
         throw new Error(errorMsg);
       }
-      const data = await res.json();
+      const data: SASTResult = await res.json();
       setResult(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Erro desconhecido");
+      }
     } finally {
       setRunning(false);
     }
@@ -111,18 +144,25 @@ export default function SASTPage() {
     handlePrint();
   };
 
+  // ✅ Espera a sessão carregar antes de decidir
+  if (status === "loading") {
+    return <div className="py-10 text-center">Carregando...</div>;
+  }
+
   const azureSettings = session?.user?.azureSettings;
   if (!azureSettings || !azureSettings.instanceUrl) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <PageHeader 
-            title="SAST Scanner"
-            subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
-            icon={<ShieldKeyhole className="w-6 h-6 text-apple-blue" />}
-          />
+        <PageHeader
+          title="SAST Scanner"
+          subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns."
+          icon={<ShieldKeyhole className="w-6 h-6 text-apple-blue" />}
+        />
         <div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6 text-red-300">
           <p className="font-medium">Acesso negado ao Scanner SAST.</p>
-          <p className="text-sm mt-1">O Tenant associado não possui configurações do Azure. Contate o Administrador.</p>
+          <p className="text-sm mt-1">
+            O Tenant associado não possui configurações do Azure. Contate o Administrador.
+          </p>
         </div>
       </div>
     );
@@ -130,19 +170,18 @@ export default function SASTPage() {
 
   return (
     <div className="w-full mx-auto space-y-6">
-      <PageHeader 
+      <PageHeader
         title="SAST Scanner"
         subtitle="Executa uma bateria de buscas predefinidas para identificar vulnerabilidades comuns ( branches main ou master )."
         icon={<ShieldKeyhole className="w-10 h-10 text-apple-blue" />}
       />
       <div className="hidden">
-      <div ref={componentRef}>
-        <SASTReport result={result} />
-      </div>
+        <div ref={componentRef}>
+          <SASTReport result={result} />
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6">
-        
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-4">
             <button
@@ -187,28 +226,53 @@ export default function SASTPage() {
                   ) : (
                     <CheckCircle className="w-5 h-5 text-emerald-400" />
                   )}
-                  <p className={`font-medium ${result.failedPatterns > 0 && result.totalOccurrences === 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {result.failedPatterns > 0 && result.totalOccurrences === 0 
-                      ? 'SAST executado com falhas!'
-                      : 'SAST concluído com sucesso!'}
+                  <p
+                    className={`font-medium ${
+                      result.failedPatterns > 0 && result.totalOccurrences === 0
+                        ? "text-red-400"
+                        : "text-emerald-400"
+                    }`}
+                  >
+                    {result.failedPatterns > 0 && result.totalOccurrences === 0
+                      ? "SAST executado com falhas!"
+                      : "SAST concluído com sucesso!"}
                   </p>
                 </div>
 
-                {/* 🔥 Resumo Executivo por Categoria */}
                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3 mb-4">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-2">📊 Resumo Executivo por Categoria</h3>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-2">
+                    📊 Resumo Executivo por Categoria
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {executiveSummary.map((item) => (
-                      <div key={item.category} className="bg-slate-900/80 p-3 rounded border border-gray-200 dark:border-slate-700 flex justify-between items-center">
+                      <div
+                        key={item.category}
+                        className="bg-slate-900/80 p-3 rounded border border-gray-200 dark:border-slate-700 flex justify-between items-center"
+                      >
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{item.category}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {item.category}
+                          </p>
                           <div className="flex gap-2 text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                            <span>SLA: <strong className="text-slate-200">{item.slaHours}h</strong></span>
-                            <span>Severidade: <span className={`uppercase font-bold ${
-                              item.severity === 'critical' ? 'text-red-400' :
-                              item.severity === 'high' ? 'text-orange-400' :
-                              item.severity === 'medium' ? 'text-yellow-400' : 'text-blue-400'
-                            }`}>{item.severity}</span></span>
+                            <span>
+                              SLA: <strong className="text-slate-200">{item.slaHours}h</strong>
+                            </span>
+                            <span>
+                              Severidade:{" "}
+                              <span
+                                className={`uppercase font-bold ${
+                                  item.severity === "critical"
+                                    ? "text-red-400"
+                                    : item.severity === "high"
+                                      ? "text-orange-400"
+                                      : item.severity === "medium"
+                                        ? "text-yellow-400"
+                                        : "text-blue-400"
+                                }`}
+                              >
+                                {item.severity}
+                              </span>
+                            </span>
                           </div>
                         </div>
                         <span className="text-lg font-bold text-amber-400">{item.total}</span>
@@ -217,9 +281,10 @@ export default function SASTPage() {
                   </div>
                 </div>
 
-                {/* 🔥 Tabela Detalhada (com proteção de Admin) */}
                 <div className="overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-2">🔍 Detalhamento dos Padrões</h3>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-2">
+                    🔍 Detalhamento dos Padrões
+                  </h3>
                   <table className="w-full text-sm text-left">
                     <thead className="bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-700">
                       <tr>
@@ -231,20 +296,29 @@ export default function SASTPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
-                      {result.patterns.map((p: any, idx: number) => (
+                      {result.patterns.map((p, idx) => (
                         <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
                           <td className="p-3 text-gray-900 dark:text-white">{p.category}</td>
                           <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                              p.severity === 'critical' ? 'bg-red-900/40 text-red-400' :
-                              p.severity === 'high' ? 'bg-orange-900/40 text-orange-400' :
-                              p.severity === 'medium' ? 'bg-yellow-900/40 text-yellow-400' :
-                              'bg-blue-900/40 text-blue-400'
-                            }`}>{p.severity}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                                p.severity === "critical"
+                                  ? "bg-red-900/40 text-red-400"
+                                  : p.severity === "high"
+                                    ? "bg-orange-900/40 text-orange-400"
+                                    : p.severity === "medium"
+                                      ? "bg-yellow-900/40 text-yellow-400"
+                                      : "bg-blue-900/40 text-blue-400"
+                              }`}
+                            >
+                              {p.severity}
+                            </span>
                           </td>
                           <td className="p-3 text-slate-300">{p.slaHours}h</td>
                           {isAdmin && (
-                            <td className="p-3 font-mono text-slate-300 text-xs break-all">{p.query}</td>
+                            <td className="p-3 font-mono text-slate-300 text-xs break-all">
+                              {p.query}
+                            </td>
                           )}
                           <td className="p-3 text-center font-bold">
                             {p.error ? (

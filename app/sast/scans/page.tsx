@@ -4,15 +4,22 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { RefreshCw, CheckCircle, XCircle, Clock, Play } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+
+type SastScanStatus = 'completed' | 'running' | 'failed' | 'pending';
+
+type SastScan = {
+  _id?: string;
+  createdAt?: string;
+  status?: SastScanStatus;
+  totalOccurrences?: number;
+};
 
 export default function SASTScansPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [scans, setScans] = useState<any[]>([]);
+  const [scans, setScans] = useState<SastScan[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchScans = async () => {
@@ -23,9 +30,14 @@ export default function SASTScansPage() {
   };
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      fetchScans();
-    }
+    if (status !== 'authenticated') return;
+
+    void (async () => {
+      setLoading(true);
+      const res = await fetch('/api/sast/scans');
+      if (res.ok) setScans(await res.json());
+      setLoading(false);
+    })();
   }, [status]);
 
   if (status === 'loading') return <div className="py-10 text-gray-500 dark:text-slate-400">Carregando...</div>;

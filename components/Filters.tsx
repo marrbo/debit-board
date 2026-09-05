@@ -2,7 +2,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { SearchItem } from '@/lib/types';
+import type { SearchItem } from '@/lib/types';
 import { Search } from 'lucide-react';
 import { parseRepoName } from '@/lib/utils';
 

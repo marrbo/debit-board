@@ -1,12 +1,12 @@
 // app/api/admin/impersonate/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerAuthSession } from '@/lib/auth';
+import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getServerAuthSession } from '@/lib/auth-server';
 
 export async function POST(req: NextRequest) {
   // Verifica se quem está fazendo a requisição é o Admin
   const adminSession = await getServerAuthSession();
-  if (adminSession?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (adminSession?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Cria o cookie seguro de impersonação
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set('impersonating_user', targetUserId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

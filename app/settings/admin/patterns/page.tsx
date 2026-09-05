@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2, Plus } from 'lucide-react';
-import PageHeader from '@/components/PageHeader';
 
 export default function PatternsPage() {
   const { data: session, status } = useSession();

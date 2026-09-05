@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { User, LogOut, Settings, UserMinus } from 'lucide-react';
+import { LogOut, Settings, UserMinus } from 'lucide-react';
 import Link from 'next/link';
 
 export default function UserMenu() {

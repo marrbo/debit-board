@@ -1,21 +1,19 @@
 // app/api/search/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { executeSearch } from '@/lib/azureSearch';
-import { getServerAuthSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import mongoose from 'mongoose';
+import { useClientSessionIds } from '@/lib/utils';
 
-export async function POST(request: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function POST(req: NextRequest) {
+  const {tenantId, userId, azureSettings} = useClientSessionIds();
 
   try {
-    const settingsHeader = request.headers.get('X-Settings');
-    const body = await request.json();
+    const settingsHeader = req.headers.get('X-Settings');
+    const body = await req.json();
 
     if (!settingsHeader) {
       return NextResponse.json({ error: 'Configurações não fornecidas.' }, { status: 400 });
@@ -25,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // 🔥 CORREÇÃO: Garante que o Tenant exista para validar a sessão
     await connectToDatabase();
-    const dbUser = await User.findOne({ sub: session.user.id });
+    const dbUser = await User.findOne({ sub: userId }).lean();
 
     let tenant = null;
     const tenantIdCandidate = dbUser?.tenantId;
@@ -38,13 +36,13 @@ export async function POST(request: NextRequest) {
       tenant = await Tenant.findById(tenantIdCandidate);
     }
 
-    if (!tenant || !tenant.azureSettings?.instanceUrl) {
+    if (!tenant || !azureSettings || !tenant.azureSettings?.instanceUrl) {
       return NextResponse.json({
         error: 'Configurações do Azure não configuradas para este Tenant. Atualize no painel Admin.'
       }, { status: 400 });
     }
 
-    const { results, hitCount } = await executeSearch(query, session.user.azureSettings, session.user?.azureSettings?.ignoreTlsErrors, session.user.tenantId);
+    const { results, hitCount } = await executeSearch(query, azureSettings, azureSettings?.ignoreTlsErrors, tenantId);
 
     return NextResponse.json({
       results: { count: hitCount, values: results },

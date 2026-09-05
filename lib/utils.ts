@@ -1,4 +1,22 @@
-import { SearchItem } from './types';
+//lib/util.ts
+import type { IAzureSettings } from '@/types/IAzureSettings';
+import type { SearchItem } from './types';
+import { useSession } from 'next-auth/react';
+
+
+export function useClientSessionIds(): {
+  userId: string;
+  tenantId: string;
+  azureSettings?: IAzureSettings;
+} {
+  const { data: session } = useSession();
+
+  return {
+    userId: session?.user?.id || '',
+    tenantId: session?.user?.tenantId || '',
+    azureSettings: session?.user?.azureSettings,
+  };
+}
 
 export function parseRepoName(repo: string): { gerencia: string; nucleo: string } {
   if (!repo) return { gerencia: 'Sem Gerência', nucleo: 'Sem Núcleo' };
@@ -6,7 +24,7 @@ export function parseRepoName(repo: string): { gerencia: string; nucleo: string 
   // Só retorna Gerência/Núcleo se houver pelo menos 2 partes.
   // Se não houver underline, NÃO vira Gerência. Vai para "Sem Gerência".
   if (parts.length >= 2) {
-    return { gerencia: parts[0], nucleo: parts.slice(1).join('_') };
+    return { gerencia: parts[0] || '', nucleo: parts.slice(1).join('_') };
   }
   return { gerencia: 'Sem Gerência', nucleo: 'Sem Núcleo' };
 }

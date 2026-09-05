@@ -1,91 +1,95 @@
 // app/api/dashboard/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { SearchRecord } from '@/models/SearchRecord';
-import { SASTScan } from '@/models/SASTScan';
+import { Project } from '@/models/Project';
 import { Observation } from '@/models/Observation';
-import { getServerAuthSession } from '@/lib/auth';
-import { subDays, startOfDay, endOfDay, format } from 'date-fns';
+import { Team } from '@/models/Team';
+import { SavedQuery } from '@/models/SavedQuery';
+import { getServerSessionIds } from '@/lib/session-server';
+import { parseDBQL } from '@/lib/parseDBQL';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+  const sessionIds = await getServerSessionIds();
+  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
   await connectToDatabase();
-  const tenantId = session.user.tenantId;
+
   const { searchParams } = new URL(req.url);
-  const period = searchParams.get('period');
-  const start = searchParams.get('start');
-  const end = searchParams.get('end');
+  const teamId = searchParams.get('teamId');
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const limit = parseInt(searchParams.get('limit') || '10', 10);
+  const sortField = searchParams.get('sort') || 'createdAt';
+  const sortOrder = searchParams.get('order') === 'asc' ? 1 : -1;
+  const dbqlId = searchParams.get('q');
+  const searchQueryRaw = searchParams.get('search') || '';
 
-  const buildDateFilter = (field: string) => {
-    let filter: any = { tenantId };
-    if (period === '24h') { filter[field] = { $gte: subDays(new Date(), 1) }; }
-    else if (period === '7d') { filter[field] = { $gte: subDays(new Date(), 7) }; }
-    else if (period === '30d') { filter[field] = { $gte: subDays(new Date(), 30) }; }
-    else if (period === 'custom' && start && end) {
-      filter[field] = { $gte: startOfDay(new Date(start)), $lte: endOfDay(new Date(end)) };
+  // 1. Resolve a query do DBQL
+  let finalSearchQuery = searchQueryRaw;
+  if (dbqlId) {
+    try {
+      const savedQuery = await SavedQuery.findById(dbqlId).lean();
+      if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
+    } catch (error) {
+      console.error('Erro ao buscar SavedQuery:', error);
     }
-    return filter;
-  };
-
-  // Buscar SearchRecords e SASTScans (para o gráfico de evolução)
-  const searchFilter = buildDateFilter('createdAt');
-  const searchRecords = await SearchRecord.find(searchFilter).lean();
-
-  const sastFilter = buildDateFilter('scanDate');
-  const sastScans = await SASTScan.find(sastFilter).lean();
-
-  // Consolidar dados de evolução por dia
-  const dailyData: Record<string, number> = {};
-  for (const record of searchRecords) {
-    const day = format(new Date(record.createdAt), 'yyyy-MM-dd');
-    dailyData[day] = (dailyData[day] || 0) + (record.totalHits || 0);
-  }
-  for (const scan of sastScans) {
-    const day = format(new Date(scan.scanDate), 'yyyy-MM-dd');
-    dailyData[day] = (dailyData[day] || 0) + (scan.totalOccurrences || 0);
   }
 
-  // KPIs de Observations (Abertas, Recorrentes, Resolvidas, Não Corrigir)
-  const observationsStats = await Observation.aggregate([
-    { $match: { tenantId: tenantId } },
-    { $group: { _id: "$status", count: { $sum: 1 } } }
+  // 2. Lógica para achar os IDs de Projetos permitidos
+  let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
+
+  // Se há um Time específico, começa com os projetos dele
+  if (teamId && teamId !== 'all') {
+    const team = await Team.findById(teamId).lean();
+    if (!team) return NextResponse.json({ data: [], total: 0 });
+    
+    const teamProjectIds = (team.projectIds || []).map((id: any) => new mongoose.Types.ObjectId(id));
+    allowedProjectIds = teamProjectIds;
+  }
+
+  // Se há DBQL, busca os nomes de projetos que batem com a query
+  if (finalSearchQuery) {
+    const parsedMatch = parseDBQL(finalSearchQuery);
+    
+    if (parsedMatch && Object.keys(parsedMatch).length > 0) {
+      const obsMatch: any = { tenantId };
+      
+      // Intersecta com os projetos do time, se existir
+      if (allowedProjectIds) {
+        const teamProjects = await Project.find({ _id: { $in: allowedProjectIds } }).select('name').lean();
+        obsMatch.project = { $in: teamProjects.map(p => p.name) };
+      }
+
+      Object.assign(obsMatch, parsedMatch);
+      const matchedProjectNames = await Observation.distinct('project', obsMatch);
+
+      const matchedProjects = await Project.find({ name: { $in: matchedProjectNames } }).select('_id').lean();
+      
+      // Atualiza os IDs permitidos (intersecção)
+      if (allowedProjectIds) {
+        const matchedIds = matchedProjects.map(p => p._id);
+        allowedProjectIds = allowedProjectIds.filter(id => matchedIds.some(mid => mid.equals(id)));
+      } else {
+        allowedProjectIds = matchedProjects.map(p => p._id);
+      }
+    }
+  }
+
+  // 3. Busca os Projetos com paginação
+  const filter: any = { tenantId };
+  if (allowedProjectIds) {
+    filter._id = { $in: allowedProjectIds };
+  }
+
+  const skip = (page - 1) * limit;
+  
+  const [projects, total] = await Promise.all([
+    Project.find(filter)
+      .sort({ [sortField]: sortOrder })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Project.countDocuments(filter)
   ]);
 
-  const statsMap = observationsStats.reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr._id] = curr.count;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const overdueCount = await Observation.countDocuments({
-    tenantId: tenantId,
-    status: { $in: ['open', 'recurring'] },
-    slaDueAt: { $lt: new Date() }
-  });
-
-  if (overdueCount > 0) {
-    await Observation.updateMany({
-      tenantId: tenantId,
-      status: { $in: ['open', 'recurring'] },
-      slaDueAt: { $lt: new Date() }
-    }, { $set: { status: 'open' } });
-  }
-
-  return NextResponse.json({
-    dailyData,
-    totalRecords: searchRecords.length + sastScans.length,
-    totalHits: searchRecords.reduce((sum, r) => sum + (r.totalHits || 0), 0) +
-               sastScans.reduce((sum, s) => sum + (s.totalOccurrences || 0), 0),
-    uniqueGerencia: new Set(searchRecords.map(r => r.gerencia).filter(Boolean)).size,
-    observationsStats: {
-      open: statsMap['open'] || 0,
-      recurring: statsMap['recurring'] || 0,
-      overdue: overdueCount,
-      resolved: statsMap['resolved'] || 0,
-      wont_fix: statsMap['wont_fix'] || 0,
-    }
-  });
+  return NextResponse.json({ data: projects, total });
 }

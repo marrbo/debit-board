@@ -1,34 +1,38 @@
 {
-  "name": "nextjs-allow-anonymous",
-  "version": "0.1.0",
+  "name": "debit-board",
+  "version": "2026.8.5",
   "private": true,
   "scripts": {
-    "dev": "next dev --experimental-https",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "disable-telemetry": "npx next telemetry disable",
+    "dev": "next dev --turbopack --experimental-https",
+    "build": "next build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/",
+    "start": "node start-standalone.js",
+    "lint": "npx eslint . --fix",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "npx vitest run --coverage --reporter=junit,html --outputFile=./coverage/test-report.junit.xml && open coverage/index.html"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.72.0",
     "@tailwindcss/typography": "^0.5.20",
     "azure-devops-node-api": "^15.1.2",
     "chart.js": "^4.4.0",
     "date-fns": "^4.4.0",
     "exceljs": "^3.10.0",
+    "http-proxy": "^1.18.1",
     "lucide-react": "^1.33.0",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.2",
-    "next": "^14.2.35",
+    "next": "^16.3.3",
     "next-auth": "^4.24.15",
-    "react": "^18.3.1",
+    "react": "19.2",
     "react-chartjs-2": "^5.2.0",
-    "react-dom": "^18.3.1",
+    "react-dom": "19.2",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
     "react-to-print": "^3.3.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@codecov/webpack-plugin": "^2.0.1",
@@ -40,19 +44,24 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "@typescript-eslint/eslint-plugin": "^7.16.0",
-    "@typescript-eslint/parser": "^7.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
     "@vitejs/plugin-react": "^6.1.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.4.19",
-    "eslint": "^8.57.0",
+    "eslint": "^9",
+    "eslint-config-next": "^16.3.3",
     "jsdom": "^30.0.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.3",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
   },
   "allowScripts": {
-    "fsevents@2.3.3": true
+    "fsevents@2.3.3": true,
+    "@sentry/cli@2.58.6": true,
+    "unrs-resolver@1.12.2": true
   }
 }

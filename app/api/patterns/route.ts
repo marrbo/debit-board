@@ -1,10 +1,10 @@
 // app/api/patterns/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
-import { getServerAuthSession } from '@/lib/auth';
+import { getServerAuthSession } from '@/lib/auth-server';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getServerAuthSession();
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

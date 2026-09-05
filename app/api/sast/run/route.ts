@@ -1,7 +1,6 @@
 // app/api/sast/run/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { getServerAuthSession } from '@/lib/auth';
 import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
@@ -9,9 +8,10 @@ import { SASTScan } from '@/models/SASTScan';
 import { Observation } from '@/models/Observation';
 import { executeSearch } from '@/lib/azureSearch';
 import mongoose from 'mongoose';
-import { SearchItem, SearchResponse } from '@/lib/types';
+import type { SearchItem } from '@/lib/types';
+import { getServerAuthSession } from '@/lib/auth-server';
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const session = await getServerAuthSession();
     if (!session?.user?.id) {
@@ -43,12 +43,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum pattern SAST ativo.' }, { status: 400 });
     }
 
-    // 🛡️ MUDANÇA: Buscamos TODOS os status, incluindo 'resolved', para que não seja criado um novo quando reaparecer
+    // 🛡️ Busca TODOS os status, incluindo 'resolved', para que não seja criado um novo quando reaparecer
     const existingObservations = await Observation.find({ tenantId }).lean();
 
     const observationMap = new Map<string, any>();
     existingObservations.forEach(observation => {
-      // 🛡️ MUDANÇA: Chave composta rigorosa baseada na sua regra de negócio
+      // 🛡️ Chave composta rigorosa
       const key = `${observation.project || ''}|${observation.repository || ''}|${observation.filePath}|${observation.category}`;
       observationMap.set(key, observation);
     });
@@ -110,16 +110,16 @@ export async function POST(req: NextRequest) {
         for (const item of result.results) {
           const key = `${item.project || ''}|${item.repository || ''}|${item.path}|${pattern.category}`;
           
-          // 🛡️ MUDANÇA: Se já processamos esse exato arquivo e categoria nesta mesma execução, ignoramos a duplicata intra-scan.
+          // 🛡️ Se já foi processado esse exato arquivo e categoria nesta mesma execução, ignoramos a duplicata intra-scan.
           if (foundKeys.has(key)) continue;
           foundKeys.add(key);
 
           const existingIssue = observationMap.get(key);
 
           if (existingIssue) {
-            // 🛡️ MUDANÇA: Lógica de atualização de status. Se estava resolvido, vira recurring. Se estava open, mantém open.
+            // 🛡️ Lógica de atualização de status. Se estava resolvido, vira recurring. Se estava open, mantém open.
             let nextStatus = existingIssue.status;
-            if (existingIssue.status === 'resolved' || existingIssue.status === 'expired' || existingIssue.status === 'wont_fix') {
+            if (existingIssue.status === 'resolved') {
               nextStatus = 'recurring';
             }
 

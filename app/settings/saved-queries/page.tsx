@@ -1,154 +1,225 @@
-// app/settings/saved-queries/page.tsx
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Bookmark, Trash2, Edit3, Plus, Play, X } from 'lucide-react';
-import PageHeader from '@/components/PageHeader';
-import DBQLRichInput from '@/components/dbql/DBQLRichInput';
+import { Suspense, useState, useMemo, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import {
+  Plus,
+  Pencil,
+  X,
+  TimerReset,
+  FolderLock,
+  Share2,
+  Globe,
+} from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { DataTable, type Column } from "@/components/DataTable";
+import type { ISavedQuery } from "@/types/ISavedQuery";
 
-interface SavedQueryItem {
-  _id: string;
+// ----------------------------------------------------------------------------
+// Tipos auxiliares para o formulário
+// ----------------------------------------------------------------------------
+type SavedQueryForm = {
   name: string;
   queryString: string;
-  context: string;
-  visibility: 'private' | 'shared' | 'public' | 'temporary';
-  createdAt: string;
-}
+  context: ISavedQuery["context"];
+  visibility: ISavedQuery["visibility"];
+};
 
-export default function SavedQueriesPage() {
+const emptyForm: SavedQueryForm = {
+  name: "",
+  queryString: "",
+  context: "repositories",
+  visibility: "private",
+};
+
+function SavedQueriesContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [queries, setQueries] = useState<SavedQueryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Estado do modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [queryString, setQueryString] = useState('');
-  const [context, setContext] = useState('observations');
-  const [visibility, setVisibility] = useState<SavedQueryItem['visibility']>('private');
+  const [form, setForm] = useState<SavedQueryForm>(emptyForm);
+  const [loading, setLoading] = useState(false);
 
-  const fetchQueries = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/saved-queries');
-      if (res.ok) { 
-        let data = await res.json();
-        data = data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        data = data.filter((q: any) => q.visibility !== 'temporary');
-        setQueries(data);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar consultas salvas:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetchQueries();
-    }
-  }, [status]);
-
-  if (status === 'loading') return <div className="py-10 text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando...</div>;
-  if (!session) { router.push('/login'); return null; }
-
-  const handleOpenCreate = () => {
+  // Handlers memoizados
+  const handleOpenCreate = useCallback(() => {
     setEditingId(null);
-    setName('');
-    setQueryString('');
-    setContext('observations');
-    setVisibility('private');
+    setForm(emptyForm);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  function getVisibilityLabel(visibility: string): string {
-    const map: Record<string, string> = {
-      public: 'Pública',
-      shared: 'Compartilhada',
-      private: 'Privada',
-    };
-    return map[visibility] || 'Temporária';
-  }
-
-  const handleOpenEdit = (q: SavedQueryItem) => {
-    setEditingId(q._id);
-    setName(q.name);
-    setQueryString(q.queryString);
-    setContext(q.context || 'observations');
-    setVisibility(q.visibility || 'private');
+  const handleOpenEdit = useCallback((item: ISavedQuery) => {
+    setEditingId(item._id as unknown as string);
+    setForm({
+      name: item.name,
+      queryString: item.queryString,
+      context: item.context,
+      visibility: item.visibility,
+    });
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleVisibilityChange = (value: string) => {
-    const validVisibilities: SavedQueryItem['visibility'][] = ['private', 'shared', 'public', 'temporary'];
-    if (validVisibilities.includes(value as any)) {
-        setVisibility(value as SavedQueryItem['visibility']);
-    }
- };
+  const handleDelete = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    
+    const message =
+      ids.length === 1
+        ? "Tem certeza que deseja excluir esta consulta salva?"
+        : `Tem certeza que deseja excluir ${ids.length} consultas salvas?`;
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !queryString) return;
+    if (!confirm(message)) return;
 
     try {
-        console.log('Payload enviado:', { 
-        name, queryString, context, visibility, tenantId: session.user.tenantId 
-        });
-
-      const url = '/api/saved-queries';
-      const method = editingId ? 'PUT' : 'POST';
-      const body = editingId 
-        ? { id: editingId, tenantId: session.user.tenantId, name, queryString, context, visibility } 
-        : { name, tenantId: session.user.tenantId, queryString, context, visibility };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+      const res = await fetch(`/api/saved-query?ids=${ids.join(',')}`, {
+        method: "DELETE",
       });
 
       if (res.ok) {
-        setIsModalOpen(false);
-        await fetchQueries();
+        alert(
+          ids.length === 1
+            ? "Consulta excluída com sucesso!"
+            : `${ids.length} consultas excluídas com sucesso!`
+        );
+        // ✅ Incrementa refreshKey para forçar o DataTable a recarregar
+        setRefreshKey((prev) => prev + 1);
       } else {
         const err = await res.json();
-        alert('Erro ao salvar: ' + (err.error || 'Erro desconhecido'));
+        alert("Erro ao excluir: " + (err.error || "Erro desconhecido"));
       }
-    } catch (err) {
-      alert('Erro de rede.');
+    } catch {
+      alert("Erro de rede ao excluir.");
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta consulta salva?')) return;
-    try {
-      const res = await fetch(`/api/saved-queries?id=${id}`, { method: 'DELETE' });
-      if (res.ok) await fetchQueries();
-    } catch (err) {
-      alert('Erro ao deletar.');
-    }
-  };
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+        const url = editingId ? `/api/saved-query` : `/api/saved-query`;
+        const method = editingId ? "PUT" : "POST";
+        const body = editingId ? { id: editingId, ...form } : form;
 
-  const handleRunQuery = (q: SavedQueryItem) => {
-    let targetPath = '/observations';
-    if (q.context === 'projects') targetPath = '/settings/projects';
-    else if (q.context === 'repositories') targetPath = '/settings/repositories';
-    else if (q.context === 'stats') targetPath = '/settings/stats';
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
 
-    router.push(`${targetPath}?q=${q._id}&m=a`);
-  };
+        if (res.ok) {
+          alert(editingId ? "Consulta atualizada!" : "Consulta criada!");
+          setIsModalOpen(false);
+          // ✅ Incrementa refreshKey para recarregar a tabela
+          setRefreshKey((prev) => prev + 1);
+        } else {
+          const err = await res.json();
+          alert("Erro: " + (err.error || "Erro desconhecido"));
+        }
+      } catch (error) {
+        alert("Erro de rede ao salvar.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [editingId, form],
+  );
+
+  // Colunas geradas dentro do componente (acesso aos handlers)
+  const columns = useMemo<Column<ISavedQuery>[]>(
+    () => [
+      { key: "name", label: "Nome", sortable: true },
+      {
+        key: "queryString",
+        label: "Query",
+        sortable: false,
+        render: (item: ISavedQuery) => (
+          <span className="block max-w-[300px] truncate text-xs font-mono">
+            {item.queryString}
+          </span>
+        ),
+      },
+      {
+        key: "context",
+        label: "Contexto",
+        sortable: true,
+        align: "center",
+        width: "120px",
+        render: (item: ISavedQuery) => (
+          <span className="px-2 py-1 rounded-full bg-apple-tertiary-light/10 text-xs font-medium font-mono">
+            {item.context}
+          </span>
+        ),
+      },
+      {
+        key: "visibility",
+        label: "Visibilidade",
+        width: "100px",
+        sortable: true,
+        align: "center",
+        render: (item: ISavedQuery) => (
+          <div className="flex justify-center items-center">
+            {item.visibility === "temporary" ? (
+              <TimerReset size={20} className="text-apple-tertiary-light" />
+            ) : item.visibility === "private" ? (
+              <FolderLock size={20} className="text-apple-tertiary-light" />
+            ) : item.visibility === "public" ? (
+              <Globe size={20} className="text-apple-tertiary-light" />
+            ) : (
+              <Share2 size={20} className="text-apple-tertiary-light" />
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "createdAt",
+        label: "Criado em",
+        sortable: true,
+        width: "120px",
+        className:
+          "text-sm text-center text-apple-label-light dark:text-apple-label-dark",
+        render: (item: ISavedQuery) =>
+          new Date(item.createdAt).toLocaleDateString(),
+      },
+      {
+        key: "actions",
+        label: "Ações",
+        sortable: false,
+        width: "80px",
+        render: (item: ISavedQuery) => (
+          <div className="flex justify-center">
+            <button
+              onClick={() => handleOpenEdit(item)}
+              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-apple-blue"
+              title="Editar"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [handleOpenEdit],
+  );
+
+  if (status === "loading")
+    return <div className="py-10 text-center">Carregando...</div>;
+
+  if (!session) {
+    router.push("/login");
+    return null;
+  }
 
   return (
     <div className="w-full space-y-4">
       <PageHeader
         title="Consultas Salvas"
-        subtitle="Gerencie seus filtros e consultas DBQL favoritos para acesso rápido em todo o sistema."
+        subtitle="Gerencie suas consultas DBQL reutilizáveis."
         actions={
-          <button 
+          <button
             onClick={handleOpenCreate}
             className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
           >
@@ -157,160 +228,154 @@ export default function SavedQueriesPage() {
         }
       />
 
-      {loading ? (
-        <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">Carregando...</div>
-      ) : queries.length === 0 ? (
-        <div className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark shadow-sm">
-          Nenhuma consulta salva encontrada. Crie uma nova consulta ou salve direto pela barra de pesquisa avançada.
-        </div>
-      ) : (
-        <div className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden shadow-sm">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-apple-tertiary-light dark:text-apple-tertiary-dark border-b border-apple-border-light dark:border-apple-border-dark">
-              <tr>
-                <th className="p-4 font-medium">Nome</th>
-                <th className="p-4 font-medium">Contexto</th>
-                <th className="p-4 font-medium">Visibilidade</th>
-                <th className="p-4 font-medium">Query DBQL</th>
-                <th className="p-4 text-right font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
-              {queries.map(q => (
-                <tr key={q._id} className="bg-apple-card-light dark:bg-apple-card-dark hover:bg-apple-bg-light dark:hover:bg-apple-card-dark/80 transition-colors">
-                  <td className="p-4 font-medium text-apple-label-light dark:text-apple-label-dark flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-apple-blue/10 flex items-center justify-center text-apple-blue">
-                      <Bookmark className="w-4 h-4" />
-                    </div>
-                    {q.name}
-                  </td>
-                  <td className="p-4 text-apple-secondary-light dark:text-apple-secondary-dark uppercase text-xs font-light">
-                    <span className="bg-apple-hover dark:bg-[#2C2C2E] px-1 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark">
-                      {q.context}
-                    </span>
-                  </td>
-                  <td className="p-4 text-apple-secondary-light dark:text-apple-secondary-dark text-xs">
-                    {getVisibilityLabel(q.visibility)}
-                  </td>
-                  <td className="p-4 font-mono text-xs text-apple-secondary-light/45 italic monospace dark:text-apple-secondary-dark max-w-md truncate">
-                    {q.queryString}
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button 
-                      onClick={() => handleRunQuery(q)}
-                      title="Executar Consulta"
-                      className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      <span className="hidden focus:inline">Executar</span>
-                    </button>
-                    <button 
-                      onClick={() => handleOpenEdit(q)}
-                      title="Editar"
-                      className="inline-flex items-center gap-1.5 border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span className="hidden focus:inline">Editar</span>
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(q._id)}
-                      title="Excluir"
-                      className="inline-flex items-center gap-1.5 border border-apple-red text-apple-red px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-red/30"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span className="hidden focus:inline">Excluir</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        endpoint="/api/saved-query"
+        columns={columns}
+        defaultSort={{ field: "createdAt", order: "desc" }}
+        defaultLimit={10}
+        searchPlaceholder="Buscar consultas (ex: name:minha-query OR context:repositories)"
+        searchContext="none"
+        userId={session.user.id}
+        refreshKey={refreshKey}
+        selectable={true}
+        canDelete={session.user.email === 'ayslanjohnson@debitboard.com'}
+        onDelete={(ids) => handleDelete(ids)}
+        // actions={[
+        //   {
+        //     label: 'Atribuir',
+        //     icon: <UserPlus className="w-4 h-4" />,
+        //     onClick: (ids, items) => handleAssign(ids, items),
+        //     requiresSelection: true,
+        //   },
+        //   {
+        //     label: 'Mudar Status',
+        //     icon: <RefreshCw className="w-4 h-4" />,
+        //     onClick: (ids, items) => handleStatusChange(ids, items),
+        //   },
+        // ]}
+      />
 
-      {/* Modal Criar / Editar Consulta */}
+      {/* Modal de Criação/Edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleSave} className="bg-white dark:bg-apple-card-dark rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4 border border-apple-border-light dark:border-apple-border-dark">
-            <div className="flex justify-between items-center border-b border-apple-border-light dark:border-apple-border-dark pb-3">
-              <h3 className="text-lg font-bold text-apple-label-light dark:text-apple-label-dark">
-                {editingId ? 'Editar Consulta Salva' : 'Nova Consulta Salva'}
-              </h3>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="text-apple-tertiary-light hover:text-apple-label-light">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-apple-card-dark rounded-2xl p-6 w-full max-w-lg shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">
+                {editingId ? "Editar Consulta" : "Nova Consulta"}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-apple-tertiary-light/10"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Nome</label>
-              <input 
-                type="text" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                placeholder="Ex: Minha Busca Crítica" 
-                required 
-                className="w-full"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Contexto</label>
-                <select 
-                  value={context} 
-                  onChange={(e) => setContext(e.target.value)} 
-                  className="w-full"
-                >
-                  <option value="observations">Observations</option>
-                  <option value="projects">Projetos</option>
-                  <option value="repositories">Repositórios</option>
-                  <option value="stats">Estatísticas</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Visibilidade</label>
-                <select 
-                  value={visibility} 
-                  onChange={(e) => handleVisibilityChange(e.target.value)} 
-                  className="w-full"
-                >
-                  <option value="private">Privada (Apenas você)</option>
-                  <option value="shared">Compartilhada (Equipe)</option>
-                  <option value="public">Pública</option>
-                  <option value="temporary">Temporária</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-                <label className="block text-xs font-medium text-apple-tertiary-light mb-1">Query DBQL</label>
-                <DBQLRichInput
-                    value={queryString}
-                    onChange={setQueryString}
-                    placeholder='Ex: category:"Broken Access Control" AND severity:critical'
-                    rows={3}
+                <label className="block text-sm font-medium mb-1">Nome</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-apple-blue"
+                  required
                 />
-            </div>
+              </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-apple-border-light dark:border-apple-border-dark">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-apple-hover dark:bg-apple-border-dark text-apple-label-light dark:text-apple-label-dark"
-              >
-                Cancelar
-              </button>
-              <button 
-                type="submit" 
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-apple-blue text-white"
-              >
-                Salvar
-              </button>
-            </div>
-          </form>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Query String
+                </label>
+                <textarea
+                  value={form.queryString}
+                  onChange={(e) =>
+                    setForm({ ...form, queryString: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-apple-blue"
+                  rows={4}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Contexto
+                  </label>
+                  <select
+                    value={form.context}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        context: e.target.value as ISavedQuery["context"],
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="observations">Observations</option>
+                    <option value="projects">Projects</option>
+                    <option value="repositories">Repositories</option>
+                    <option value="stats">Stats</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Visibilidade
+                  </label>
+                  <select
+                    value={form.visibility}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        visibility: e.target.value as ISavedQuery["visibility"],
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="private">Private</option>
+                    <option value="shared">Shared</option>
+                    <option value="public">Public</option>
+                    <option value="temporary">Temporary</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-apple-tertiary-light/10 hover:bg-gray-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 text-sm rounded-lg bg-apple-blue text-white hover:bg-apple-blue/80 disabled:opacity-50"
+                >
+                  {loading ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function SavedQueriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
+          Carregando página de consultas salvas...
+        </div>
+      }
+    >
+      <SavedQueriesContent />
+    </Suspense>
   );
 }

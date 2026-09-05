@@ -5,6 +5,9 @@
 /.pnp
 .pnp.js
 
+#dump
+/dumps
+
 # testing
 /coverage
 
@@ -36,3 +39,5 @@ yarn-error.log*
 next-env.d.ts
 
 certificates
+# Sentry Config File
+.env.sentry-build-plugin

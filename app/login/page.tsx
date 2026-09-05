@@ -21,14 +21,14 @@ function LoginErrorHandler() {
 }
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
+  const { status: sessionStatus } = useSession(); // 🔥 Agora status está definido
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (sessionStatus === 'authenticated') {
       router.push('/');
     }
-  }, [status, router]);
+  }, [sessionStatus, router]);
 
   const handleSSOLogin = () => {
     signIn('keycloak', { callbackUrl: '/stats' });

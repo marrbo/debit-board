@@ -1,7 +1,7 @@
 // lib/azureSearch.ts
 import https from 'node:https';
 import { URL } from 'node:url';
-import { Settings, SearchItem } from './types';
+import type { Settings, SearchItem } from './types';
 import { connectToDatabase } from './mongodb';
 import { Team } from '@/models/Team';
 import { Project } from '@/models/Project';

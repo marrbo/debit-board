@@ -1,6 +1,6 @@
 // app/observations/components.tsx
+import type { IObservation } from '@/types/IObservation';
 import React from 'react';
-import { IObservation } from '@/models/Observation';
 
 /**
  * Renderiza o Avatar do usuário de forma padronizada.
@@ -19,8 +19,8 @@ export function UserAvatar({ name, sub, className = "" }: { name?: string; sub?:
 /**
  * Componente do Relatório PDF com agrupamentos e timbrado executivo.
  */
-export const ObservationsReport = ({ observations, usersMap }: { observations: IObservation[]; usersMap: Record<string, string> }) => {
-  if (!observations.length) return null;
+export const ObservationsReport = ({ observations, usersMap }: { observations?: IObservation[]; usersMap: Record<string, string> }) => {
+  if (!observations || observations.length === 0) return null;
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -33,8 +33,8 @@ export const ObservationsReport = ({ observations, usersMap }: { observations: I
     return a.fileName.localeCompare(b.fileName);
   });
 
-  const groupBy = (arr: IObservation[], key: keyof IObservation) => {
-    return arr.reduce((acc, item) => {
+  const groupBy = (arr: IObservation[] | undefined, key: keyof IObservation) => {
+    return (arr || []).reduce((acc, item) => {
       const groupKey = String(item[key] || 'Sem ' + key);
       if (!acc[groupKey]) acc[groupKey] = [];
       acc[groupKey].push(item);
@@ -184,7 +184,7 @@ export const ObservationsReport = ({ observations, usersMap }: { observations: I
                                       </span>
                                     </td>
                                   </tr>
-                                  {items.map((issue) => (
+                                  {items?.map((issue) => (
                                     <tr key={issue._id.toString()} className="border-b border-gray-100 hover:bg-gray-50 row-item">
                                       <td className="border border-gray-200 p-2 pl-20 align-top">
                                         <div className="font-bold text-[11px]">{issue.fileName}</div>

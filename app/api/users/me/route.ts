@@ -1,10 +1,10 @@
 // app/api/users/me/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/models/User';
-import { getServerAuthSession } from '@/lib/auth';
+import { getServerAuthSession } from '@/lib/auth-server';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getServerAuthSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
