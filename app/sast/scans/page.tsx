@@ -51,7 +51,7 @@ export default function SASTScansPage() {
         title="Histórico de Scans SAST"
         subtitle="Acompanhe o status e os resultados das execuções do SAST Scanner."
         actions={
-          <button onClick={() => fetchScans()} className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-gray-900 dark:text-white px-3 py-1.5 rounded text-sm font-medium">
+          <button onClick={() => fetchScans()} className="flex items-center gap-2 bg-apple-blue hover:bg-slate-600 text-white  px-3 py-1.5 rounded text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Atualizar
           </button>
         }
@@ -77,8 +77,7 @@ export default function SASTScansPage() {
               {scans.map((s) => (
                 <tr key={s._id} className="hover:bg-slate-700/30 transition-colors">
                   <td className="p-4 font-mono text-slate-300 text-xs">
-                    {/* {format(new Date(s?.createdAt) || Date.now, 'dd/MM/yyyy HH:mm', { locale: ptBR })} */}
-                    { s?.createdAt }
+                    {s?.createdAt}
                   </td>
                   <td className="p-4 flex items-center gap-2">
                     {s.status === 'completed' && <CheckCircle className="w-4 h-4 text-emerald-400" />}

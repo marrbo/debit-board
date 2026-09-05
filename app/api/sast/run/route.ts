@@ -11,6 +11,31 @@ import mongoose from 'mongoose';
 import type { SearchItem } from '@/lib/types';
 import { getServerAuthSession } from '@/lib/auth-server';
 
+// Padrões de exclusão (caminhos/arquivos que devem ser ignorados)
+const EXCLUDED_DIRS = [
+  'node_modules', 'bin', 'obj', 'dist', 'build', '.git', '__pycache__',
+  'venv', 'vendor', '.next', '.nuxt', 'coverage', '.gradle', '.idea',
+  '.vscode', 'target', 'tmp', 'temp', 'logs', 'log', 'packages', 'files',
+  'uploads'
+];
+
+const EXCLUDED_FILE_EXTENSIONS = [
+  '.min.js', '.min.css', '.map', '.lock', '.bundle.js', '.bundle.min.js'
+];
+
+function isExcludedPath(filePath: string): boolean {
+  if (!filePath) return false;
+  const normalized = filePath.replace(/\\/g, '/').toLowerCase();
+  
+  const parts = normalized.split('/');
+  if (parts.some(part => EXCLUDED_DIRS.includes(part))) return true;
+  
+  const lowerPath = normalized.toLowerCase();
+  if (EXCLUDED_FILE_EXTENSIONS.some(ext => lowerPath.endsWith(ext))) return true;
+  
+  return false;
+}
+
 export async function POST() {
   try {
     const session = await getServerAuthSession();
@@ -43,19 +68,14 @@ export async function POST() {
       return NextResponse.json({ error: 'Nenhum pattern SAST ativo.' }, { status: 400 });
     }
 
-    // 🛡️ Busca TODOS os status, incluindo 'resolved', para que não seja criado um novo quando reaparecer
     const existingObservations = await Observation.find({ tenantId }).lean();
-
     const observationMap = new Map<string, any>();
     existingObservations.forEach(observation => {
-      // 🛡️ Chave composta rigorosa
       const key = `${observation.project || ''}|${observation.repository || ''}|${observation.filePath}|${observation.category}`;
       observationMap.set(key, observation);
     });
 
-    // 🔍 Rastreia todas as chaves encontradas no scan atual
     const foundKeys = new Set<string>();
-
     const patternResults = [];
     let totalOccurrences = 0;
     let failedPatterns = 0;
@@ -91,8 +111,9 @@ export async function POST() {
           continue;
         }
 
+        // 🔥 Aplicar exclusões antes de qualquer processamento
         result.results = result.results.filter(
-          (item: SearchItem) => ['main', 'master'].includes(item.branch)
+          (item: SearchItem) => ['main', 'master'].includes(item.branch) && !isExcludedPath(item.path)
         );
 
         patternResults.push({
@@ -102,22 +123,20 @@ export async function POST() {
           severity: pattern.severity,
           slaHours: pattern.slaHours,
           results: result.results,
-          hitCount: result.hitCount,
+          hitCount: result.results.length,
         });
         
-        totalOccurrences += result.hitCount;
+        totalOccurrences += result.results.length;
 
         for (const item of result.results) {
           const key = `${item.project || ''}|${item.repository || ''}|${item.path}|${pattern.category}`;
           
-          // 🛡️ Se já foi processado esse exato arquivo e categoria nesta mesma execução, ignoramos a duplicata intra-scan.
           if (foundKeys.has(key)) continue;
           foundKeys.add(key);
 
           const existingIssue = observationMap.get(key);
 
           if (existingIssue) {
-            // 🛡️ Lógica de atualização de status. Se estava resolvido, vira recurring. Se estava open, mantém open.
             let nextStatus = existingIssue.status;
             if (existingIssue.status === 'resolved') {
               nextStatus = 'recurring';
@@ -131,7 +150,7 @@ export async function POST() {
                     status: nextStatus,
                     lastSeen: new Date(),
                     hitCount: item.hitCount || 0,
-                    patternId: pattern._id.toString(), // Atualiza caso tenha mudado o pattern da categoria
+                    patternId: pattern._id.toString(),
                     hits: item.hits,
                     scanId: newScan._id,
                     project: item.project || '',
@@ -167,7 +186,6 @@ export async function POST() {
               lineNumber: 0,
             });
             
-            // Adiciona no mapa para que um próximo pattern concorrente na mesma run não duplique
             observationMap.set(key, { _id: 'temp', status: 'open' });
           }
         }
@@ -187,22 +205,31 @@ export async function POST() {
       }
     }
 
-    // 🚀 Marca como resolved as observations que existiam anteriormente mas sumiram no scan atual
+    // 🚀 Marca como resolved/exclusion as observations que existiam anteriormente mas sumiram no scan atual
     const resolvedUpdates: any[] = [];
     observationMap.forEach((issue, key) => {
-      // 🛡️ MUDANÇA: Só envia atualização se não foi encontrado AGORA e se já não estiver com status resolved
-      if (!foundKeys.has(key) && issue.status !== 'resolved' && issue._id !== 'temp') {
-        resolvedUpdates.push({
-          updateOne: {
-            filter: { _id: issue._id },
-            update: {
-              $set: {
-                status: 'resolved',
-                lastSeen: new Date(),
+      if (!foundKeys.has(key) && issue._id !== 'temp') {
+        let nextStatus = 'resolved';
+        // Se o arquivo estiver em caminho excluído, marca como 'exclusion'
+        if (isExcludedPath(issue.filePath) && issue.status !== 'exclusion') {
+          nextStatus = 'exclusion';
+        } else if (issue.status !== 'resolved') {
+          nextStatus = 'resolved';
+        }
+
+        if (issue.status !== nextStatus) {
+          resolvedUpdates.push({
+            updateOne: {
+              filter: { _id: issue._id },
+              update: {
+                $set: {
+                  status: nextStatus,
+                  lastSeen: new Date(),
+                }
               }
             }
-          }
-        });
+          });
+        }
       }
     });
 
