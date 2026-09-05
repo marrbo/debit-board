@@ -119,7 +119,7 @@ export default function SASTPage() {
       if (!res.ok) {
         let errorMsg = "Erro ao executar Advanced Code Scanner";
         try {
-          const errorData = await res.json();
+          const errorData = await res?.json();
           errorMsg = errorData.error || errorMsg;
         } catch {
           errorMsg = `Erro ${res.status}: ${res.statusText}`;

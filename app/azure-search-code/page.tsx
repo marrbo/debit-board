@@ -75,7 +75,7 @@ export default function AzureSearchCodePage() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
+        const errorData = await res?.json();
         throw new Error(errorData.error || 'Erro ao buscar dados');
       }
 

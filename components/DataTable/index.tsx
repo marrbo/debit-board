@@ -44,12 +44,12 @@ export interface DataTableProps<T> {
   defaultLimit?: number;
   searchPlaceholder?: string;
   searchContext?: string;
+  searchVisible?: boolean;
   userId: string;
   projectId?: string;
   teamId?: string;
   refreshKey?: number;
   onRowClick?: (item: T) => void;
-  // Novos props
   selectable?: boolean;               // exibir coluna de checkboxes (default true)
   actions?: DataTableAction<T>[];     // ações customizadas
   canDelete?: boolean;                // permitir exclusão (default true)
@@ -74,6 +74,7 @@ export function DataTable<T extends { _id: string }>({
   defaultLimit = 10,
   searchPlaceholder = 'Buscar...',
   searchContext = 'none',
+  searchVisible,
   userId,
   projectId,
   teamId,
@@ -167,7 +168,7 @@ export function DataTable<T extends { _id: string }>({
   // ============================================================
   useEffect(() => {
     let cancelled = false;
-
+    
     const loadData = async () => {
       setLoading(true);
       try {
@@ -357,7 +358,7 @@ export function DataTable<T extends { _id: string }>({
     return (
       <div className="space-y-4">
         {searchContext !== 'none' ? (
-          <DBQLAdvancedSearch onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
+          <DBQLAdvancedSearch searchVisible={searchVisible} onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
         ) : (
           <SimpleColumnSearch columns={columns} onSearch={handleSimpleSearch} placeholder={searchPlaceholder} />
         )}
@@ -424,6 +425,7 @@ export function DataTable<T extends { _id: string }>({
       {searchContext !== 'none' ? (
         <DBQLAdvancedSearch
           onSearch={handleDbqlSearch}
+          searchVisible={searchVisible}
           userId={userId}
           placeholder={searchPlaceholder}
           context={searchContext}

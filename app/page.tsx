@@ -3,18 +3,11 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, ChartAreaIcon } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import type { Column } from '@/components/DataTable';
 import TeamStatsCard from "@/components/TeamStatsCard";
-
-// const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-//   open: { label: "Novo", bg: "bg-blue-100", color: "text-blue-600" },
-//   resolved: { label: "Corrigido", bg: "bg-green-100", color: "text-green-600" },
-//   recurring: { label: "Recorrente", bg: "bg-red-100", color: "text-red-600" },
-//   wont_fix: { label: "Não Corrigir", bg: "bg-gray-100", color: "text-gray-600" },
-// };
 
 // Coluna do Grid (agora recebendo dados da rota /api/dashboard/stats)
 const columns: Column<any>[] = [
@@ -31,22 +24,22 @@ const columns: Column<any>[] = [
       return (
         <div className="flex flex-col gap-1">
           <div className="grid grid-cols-4 gap-2 hover:scale-150">
-            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 border border-red-600/50 text-xs font-bold">
               {sev.critical || 0}
-              <span className="text-[7px] text-xs text-red-600/50 align-center uppercase">critical</span>
+              <span className="text-[7px] text-red-600/50 align-center uppercase">critical</span>
             </div>
             
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 border border-orange-600/50 text-xs font-bold">
               {sev.high || 0}
-              <span className="text-[7px] text-xs text-orange-600/50 uppercase">high</span>
+              <span className="text-[7px] text-orange-600/50 uppercase">high</span>
             </div>
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 border border-yellow-600/50 text-xs font-bold">
               {sev.medium || 0}
-              <span className="text-[7px] text-xs text-yellow-600/50 uppercase">medium</span>
+              <span className="text-[7px] text-yellow-600/50 uppercase">medium</span>
             </div>
-            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 text-green-600 text-xs font-bold">
+            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 border border-green-600/50 text-green-600 text-xs font-bold">
               {sev.low || 0}
-              <span className="text-[7px] text-xs text-green-600/50 uppercase">low</span>
+              <span className="text-[7px] text-green-600/50 uppercase">low</span>
             </div>
           </div>
         </div>
@@ -77,6 +70,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
 
   const [teamId, setTeamId] = useState(searchParams.get('teamId') || '');
+  const [teamName, setTeamName] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
   const [effectiveTeamId, setEffectiveTeamId] = useState('');
   const [searchTerm, setSearchTerm] = useState(''); // ID da query DBQL
@@ -153,10 +147,12 @@ function DashboardContent() {
     return null;
   }
 
+
   return (
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Dashboard"
+        icon={<ChartAreaIcon className="w-10 h-10 text-apple-blue" />}
         subtitle="Visão geral do time selecionado."
         actions={
           <div className="relative" ref={dropdownRef}>
@@ -178,6 +174,7 @@ function DashboardContent() {
                     onClick={() => {
                       const newTeamId = team.isGlobal ? 'all' : team._id;
                       setTeamId(team._id);
+                      setTeamName(team.name);
                       setEffectiveTeamId(newTeamId);
                       setDropdownOpen(false);
                     }}
@@ -215,12 +212,15 @@ function DashboardContent() {
               title="Categoria"
               total={stats.teamStats.total}
               category={stats.teamStats.categoryTotals}
+              categoryGroup={stats.teamStats.categoryGroupTotals}
             />
           </div>
 
           {/* Projects Table (usando a rota /api/dashboard e projectStats para extraData) */}
           <div className="pt-4 border-t border-apple-border-light dark:border-apple-border-dark">
-            <h3 className="text-lg font-semibold mb-4">Projetos do Time</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              Projetos {teamName === 'Global' ? '' : teamName }
+            </h3>
             <DataTable
               endpoint="/api/dashboard"
               columns={columns}
@@ -228,6 +228,7 @@ function DashboardContent() {
               defaultLimit={10}
               searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
               searchContext="projects"
+              searchVisible={false}
               userId={session?.user?._id?.toString()}
               teamId={effectiveTeamId}
               extraData={stats.projectStats} // 🔥 Usa o map de stats dedicado

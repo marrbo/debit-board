@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       overrideSearchQuery: finalSearchQuery,
       projection: {
         _id: 1, fileName: 1, filePath: 1, category: 1,
+        patternId: 1,
         branch: 1, severity: 1, status: 1, slaDueAt: 1,
         assignedTo: 1, hitCount: 1, project: 1, repository: 1,
       },

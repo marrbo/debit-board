@@ -57,7 +57,7 @@ export default function ProfilePage() {
     if (res.ok) {
       alert('Perfil atualizado com sucesso!');
     } else {
-      const errorData = await res.json();
+      const errorData = await res?.json();
       alert('Erro ao salvar perfil: ' + (errorData.error || 'Erro desconhecido'));
     }
     setSaving(false);

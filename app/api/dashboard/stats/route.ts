@@ -79,13 +79,34 @@ export async function GET(req: NextRequest) {
         total: 1,
         statusTotals: { $arrayToObject: { $map: { input: { $setUnion: "$statuses" }, as: "st", in: { k: "$$st", v: { $size: { $filter: { input: "$statuses", as: "sta", cond: { $eq: ["$$sta", "$$st"] } } } } } } } },
         severityTotals: { $arrayToObject: { $map: { input: { $setUnion: "$severities" }, as: "sev", in: { k: "$$sev", v: { $size: { $filter: { input: "$severities", as: "s", cond: { $eq: ["$$s", "$$sev"] } } } } } } } },
+        // 🔹 categoryTotals = contagem simples (observations por categoria)
         categoryTotals: { $arrayToObject: { $map: { input: { $setUnion: "$categories" }, as: "cat", in: { k: "$$cat", v: { $size: { $filter: { input: "$categories", as: "c", cond: { $eq: ["$$c", "$$cat"] } } } } } } } }
       }
     }
   ];
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
+
+  // 4.1 - Nova agregação para contar patternId distintos por categoria (Grouped)
+  const categoryPipeline = [
+    { $match: obsMatch },
+    { $group: { _id: { category: "$category", patternId: "$patternId" } } },
+    { $group: { _id: "$_id.category", count: { $sum: 1 } } },
+    { $project: { _id: 0, category: "$_id", count: 1 } }
+  ];
+
+  const categoryStatsResult = await Observation.aggregate(categoryPipeline);
+  const categoryGroupTotals: Record<string, number> = {};
+  categoryStatsResult.forEach((item: any) => {
+    categoryGroupTotals[item.category] = item.count;
+  });
+
+  // Base do teamStats (inclui categoryTotals original)
   const teamStats = teamStatsResult[0] || { total: 0, statusTotals: {}, severityTotals: {}, categoryTotals: {} };
+  
+  // 🔹 Adiciona ambos os mapas
+  teamStats.categoryTotals = teamStats.categoryTotals || {};   // SINGLE
+  teamStats.categoryGroupTotals = categoryGroupTotals;         // GROUPED
 
   // 5. Stats por Projeto (Grid)
   const projectPipeline: any[] = [
