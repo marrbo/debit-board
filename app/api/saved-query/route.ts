@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // buscar query temporaria do usuario
-    const tempQuery = await SavedQuery.findOne({ userId: body.userId, visibility: 'temporary' })
+    const tempQuery = await SavedQuery.findOne({ userId: { $eq: body.userId }, visibility: 'temporary' })
 
     if (tempQuery) {
       tempQuery.queryString = body.queryString;
