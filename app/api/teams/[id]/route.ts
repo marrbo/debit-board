@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json();
   const { name, description, projectIds } = body;
 
-  const team = await Team.findOne({ _id: id, tenantId });
+  const team = await Team.findOne({ _id: { $eq: id }, tenantId: { $eq: tenantId } });
   if (!team) return NextResponse.json({ error: 'Team não encontrado' }, { status: 404 });
 
   // Remove teamId dos projetos antigos
