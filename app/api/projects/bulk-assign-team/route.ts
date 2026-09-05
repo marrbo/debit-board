@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // 🔥 Atualiza os projetos para apontar para o novo time
   await Project.updateMany(
-    { _id: { $in: projectIds }, tenantId },
+    { _id: { $in: projectIds }, tenantId: { $eq: tenantId } },
     { $set: { teamId: targetTeamId } }
   );
 
