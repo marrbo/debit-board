@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   await connectToDatabase();
 
-  const tenant = await Tenant.findOne({ _id: tenantId }).lean();
+  const tenant = await Tenant.findOne({ _id: { $eq: tenantId } }).lean();
   if (!tenant || !tenant.azureSettings || !tenant.azureSettings.instanceUrl || !tenant.azureSettings.pat) {
     return NextResponse.json(
       { error: 'Configurações do Azure DevOps não encontradas para este Tenant.' },
