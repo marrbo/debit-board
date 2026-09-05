@@ -103,8 +103,8 @@ export async function PUT(req: NextRequest) {
 
     if (!id) return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
 
-    const updatedQuery = await SavedQuery.findByIdAndUpdate(
-      id,
+    const updatedQuery = await SavedQuery.findOneAndUpdate(
+      { _id: { $eq: id } },
       { $set: updateData },
       { new: true }
     );
