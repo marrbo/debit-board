@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // buscar query temporaria do usuario
-    const tempQuery = await SavedQuery.findOne({ userId: body.userId, visibility: 'temporary' })
+    const tempQuery = await SavedQuery.findOne({ userId: { $eq: body.userId }, visibility: 'temporary' })
 
     if (tempQuery) {
       tempQuery.queryString = body.queryString;
@@ -103,8 +103,8 @@ export async function PUT(req: NextRequest) {
 
     if (!id) return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
 
-    const updatedQuery = await SavedQuery.findByIdAndUpdate(
-      id,
+    const updatedQuery = await SavedQuery.findOneAndUpdate(
+      { _id: { $eq: id } },
       { $set: updateData },
       { new: true }
     );

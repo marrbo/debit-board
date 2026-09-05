@@ -96,7 +96,7 @@ export const authOptions: NextAuthOptions = {
         // Se não encontrou por tenantId, busca por email
         if (!tenant) {
           tenant = await Tenant.findOne({
-            $or: [{ adminEmail: user.email }, { users: user.email }],
+            $or: [{ adminEmail: { $eq: user.email } }, { users: { $eq: user.email } }],
           }).lean();
         }
 

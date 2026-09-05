@@ -36,13 +36,13 @@ export async function POST(req: NextRequest) {
 
   // 🔥 Atualiza os projetos para apontar para o novo time
   await Project.updateMany(
-    { _id: { $in: projectIds }, tenantId },
+    { _id: { $in: projectIds }, tenantId: { $eq: tenantId } },
     { $set: { teamId: targetTeamId } }
   );
 
   // 🔥 Atualiza a lista de projectIds do time
   await Team.updateOne(
-    { _id: targetTeamId, tenantId },
+    { _id: { $eq: targetTeamId }, tenantId: { $eq: tenantId } },
     { $addToSet: { projectIds: { $each: projectIds } } }
   );
 

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   await connectToDatabase();
 
-  const tenant = await Tenant.findOne({ _id: tenantId }).lean();
+  const tenant = await Tenant.findOne({ _id: { $eq: tenantId } }).lean();
   if (!tenant || !tenant.azureSettings || !tenant.azureSettings.instanceUrl || !tenant.azureSettings.pat) {
     return NextResponse.json(
       { error: 'Configurações do Azure DevOps não encontradas para este Tenant.' },
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
       // 1. Upsert Project
       const savedProject = await Project.findOneAndUpdate(
-        { tenantId, azureProjectId },
+        { tenantId: { $eq: tenantId }, azureProjectId: { $eq: azureProjectId } },
         {
           name: projectName,
           azureProjectId,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       for (const azureRepo of repos) {
         // 2.1 Upsert Repository
         await Repository.findOneAndUpdate(
-          { tenantId, azureRepoId: azureRepo.id! },
+          { tenantId: { $eq: tenantId }, azureRepoId: azureRepo.id! },
           {
             name: azureRepo.name!,
             projectId: savedProject._id.toString(),
