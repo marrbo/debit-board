@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Remove teamId dos projetos antigos
   await Project.updateMany(
-    { teamId: team._id, tenantId },
+    { teamId: team._id, tenantId: { $eq: tenantId } },
     { $unset: { teamId: 1 } }
   );
 
