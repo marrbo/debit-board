@@ -1,13 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Check, ChartAreaIcon } from "lucide-react";
+import { ChevronDown, Check, ChartAreaIcon, Download } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import type { Column } from '@/components/DataTable';
 import TeamStatsCard from "@/components/TeamStatsCard";
+import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
 
 // Coluna do Grid (agora recebendo dados da rota /api/dashboard/stats)
 const columns: Column<any>[] = [
@@ -84,6 +85,9 @@ function DashboardContent() {
     projectStats: {}
   });
 
+  // 🔥 Dados dos projetos para exportar PDF
+  const [projects, setProjects] = useState<any[]>([]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -141,12 +145,54 @@ function DashboardContent() {
       .catch(console.error);
   }, [effectiveTeamId, searchTerm]);
 
+  // 🔥 Busca dados da tabela de projetos (para o PDF)
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+
+    const params = new URLSearchParams({
+      teamId: effectiveTeamId,
+      page: "1",
+      limit: "100",
+      sort: "name",
+      order: "asc",
+    });
+    if (searchTerm) params.set('q', searchTerm);
+
+    fetch(`/api/dashboard?${params.toString()}`)
+      .then(res => res.json())
+      .then(json => {
+        setProjects(json.data || []);
+      })
+      .catch(console.error);
+  }, [effectiveTeamId, searchTerm]);
+
+  // 🔥 Função de exportação PDF
+  const handleExportPDF = useCallback(async () => {
+    const projectsForPDF = projects.map((p: any) => {
+      const projectStat = stats.projectStats?.[p.name] || {};
+      return {
+        name: p.name,
+        description: p.description,
+        lastScan: p.syncDate ? new Date(p.syncDate).toLocaleDateString("pt-BR") : "—",
+        severity: projectStat.severity || {},
+      };
+    });
+
+    await exportDashboardPDF({
+      teamName: teamName,
+      generatedAt: new Date(),
+      teamStats: stats.teamStats,
+      projectStats: stats.projectStats,
+      projects: projectsForPDF,
+      categoryDetails: stats.categoryDetails,
+    });
+  }, [projects, stats, teamName]);
+
   if (status === "loading") return <div className="py-10 text-center">Carregando...</div>;
   if (!session) {
     router.push("/login");
     return null;
   }
-
 
   return (
     <div className="w-full space-y-6 p-8">
@@ -155,43 +201,56 @@ function DashboardContent() {
         icon={<ChartAreaIcon className="w-10 h-10 text-apple-blue" />}
         subtitle="Visão geral do time selecionado."
         actions={
-          <div className="relative" ref={dropdownRef}>
+          <div className="flex items-center gap-3">
+            {/* 🔥 Botão Exportar PDF */}
             <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+              onClick={handleExportPDF}
+              disabled={projects.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-apple-blue text-white text-sm font-medium hover:bg-apple-blue/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="font-bold">
-                {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
-              </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              <Download className="w-4 h-4" />
+              Exportar PDF
             </button>
 
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
-                {teams.map((team) => (
-                  <button
-                    key={team._id}
-                    onClick={() => {
-                      const newTeamId = team.isGlobal ? 'all' : team._id;
-                      setTeamId(team._id);
-                      setTeamName(team.name);
-                      setEffectiveTeamId(newTeamId);
-                      setDropdownOpen(false);
-                    }}
-                    className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
-                      teamId === team._id
-                        ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
-                        : "text-apple-label-light dark:text-apple-label-dark"
-                    }`}
-                  >
-                    <span className="truncate">
-                      {team.isGlobal ? `${team.name} (Todos)` : team.name}
-                    </span>
-                    {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Seletor de Time */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+              >
+                <span className="font-bold">
+                  {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
+                  {teams.map((team) => (
+                    <button
+                      key={team._id}
+                      onClick={() => {
+                        const newTeamId = team.isGlobal ? 'all' : team._id;
+                        setTeamId(team._id);
+                        setTeamName(team.name);
+                        setEffectiveTeamId(newTeamId);
+                        setDropdownOpen(false);
+                      }}
+                      className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
+                        teamId === team._id
+                          ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
+                          : "text-apple-label-light dark:text-apple-label-dark"
+                      }`}
+                    >
+                      <span className="truncate">
+                        {team.isGlobal ? `${team.name} (Todos)` : team.name}
+                      </span>
+                      {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         }
       />
@@ -209,7 +268,7 @@ function DashboardContent() {
             />
             <TeamStatsCard
               type="category"
-              title="Categoria"
+              title="Distribuição por Categoria"
               total={stats.teamStats.total}
               category={stats.teamStats.categoryTotals}
               categoryGroup={stats.teamStats.categoryGroupTotals}
