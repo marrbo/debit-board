@@ -152,7 +152,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
     // Garante que a observação pertence ao tenant do usuário logado
     const updatedObservation = await Observation.findOneAndUpdate(
-      { _id: id, tenantId: tenantId },
+      { _id: { $eq: id }, tenantId: { $eq: tenantId } },
       { $set: { assigneeId: assigneeId || null } },
       { new: true }
     );
