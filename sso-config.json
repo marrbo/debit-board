@@ -1,5 +1,0 @@
-{
-  "keycloakIssuer": "http://localhost:8080/realms/debit-board",
-  "keycloakClientId": "nextjs-client",
-  "keycloakClientSecret": "nSUKFaktnLXHKcjY7EGNMLUy1lknDKpt"
-}
