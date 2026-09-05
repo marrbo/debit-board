@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       for (const azureRepo of repos) {
         // 2.1 Upsert Repository
         await Repository.findOneAndUpdate(
-          { tenantId, azureRepoId: azureRepo.id! },
+          { tenantId: { $eq: tenantId }, azureRepoId: azureRepo.id! },
           {
             name: azureRepo.name!,
             projectId: savedProject._id.toString(),
