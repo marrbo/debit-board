@@ -1,6 +1,6 @@
 // models/SavedQuery.ts
 import type { ISavedQuery } from '@/types/ISavedQuery';
-import { model, models, Schema, type Model } from 'mongoose';
+import mongoose, { model, models, Schema, type Model } from 'mongoose';
 
 export interface SavedQueryModel extends Model<ISavedQuery> {
   findCriticals(): Promise<ISavedQuery[]>;
@@ -19,7 +19,7 @@ const SavedQuerySchema = new Schema<ISavedQuery>({
     enum: ['private', 'shared', 'public', 'temporary'],
     default: 'private'
   },
-  tenantId: { type: String, required: true, index: true },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, index: true },
   userId: { type: String, required: true, index: true },
   createdAt: { type: Date, default: Date.now },
 });

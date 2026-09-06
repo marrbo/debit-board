@@ -109,10 +109,11 @@ function ProjectsContent() {
         key={refreshKey}
         endpoint="/api/projects"
         columns={columns}
-        defaultSort={{ field: "createdAt", order: "desc" }}
-        defaultLimit={10}
-        searchPlaceholder="Buscar repositórios (ex: name:repo-backend OR projectId:...)"
-        searchContext="repositories"
+        defaultSort={{ field: "name", order: "asc" }}
+        defaultLimit={8}
+        pdfTitle="Projetos"
+        searchPlaceholder="Buscar projetos (ex: name:MeuProjeto OR projectId:...)"
+        searchContext="none"
         userId={session.user.id}
         // onRowClick={(project: unknown) => setSelectedProject(project as IProject)}
         onSelectionChange={setSelectedProjectIds}

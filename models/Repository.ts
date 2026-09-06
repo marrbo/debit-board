@@ -4,7 +4,7 @@ import type { Model } from 'mongoose';
 import mongoose, { Schema } from 'mongoose';
 
 const RepositorySchema = new Schema<IRepository>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, ref: 'Tenant' },
   projectId: { type: String, required: true, ref: 'Project' },
   azureProjectId: { type: String, required: true },
   name: { type: String, required: true },

@@ -9,13 +9,18 @@ import { DataTable } from "@/components/DataTable";
 import TeamDrawer from "@/components/TeamDrawer";
 import type { Column } from '@/components/DataTable';
 import type { ITeam } from "@/types/ITeam";
+import { CirclePlus } from "lucide-react";
 
 const columns: Column<ITeam>[] = [
   { key: "name", label: "Nome do Time", sortable: true },
+  { key: "description", label: "Descrição", sortable: true },
   {
     key: "projectCount",
     label: "Projetos",
     sortable: true,
+    align: 'center',
+    width: '100px',
+    headerClassName: 'items-center text-center',
     render: (item: ITeam) => item.projectCount || 0,
   },
   {
@@ -56,19 +61,20 @@ function TeamsContent() {
             onClick={() => setSelectedTeam({} as ITeam)}
             className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
           >
-            Criar Time
+            <CirclePlus className="w-4 h-4"/> Novo Time
           </button>
         }
       />
 
       <DataTable
         key={refreshKey}
-        endpoint="/api/teams"
+        endpoint="/api/teams?includeGlobal=false"
         columns={columns}
-        defaultSort={{ field: "createdAt", order: "desc" }}
-        defaultLimit={10}
+        defaultSort={{ field: "name", order: "asc" }}
+        defaultLimit={8}
+        pdfTitle="Times"
         searchPlaceholder="Buscar times (ex: name:DevOps)"
-        searchContext="teams"
+        searchContext="none"
         userId={session?.user?._id?.toString()}
         onRowClick={(team: unknown) => setSelectedTeam(team as ITeam)}
       />

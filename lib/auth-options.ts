@@ -5,6 +5,7 @@ import { connectToDatabase } from "./mongodb";
 import { Tenant } from "@/models/Tenant";
 import type { IAzureSettings } from "@/types/IAzureSettings";
 import type { IUser } from "@/types/IUser";
+import type mongoose from "mongoose";
 
 declare module "next-auth" {
   interface Session {
@@ -15,7 +16,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     sub?: string;
-    tenantId?: string;
+    tenantId?: mongoose.Types.ObjectId;
     organization?: string;        // nome da organização (ex: "MARRBO")
       organizationData?: {
         tenantId?: string[];

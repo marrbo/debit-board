@@ -7,6 +7,7 @@ import { User } from "@/models/User";
 import { revalidatePath } from "next/cache";
 import crypto from 'crypto';
 import { getServerAuthSession } from "@/lib/auth-server";
+import mongoose from "mongoose";
 
 // --- Helper: verifica se o usuário atual é Admin ---
 async function checkAdmin() {
@@ -73,10 +74,14 @@ export async function assignUsersToTenant(userIds: string[], tenantId: string) {
   await checkAdmin();
   if (!tenantId || userIds.length === 0) return;
 
+  const tenantIdRaw = mongoose.Types.ObjectId.isValid(tenantId)
+        ? new mongoose.Types.ObjectId(tenantId)
+        : tenantId;
+
   await connectToDatabase();
   await User.updateMany(
     { sub: { $in: userIds } },
-    { $set: { tenantId: tenantId } }
+    { $set: { tenantId: tenantIdRaw } }
   );
   revalidatePath("/settings/admin");
 }
@@ -108,7 +113,13 @@ export async function createUser(formData: FormData) {
   }
 
   await connectToDatabase();
-  const existingUser = await User.findOne({ email });
+
+  // FormData values are untrusted; require a primitive string before querying.
+  if (typeof email !== "string") {
+    throw new Error("E-mail inválido.");
+  }
+
+  const existingUser = await User.findOne({ email: { $eq: email } });
   if (existingUser) {
     throw new Error("Já existe um usuário com este e-mail no sistema.");
   }
@@ -127,10 +138,19 @@ export async function createUser(formData: FormData) {
 }
 
 // --- Toggle de Status (Ativo/Inativo) ---
-export async function toggleTenantStatus(tenantId: string, isActive: boolean) {
+export async function toggleTenantStatus(tenantId: mongoose.Types.ObjectId, isActive: boolean) {
   await checkAdmin();
+  // Validate and normalize server-action input before using it in a query.
+  if (!mongoose.Types.ObjectId.isValid(tenantId)) {
+    throw new Error("Invalid tenant ID");
+  }
+  if (typeof isActive !== "boolean") {
+    throw new Error("Invalid status");
+  }
+
   await connectToDatabase();
-  await Tenant.findByIdAndUpdate(tenantId, { isActive });
+  const safeTenantId = new mongoose.Types.ObjectId(tenantId);
+  await Tenant.findByIdAndUpdate(safeTenantId, { $set: { isActive } });
   revalidatePath("/settings/admin");
 }
 

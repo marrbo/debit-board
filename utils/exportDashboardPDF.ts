@@ -6,8 +6,13 @@ interface DashboardPDFData {
   generatedAt: Date;
   teamStats: any;
   projectStats: any;
-  projects: any[]; // array de projetos com nome, severityCounts, description, lastScan
+  projects: any[];
   categoryDetails?: any;
+}
+
+// Helper para converter entradas de categorias para [string, number][]
+function toNumericEntries(obj: Record<string, any>): [string, number][] {
+  return Object.entries(obj || {}).map(([key, value]) => [key, Number(value) || 0]);
 }
 
 export async function exportDashboardPDF(data: DashboardPDFData) {
@@ -104,16 +109,16 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
   y += cardHeight + 10;
 
   // ===================== DISTRIBUIÇÃO (Individual) =====================
-  if (data.teamStats.categoryTotals) {
+  const singleCategories = toNumericEntries(data.teamStats.categoryTotals);
+  if (singleCategories.length > 0) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
     doc.text("Distribuição por Categoria (Individual)", margin, y);
 
     y += 5;
-    const categories = Object.entries(data.teamStats.categoryTotals);
-    if (categories.length > 0) {
-      const totalCat = categories.reduce((sum, [, val]) => sum + Number(val), 0);
+    const totalCat = singleCategories.reduce((sum, [, val]) => sum + val, 0);
+    if (totalCat > 0) {
       const barWidth = pageWidth - margin * 2;
       const barHeight = 8;
 
@@ -130,22 +135,22 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
         '#393b79', '#5254a3', '#6b6ecf', '#9c9ede', '#637939',
         '#8ca252', '#b5cf6b', '#cedb9c', '#8c6d31', '#bd9e39',
         '#e7ba52', '#e7cb94', '#843c39', '#ad494a', '#d6616b'
-        ];
+      ];
       let currentX = margin;
-      categories.forEach(([cat, value], i) => {
+      singleCategories.forEach(([_, value], i) => {
         const segWidth = (value / totalCat) * barWidth;
         doc.setFillColor(colors[i % colors.length]);
         doc.rect(currentX, y, segWidth, barHeight, "F");
         currentX += segWidth;
       });
 
-      // Legendas em 2 colunas com largura fixa (sem sobreposição)
+      // Legendas em 2 colunas
       y += barHeight + 6;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       const legendColWidth = (pageWidth - margin * 2) / 2;
-      
-      categories.forEach(([cat, value], i) => {
+
+      singleCategories.forEach(([cat, value], i) => {
         const colIndex = i % 2;
         const rowIndex = Math.floor(i / 2);
         const startX = margin + colIndex * legendColWidth;
@@ -156,21 +161,21 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
         doc.setTextColor(100, 116, 139);
         doc.text(`${cat}: ${value}`, startX + 5, startY + 3);
       });
-      y += Math.ceil(categories.length / 2) * 6 + 8;
+      y += Math.ceil(singleCategories.length / 2) * 6 + 8;
     }
   }
 
-  // ===================== DISTRIBUIÇÃO (Grupo) =====================
-  if (data.teamStats.categoryGroupTotals) {
+  // ===================== DISTRIBUIÇÃO (Agrupado) =====================
+  const groupedCategories = toNumericEntries(data.teamStats.categoryGroupTotals);
+  if (groupedCategories.length > 0) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
     doc.text("Distribuição por Categoria (Agrupado)", margin, y);
 
     y += 5;
-    const categories = Object.entries(data.teamStats.categoryGroupTotals);
-    if (categories.length > 0) {
-      const totalCat = categories.reduce((sum, [, val]) => sum + Number(val), 0)
+    const totalCat = groupedCategories.reduce((sum, [, val]) => sum + val, 0);
+    if (totalCat > 0) {
       const barWidth = pageWidth - margin * 2;
       const barHeight = 8;
 
@@ -179,20 +184,20 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
 
       const colors = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#911eb4", "#3cb44b", "#ffe119", "#4363d8", "#f58231"];
       let currentX = margin;
-      categories.forEach(([cat, value], i) => {
+      groupedCategories.forEach(([_, value], i) => {
         const segWidth = (value / totalCat) * barWidth;
         doc.setFillColor(colors[i % colors.length]);
         doc.rect(currentX, y, segWidth, barHeight, "F");
         currentX += segWidth;
       });
 
-      // Legendas em 2 colunas com largura fixa (sem sobreposição)
+      // Legendas em 2 colunas
       y += barHeight + 6;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       const legendColWidth = (pageWidth - margin * 2) / 2;
-      
-      categories.forEach(([cat, value], i) => {
+
+      groupedCategories.forEach(([cat, value], i) => {
         const colIndex = i % 2;
         const rowIndex = Math.floor(i / 2);
         const startX = margin + colIndex * legendColWidth;
@@ -203,7 +208,7 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
         doc.setTextColor(100, 116, 139);
         doc.text(`${cat}: ${value}`, startX + 5, startY + 3);
       });
-      y += Math.ceil(categories.length / 2) * 6 + 8;
+      y += Math.ceil(groupedCategories.length / 2) * 6 + 8;
     }
   }
 
@@ -222,20 +227,19 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
     y += 5;
 
     const tableData = data.projects.map((project: any) => {
-    const description = project.description || "";
-    const truncatedDescription = description.length > 80
+      const description = project.description || "";
+      const truncatedDescription = description.length > 80
         ? description.slice(0, 80) + " (...)"
         : description;
 
-        return [
-            project.name || "",
-            `${project.severity?.critical || 0} / ${project.severity?.high || 0} / ${project.severity?.medium || 0} / ${project.severity?.low || 0}`,
-            truncatedDescription,
-            project.lastScan || "",
-        ];
+      return [
+        project.name || "",
+        `${project.severity?.critical || 0} / ${project.severity?.high || 0} / ${project.severity?.medium || 0} / ${project.severity?.low || 0}`,
+        truncatedDescription,
+        project.lastScan || "",
+      ];
     });
 
-    // Largura total da tabela (página A4 landscape - margens)
     const tableWidth = pageWidth - margin * 2;
 
     autoTable(doc, {
@@ -244,16 +248,16 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
       head: [["Projeto", "Severidade (C/A/M/B)", "Descrição", "Último Scan"]],
       body: tableData,
       theme: "grid",
-      tableWidth: tableWidth, // 🔥 Força a tabela a ocupar toda a largura
+      tableWidth: tableWidth,
       headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold" },
       bodyStyles: { textColor: [51, 65, 85], fontSize: 8 },
       alternateRowStyles: { fillColor: [241, 245, 249] },
       styles: { overflow: 'linebreak' },
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.20 }, // Projeto
-        1: { cellWidth: tableWidth * 0.15, halign: "center" }, // Severidade
-        2: { cellWidth: tableWidth * 0.45, overflow: 'ellipsize' }, // Descrição
-        3: { cellWidth: tableWidth * 0.20, halign: "center" }, // Último Scan
+        0: { cellWidth: tableWidth * 0.20 },
+        1: { cellWidth: tableWidth * 0.15, halign: "center" },
+        2: { cellWidth: tableWidth * 0.45, overflow: 'ellipsize' },
+        3: { cellWidth: tableWidth * 0.20, halign: "center" },
       },
     });
   }

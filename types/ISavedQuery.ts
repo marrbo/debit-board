@@ -8,7 +8,7 @@ export interface ISavedQuery extends Document {
   queryString: string;
   context: string;
   visibility: 'private' | 'shared' | 'public' | 'temporary';
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   createdAt?: Date;
   userId: string;
 }

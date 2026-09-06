@@ -3,7 +3,7 @@ import type { IProject } from '@/types/IProject';
 import mongoose, { type Model, Schema } from 'mongoose';
 
 const ProjectSchema = new Schema<IProject>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, ref: 'Tenant' },
   teamId: { type: mongoose.Types.ObjectId, ref: 'Team', default: null },
   azureProjectId: { type: String, required: true },
   name: { type: String, required: true },

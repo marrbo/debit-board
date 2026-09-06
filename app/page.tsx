@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Check, ChartAreaIcon, Download } from "lucide-react";
@@ -73,7 +73,6 @@ function DashboardContent() {
   const [teamId, setTeamId] = useState(searchParams.get('teamId') || '');
   const [teamName, setTeamName] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
-  const [effectiveTeamId, setEffectiveTeamId] = useState('');
   const [searchTerm, setSearchTerm] = useState(''); // ID da query DBQL
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -98,6 +97,12 @@ function DashboardContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const effectiveTeamId = useMemo(() => {
+    if (!teamId) return '';
+    const selected = teams.find(t => t._id === teamId);
+    return selected?.isGlobal ? 'all' : teamId;
+  }, [teamId, teams]);
+
   // Busca os Teams (Prioridade: Global ou único time)
   useEffect(() => {
     fetch("/api/teams")
@@ -105,40 +110,23 @@ function DashboardContent() {
       .then(json => {
         const allTeams = json.data || [];
         setTeams(allTeams);
-
         const globalTeam = allTeams.find((t: any) => t.isGlobal);
         const nonGlobalTeams = allTeams.filter((t: any) => !t.isGlobal);
-
         if (!teamId && allTeams.length > 0) {
           if (nonGlobalTeams.length === 1) {
             setTeamId(nonGlobalTeams[0]._id);
-            setEffectiveTeamId(nonGlobalTeams[0]._id);
           } else {
             setTeamId(globalTeam?._id || allTeams[0]._id);
-            setEffectiveTeamId(globalTeam ? 'all' : allTeams[0]._id);
           }
         }
       });
-  }, []);
-
-  useEffect(() => {
-    if (!teamId) return;
-    const selected = teams.find(t => t._id === teamId);
-    if (selected?.isGlobal) setEffectiveTeamId('all');
-    else setEffectiveTeamId(teamId);
-  }, [teamId, teams]);
+  }, [teamId]);
 
   // 🔥 Busca as Stats na nova Rota Dedicada (com DBQL aplicado)
   useEffect(() => {
     if (!effectiveTeamId) return;
-    
-    const params = new URLSearchParams({
-      teamId: effectiveTeamId,
-      range: "30d"
-    });
-    
+    const params = new URLSearchParams({ teamId: effectiveTeamId, range: "30d" });
     if (searchTerm) params.set('q', searchTerm);
-
     fetch(`/api/dashboard/stats?${params.toString()}`)
       .then(res => res.json())
       .then(data => setStats(data))
@@ -148,21 +136,11 @@ function DashboardContent() {
   // 🔥 Busca dados da tabela de projetos (para o PDF)
   useEffect(() => {
     if (!effectiveTeamId) return;
-
-    const params = new URLSearchParams({
-      teamId: effectiveTeamId,
-      page: "1",
-      limit: "100",
-      sort: "name",
-      order: "asc",
-    });
+    const params = new URLSearchParams({ teamId: effectiveTeamId, page: "1", limit: "100", sort: "name", order: "asc" });
     if (searchTerm) params.set('q', searchTerm);
-
     fetch(`/api/dashboard?${params.toString()}`)
       .then(res => res.json())
-      .then(json => {
-        setProjects(json.data || []);
-      })
+      .then(json => setProjects(json.data || []))
       .catch(console.error);
   }, [effectiveTeamId, searchTerm]);
 
@@ -230,10 +208,8 @@ function DashboardContent() {
                     <button
                       key={team._id}
                       onClick={() => {
-                        const newTeamId = team.isGlobal ? 'all' : team._id;
                         setTeamId(team._id);
                         setTeamName(team.name);
-                        setEffectiveTeamId(newTeamId);
                         setDropdownOpen(false);
                       }}
                       className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${

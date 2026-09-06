@@ -22,7 +22,6 @@ import {
   Copy,
   PlayCircleIcon,
   SearchCode,
-  SearchX,
   TriangleAlert,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
@@ -613,12 +612,13 @@ export default function DBQLAdvancedSearch({
           
           // Busca query temporária do usuário
           let tempQuery = queries.find((tmp: ISavedQuery) => tmp.visibility === 'temporary' && tmp.userId === userId)
+          const tenantIdRaw = session?.user?.tenantId;
           if (!tempQuery) {
             tempQuery = {
               userId: userId,
               name: `Temporary (${session?.user?.name})`,
               context: dbqlContext,
-              tenantId: session?.user?.tenantId,
+              tenantId: tenantIdRaw,
               visibility: 'temporary',
               queryString: ''
             } as ISavedQuery;

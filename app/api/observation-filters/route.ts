@@ -5,6 +5,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { Observation } from '@/models/Observation';
 import type { PipelineStage } from 'mongoose';
 import { User } from '@/models/User';
+import { getServerSessionIds } from '@/lib/session-server';
 
 // Mapeamento de aliases para campos reais
 const FIELD_MAP: Record<string, string> = {
@@ -17,7 +18,8 @@ const FIELD_MAP: Record<string, string> = {
 };
 
 export async function GET(req: NextRequest) {
-  const tenantId = req.headers.get('x-tenant-id');
+  const sessionIds = await getServerSessionIds();
+  const tenantId = sessionIds.tenantId;
   const { searchParams } = new URL(req.url);
   const fieldRaw = searchParams.get('field');
   const query = searchParams.get('query') || '';

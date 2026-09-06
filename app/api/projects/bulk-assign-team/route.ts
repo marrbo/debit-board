@@ -6,7 +6,8 @@ import { getServerSessionIds } from '@/lib/session-server';
 
 export async function POST(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
+  
   await connectToDatabase();
 
   const body = await req.json();

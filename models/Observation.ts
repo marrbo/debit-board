@@ -2,7 +2,7 @@ import type { IObservation } from '@/types/IObservation';
 import mongoose, { Schema } from 'mongoose';
 
 const ObservationSchema = new Schema<IObservation>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
   scanId: { type: Schema.Types.ObjectId, ref: 'SASTScan', required: true },
   patternId: { type: Schema.Types.ObjectId, ref: 'VulnerabilityPattern' },
   pattern: { type: Schema.Types.Mixed, ref: 'VulnerabilityPattern' },

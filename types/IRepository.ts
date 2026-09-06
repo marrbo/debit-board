@@ -1,9 +1,10 @@
 // types/IRepository.ts
 import type { GitRepository } from 'azure-devops-node-api/interfaces/GitInterfaces';
+import type mongoose from 'mongoose';
 import type { Document } from 'mongoose';
 
 export interface IRepository extends GitRepository, Document {
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   projectId: string; // Referência ao _id do Project (string)
   azureProjectId: string; // GUID do projeto no Azure (para referência direta)
   name: string; // Nome do repositório no Azure

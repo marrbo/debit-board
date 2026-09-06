@@ -9,10 +9,12 @@ import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { getServerSessionIds } from '@/lib/session-server';
 import { parseDBQL } from '@/lib/parseDBQL';
 import { subDays } from 'date-fns';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
+
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
@@ -41,8 +43,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Filtro base
   const obsMatch: any = { tenantId };
-  
+
   if (finalSearchQuery) {
     const parsedMatch = parseDBQL(finalSearchQuery);
     if (parsedMatch && Object.keys(parsedMatch).length > 0) {
@@ -58,6 +61,13 @@ export async function GET(req: NextRequest) {
     obsMatch.project = { $in: allowedProjectNames };
   }
 
+  // 🔥 Filtro extra para agregações de categoria: ignora patternId nulo/vazio
+  const categoryMatch = {
+    ...obsMatch,
+    patternId: { $exists: true, $nin: [null, ""] },
+  };
+
+  // 4. Stats do Time (Cards) - mantém para os cards principais
   const teamPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -82,8 +92,9 @@ export async function GET(req: NextRequest) {
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
 
+  // 4.1 - Agrupamento por categoria e patternId (somente com patternId válido)
   const categoryPipeline = [
-    { $match: obsMatch },
+    { $match: categoryMatch },
     { $group: { _id: { category: "$category", patternId: "$patternId" } } },
     { $group: { _id: "$_id.category", count: { $sum: 1 } } },
     { $project: { _id: 0, category: "$_id", count: 1 } }
@@ -99,8 +110,9 @@ export async function GET(req: NextRequest) {
   teamStats.categoryTotals = teamStats.categoryTotals || {};
   teamStats.categoryGroupTotals = categoryGroupTotals;
 
+  // 4.2 - Detalhes por categoria (padrões distintos) com filtro de patternId válido
   const detailPipeline = [
-    { $match: obsMatch },
+    { $match: categoryMatch },
     { $group: { _id: { category: "$category", patternId: "$patternId" }, count: { $sum: 1 } } },
     { $project: { _id: 0, category: "$_id.category", patternId: "$_id.patternId", count: 1 } }
   ];
@@ -108,30 +120,36 @@ export async function GET(req: NextRequest) {
   const categoryDetails: Record<string, Record<string, number>> = {};
   detailResults.forEach((item: any) => {
     if (!categoryDetails[item.category]) categoryDetails[item.category] = {};
+    // Converte patternId para string para usar como chave
     categoryDetails[item.category][item.patternId] = item.count;
   });
 
-  // 🔥 Converte patternId para nome do pattern usando VulnerabilityPattern
+  // 🔥 Busca nomes dos patterns - converte IDs para ObjectId
   const allPatternIds = new Set<string>();
   Object.values(categoryDetails).forEach((patterns) => {
     Object.keys(patterns).forEach((id) => allPatternIds.add(id));
   });
 
-  const patterns = await VulnerabilityPattern.find({ _id: { $in: Array.from(allPatternIds) } }).select('_id name').lean();
+  const validObjectIds = Array.from(allPatternIds)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  const patterns = await VulnerabilityPattern.find({ _id: { $in: validObjectIds } }).select('_id name').lean();
   const patternNameMap: Record<string, string> = {};
   patterns.forEach((p: any) => {
-    patternNameMap[p._id.toString()] = p.name;
+    patternNameMap[p._id] = p.name;
   });
 
   const categoryDetailsWithNames: Record<string, Record<string, number>> = {};
   Object.entries(categoryDetails).forEach(([category, patterns]) => {
     categoryDetailsWithNames[category] = {};
     Object.entries(patterns).forEach(([patternId, count]) => {
-      const patternName = patternNameMap[patternId] || patternId;
+      const patternName = patternNameMap[patternId] || patternId; // fallback para o ID se não encontrar
       categoryDetailsWithNames[category][patternName] = count;
     });
   });
 
+  // 5. Stats por Projeto (Grid) - mantém sem filtro de patternId
   const projectPipeline: any[] = [
     { $match: obsMatch },
     {

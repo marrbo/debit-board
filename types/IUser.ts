@@ -1,6 +1,7 @@
 // types/IUser.ts
 import type { Document } from 'mongoose';
 import type { IAzureSettings } from './IAzureSettings';
+import type mongoose from 'mongoose';
 
 export type IUser = Document & {
   id: string;
@@ -11,7 +12,7 @@ export type IUser = Document & {
   company?: string;
   jobTitle?: string;
   phone?: string;
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   onboardingCompleted: boolean;
   isActive: boolean;
   roles?: string[];

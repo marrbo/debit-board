@@ -10,7 +10,7 @@ const UserSchema = new Schema<IUser>({
   company: String,
   jobTitle: String,
   phone: String,
-  tenantId: { type: String, ref: 'Tenant', required: true },
+  tenantId: { type: mongoose.Types.ObjectId, ref: 'Tenant', required: true },
   onboardingCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   roles: [String],

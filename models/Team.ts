@@ -4,7 +4,7 @@ import type { ITeam } from "@/types/ITeam";
 import mongoose, { Schema } from "mongoose";
 
 const TeamSchema = new Schema<ITeam>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, ref: 'Tenant' },
   name: { type: String, required: true },
   description: { type: String },
   members: [{ type: String, ref: 'User' }],

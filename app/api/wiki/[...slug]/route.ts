@@ -3,9 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { getServerAuthSession } from '@/lib/auth-server';
 
-export async function GET(request: Request, props: { params: Promise<{ slug: string[] }> }) {
+export async function GET(_: Request, props: { params: Promise<{ slug: string[] }> }) {
   const params = await props.params;
-  await request.json();
+
   const slugPath = params.slug.join('/');
   const filePath = path.join(process.cwd(), 'content', 'wiki', `${slugPath}.md`);
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';

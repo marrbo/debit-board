@@ -6,14 +6,14 @@ import { SquarePen } from 'lucide-react';
 
 export default function WikiViewer({ slug, content, isAdmin = false }: { slug: string, content: string, isAdmin?: boolean }) {
   return (
-    <div className="w-full mx-auto p-4">
+    <div className="w-full mx-auto p-6 px-12">
       {isAdmin && (
         <div className="flex justify-end mb-4">
           <Link
             href={`/wiki/${slug}?edit=true`}
-            className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
+            className="inline-flex items-center gap-1.5 text-apple-tertiary-dark hover:text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-apple-blue/30"
           >
-            <SquarePen className="w-4 h-4 mr-2" /> Editar
+            <SquarePen className="w-6 h-6" />
           </Link>
         </div>
       )}

@@ -2,18 +2,19 @@
 import type { IAzureSettings } from '@/types/IAzureSettings';
 import type { SearchItem } from './types';
 import { useSession } from 'next-auth/react';
+import type mongoose from 'mongoose';
 
 
 export function useClientSessionIds(): {
   userId: string;
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   azureSettings?: IAzureSettings;
 } {
   const { data: session } = useSession();
 
   return {
     userId: session?.user?.id || '',
-    tenantId: session?.user?.tenantId || '',
+    tenantId: session?.user?.tenantId,
     azureSettings: session?.user?.azureSettings,
   };
 }

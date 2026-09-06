@@ -235,6 +235,7 @@ function SavedQueriesContent() {
         defaultLimit={10}
         searchPlaceholder="Buscar consultas (ex: name:minha-query OR context:repositories)"
         searchContext="none"
+        pdfTitle="Consultas Salvas"
         userId={session.user.id}
         refreshKey={refreshKey}
         selectable={true}
