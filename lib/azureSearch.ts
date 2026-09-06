@@ -6,6 +6,7 @@ import { connectToDatabase } from './mongodb';
 import { Team } from '@/models/Team';
 import { Project } from '@/models/Project';
 import { Repository } from '@/models/Repository';
+import type mongoose from 'mongoose';
 
 export async function azureFetch(urlString: string, options: any, ignoreTls: boolean): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -33,7 +34,7 @@ export async function azureFetch(urlString: string, options: any, ignoreTls: boo
 }
 
 // Função de sincronização (mantida)
-async function syncProjectsFromAzureResults(tenantId: string, results: SearchItem[]) {
+async function syncProjectsFromAzureResults(tenantId: mongoose.Types.ObjectId, results: SearchItem[]) {
   if (!results || results.length === 0) return;
   await connectToDatabase();
 
@@ -101,7 +102,7 @@ export async function executeSearch(
   query: string,
   settings: Settings,
   ignoreTls: boolean,
-  tenantId?: string
+  tenantId?: mongoose.Types.ObjectId
 ): Promise<{ results: SearchItem[]; hitCount: number; error?: string }> {
   
   // 🔥 VALIDAÇÃO EXPLÍCITA PARA EVITAR ZEROS SILENCIOSOS

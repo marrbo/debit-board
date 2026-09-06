@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import { SimpleColumnSearch } from '@/components/dbql/SimpleColumnSearch';
 import { ChevronUp, ChevronDown, LoaderCircle, Trash2, FileText, FileSpreadsheet } from 'lucide-react';
+import { exportTableToPDF } from "./exportPDF";
 
 // ============================================================
 // Tipos
@@ -20,6 +21,7 @@ export interface Column<T> {
   align?: 'left' | 'center' | 'right';
   className?: string | ((item: T) => string);
   headerClassName?: string;
+  exportable?: boolean;
 }
 
 export interface DataTableAction<T> {
@@ -44,18 +46,21 @@ export interface DataTableProps<T> {
   defaultLimit?: number;
   searchPlaceholder?: string;
   searchContext?: string;
+  searchVisible?: boolean;
   userId: string;
   projectId?: string;
   teamId?: string;
   refreshKey?: number;
   onRowClick?: (item: T) => void;
-  // Novos props
   selectable?: boolean;               // exibir coluna de checkboxes (default true)
   actions?: DataTableAction<T>[];     // ações customizadas
   canDelete?: boolean;                // permitir exclusão (default true)
   onDelete?: (selectedIds: string[]) => void; // callback de exclusão
-  onExportExcel?: (filters: ExportFilters) => void;
+  
+  exportPDF?: boolean;               // 🔥 nativo, default true
+  pdfTitle?: string;                 // 🔥 título do PDF
   onExportPDF?: (filters: ExportFilters) => void;
+  onExportExcel?: (filters: ExportFilters) => void;
   onSelectionChange?: (ids: string[]) => void;
   onSearchChange?: (search: string) => void;
 
@@ -74,6 +79,7 @@ export function DataTable<T extends { _id: string }>({
   defaultLimit = 10,
   searchPlaceholder = 'Buscar...',
   searchContext = 'none',
+  searchVisible,
   userId,
   projectId,
   teamId,
@@ -83,6 +89,8 @@ export function DataTable<T extends { _id: string }>({
   actions = [],
   canDelete = true,
   onDelete,
+  exportPDF = true,
+  pdfTitle,
   onExportExcel,
   onExportPDF,
   variant = 'table',
@@ -141,33 +149,12 @@ export function DataTable<T extends { _id: string }>({
     };
   }, [currentDbqlId, projectId]);
 
-  const exportActions = useMemo(() => {
-    const acts: DataTableAction<T>[] = [];
-    if (onExportPDF) {
-      acts.push({
-        label: "PDF",
-        icon: <FileText className="w-4 h-4" />,
-        onClick: () => onExportPDF(buildExportFilters()),
-        requiresSelection: false,
-      });
-    }
-    if (onExportExcel) {
-      acts.push({
-        label: "Excel",
-        icon: <FileSpreadsheet className="w-4 h-4" />,
-        onClick: () => onExportExcel(buildExportFilters()),
-        requiresSelection: false,
-      });
-    }
-    return acts;
-  }, [onExportPDF, onExportExcel, buildExportFilters]);
-
   // ============================================================
   // Busca de dados (server-side para DBQL, client-side para simples)
   // ============================================================
   useEffect(() => {
     let cancelled = false;
-
+    
     const loadData = async () => {
       setLoading(true);
       try {
@@ -184,7 +171,13 @@ export function DataTable<T extends { _id: string }>({
           params.set('q', currentDbqlId);
         }
 
-        const res = await fetch(`${endpoint}?${params}`);
+        const url = new URL(endpoint, window.location.origin);
+        params.forEach((value, key) => {
+          url.searchParams.append(key, value);
+        });
+        const res = await fetch(url.toString());
+
+
         if (res.ok) {
           const json = await res.json();
           if (!cancelled) {
@@ -227,24 +220,161 @@ export function DataTable<T extends { _id: string }>({
   // ============================================================
   // Filtro client-side
   // ============================================================
-  const filteredData = useMemo(() => {
+  const filteredData = (() => {
     if (searchContext !== 'none') return data;
     if (!filterValue) return data;
 
     return data.filter((item) => {
       const value = String(filterValue).toLowerCase();
       if (!filterColumn) {
-        return Object.entries(item).some(([val]) => {
+        // Busca em todas as propriedades primitivas do objeto
+        return Object.entries(item).some(([_, val]) => {
+          // Ignora objetos e null
           if (typeof val === 'object' || val === null) return false;
           return String(val).toLowerCase().includes(value);
         });
       } else {
-        const cellValue = (item as any)[filterColumn];
+        const cellValue = (item as unknown as Record<string, unknown>)[filterColumn];
         if (cellValue === undefined) return false;
         return String(cellValue).toLowerCase().includes(value);
       }
     });
-  }, [data, filterColumn, filterValue, searchContext]);
+  })();
+
+
+  // ============================================================
+  // Antes de exportar para PDF faz um fetch ALL
+  // para retornar todos os dados de todas as páginas 
+  // mantendo o filtro e parâmetros de busca
+  // ============================================================
+  const fetchAllForExport = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({
+        all: "true", // 🔥 Força a API a retornar todos
+        sort: sortField,
+        order: sortOrder,
+        ...(projectId && { projectId }),
+        ...(teamId && { teamId }),
+      });
+
+      // Se tiver busca DBQL (server-side)
+      if (searchContext !== 'none' && currentDbqlId) {
+        params.set('q', currentDbqlId);
+      }
+
+      // Se tiver busca simples (client-side) e não for server-side,
+      // o filtro é client-side, então buscamos todos e filtramos depois.
+      if (searchContext === 'none' && filterValue) {
+        // Não passa o filtro para a API (é client-side), mas buscamos todos e filtramos abaixo
+      }
+
+      const url = new URL(endpoint, window.location.origin);
+      params.forEach((value, key) => {
+        url.searchParams.append(key, value);
+      });
+
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error('Falha ao buscar todos os dados');
+      const json = await res.json();
+      let items = json.data || [];
+
+      // Se for busca client-side, aplica o filtro local
+      if (searchContext === 'none' && filterValue) {
+        const value = String(filterValue).toLowerCase();
+        items = items.filter((item: any) => {
+          if (!filterColumn) {
+            return Object.entries(item).some(([_, val]) =>
+              typeof val !== 'object' && val !== null &&
+              String(val).toLowerCase().includes(value)
+            );
+          } else {
+            return String((item as any)[filterColumn] ?? '').toLowerCase().includes(value);
+          }
+        });
+      }
+
+      return items;
+    } catch (error) {
+      console.error('Erro ao buscar todos os dados para exportação:', error);
+      return []; // fallback vazio
+    }
+  }, [endpoint, sortField, sortOrder, projectId, teamId, searchContext, currentDbqlId, filterValue, filterColumn]);
+
+  // ============================================================
+  // Exportação nativa básica de PDF
+  // ============================================================
+  const handleNativeExportPDF = useCallback(async () => {
+    // 🔥 Busca todos os dados (sem paginação)
+    const exportData = await fetchAllForExport();
+
+    // Se não retornou nada, usa os dados atuais da página
+    const finalData = exportData.length > 0 ? exportData : filteredData;
+
+    // Filtra colunas não exportáveis
+    const exportColumns = columns
+      .filter((col) => col.key !== "__select")
+      .filter((col) => col.exportable !== false)
+      .filter((col) => {
+        const key = String(col.key).toLowerCase();
+        if (key === "actions" || key.includes("action")) return false;
+        return true;
+      })
+      .map((col) => ({
+        key: String(col.key),
+        label: col.label,
+        render: col.render ? (item: any) => col.render!(item, extraData) : undefined,
+      }));
+
+    // 🔥 Título seguro: usa pdfTitle ou "Relatório" (nunca searchContext)
+    const safeTitle = pdfTitle || "Relatório";
+    const safeFilename = `Debit-Board_Relatorio_${safeTitle}`
+      .replace(/[^a-zA-Z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') + '.pdf';
+
+    exportTableToPDF({
+      title: safeTitle,
+      subtitle: "Debit Board - Relatório de Dados",
+      columns: exportColumns,
+      data: finalData,
+      filename: safeFilename,
+    });
+  }, [fetchAllForExport, filteredData, columns, pdfTitle, extraData]);
+
+
+  const exportActions = useMemo(() => {
+    const acts: DataTableAction<T>[] = [];
+
+    if (onExportPDF) {
+      acts.push({
+        label: "PDF",
+        icon: <FileText className="w-4 h-4" />,
+        onClick: () => onExportPDF(buildExportFilters()),
+        requiresSelection: false,
+      });
+    } else if (exportPDF !== false) {
+      // 🔥 Exportação nativa
+      acts.push({
+        label: "PDF",
+        icon: <FileText className="w-4 h-4" />,
+        onClick: async () => {
+          await handleNativeExportPDF();
+        },
+        requiresSelection: false,
+      });
+    }
+
+    if (onExportExcel) {
+      acts.push({
+        label: "Excel",
+        icon: <FileSpreadsheet className="w-4 h-4" />,
+        onClick: () => onExportExcel(buildExportFilters()),
+        requiresSelection: false,
+      });
+    }
+
+    return acts;
+  }, [onExportPDF, onExportExcel, buildExportFilters, exportPDF, handleNativeExportPDF]);
 
   // ============================================================
   // Seleção
@@ -357,7 +487,7 @@ export function DataTable<T extends { _id: string }>({
     return (
       <div className="space-y-4">
         {searchContext !== 'none' ? (
-          <DBQLAdvancedSearch onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
+          <DBQLAdvancedSearch searchVisible={searchVisible} onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
         ) : (
           <SimpleColumnSearch columns={columns} onSearch={handleSimpleSearch} placeholder={searchPlaceholder} />
         )}
@@ -424,6 +554,7 @@ export function DataTable<T extends { _id: string }>({
       {searchContext !== 'none' ? (
         <DBQLAdvancedSearch
           onSearch={handleDbqlSearch}
+          searchVisible={searchVisible}
           userId={userId}
           placeholder={searchPlaceholder}
           context={searchContext}
@@ -437,55 +568,63 @@ export function DataTable<T extends { _id: string }>({
       )}
 
       {/* Barra de exportação (sem seleção) */}
-      {showExportBar && (
-        <div className="flex justify-end gap-2">
-          {exportActions.map((action, idx) => (
-            <button
-              key={idx}
-              onClick={() => action.onClick([], [])}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20"
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Barra de ações (aparece quando há seleção) */}
-      {selectable && selectedIds.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-sm">
-          <div className="flex items-center gap-2 text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
-            <span className="font-semibold">{selectedIds.length} selecionado(s)</span>
-            <button
-              onClick={() => {
-                setSelectedIds([]);
-                setSelectAll(false);
-              }}
-              className="text-apple-blue hover:underline"
-            >
-              Limpar
-            </button>
+      <div className="flex justify-between items-center align-middle">
+        {!loading && total > 0 && (
+          <div className="relative h-10 px-2 py-5 w-100 text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark">
+                Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}
           </div>
-          <div className="flex items-center gap-2">
-            {allActions.map((action, idx) => (
+        )}
+      
+        {showExportBar && (
+          <div className="flex justify-end gap-2">
+            {exportActions.map((action, idx) => (
               <button
                 key={idx}
-                onClick={() => action.onClick(selectedIds, selectedItems)}
-                disabled={action.disabled || (action.requiresSelection && selectedIds.length === 0)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  action.label === 'Excluir'
-                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                    : 'bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20'
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                onClick={() => action.onClick([], [])}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20"
               >
                 {action.icon}
                 {action.label}
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Barra de ações (aparece quando há seleção) */}
+        {selectable && selectedIds.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-sm">
+            <div className="flex items-center gap-2 text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
+              <span className="font-semibold">{selectedIds.length} selecionado(s)</span>
+              <button
+                onClick={() => {
+                  setSelectedIds([]);
+                  setSelectAll(false);
+                }}
+                className="text-apple-blue hover:underline"
+              >
+                Limpar
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {allActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => action.onClick(selectedIds, selectedItems)}
+                  disabled={action.disabled || (action.requiresSelection && selectedIds.length === 0)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    action.label === 'Excluir'
+                      ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                      : 'bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {action.icon}
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Tabela */}
       <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden shadow-sm">
@@ -575,7 +714,7 @@ export function DataTable<T extends { _id: string }>({
       {/* Paginação */}
       {!loading && total > 0 && (
         <div className="flex items-center justify-between text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
-          <div>
+          <div className="px-2 w-100 text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark" >
             Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}
           </div>
           <div className="flex items-center gap-2">

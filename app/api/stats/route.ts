@@ -7,9 +7,8 @@ import { parseDBQL } from '@/lib/parseDBQL';
 import { getServerSessionIds } from '@/lib/session-server';
 
 export async function GET(req: NextRequest) {
-  // 🔹 Obter tenantId com prioridade do header, fallback para sessão
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 

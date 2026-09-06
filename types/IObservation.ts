@@ -3,7 +3,7 @@ import type { Document } from 'mongoose';
 import type mongoose from 'mongoose';
 
 export type IObservation = Document & {
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   scanId: mongoose.Types.ObjectId;
   patternId: mongoose.Types.ObjectId;
   pattern?: string;

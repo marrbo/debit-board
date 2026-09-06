@@ -11,11 +11,9 @@ import {
 import type { CSSProperties } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
-  Search,
   X,
   Code2,
   HelpCircle,
-  AlertCircle,
   BookmarkPlus,
   Bookmark,
   Check,
@@ -23,8 +21,8 @@ import {
   Trash2,
   Copy,
   PlayCircleIcon,
-  ChevronDown,
-  ChevronUp,
+  SearchCode,
+  TriangleAlert,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
 import DBQLHelpModal from "./DBQLHelpModal";
@@ -43,6 +41,7 @@ interface AdvancedSearchProps {
   userId: string;
   onManageQueries?: () => void;
   value?: string;
+  searchVisible?: boolean;
 }
 
 interface ValidationError {
@@ -229,6 +228,7 @@ export default function DBQLAdvancedSearch({
   userId = "",
   onManageQueries,
   value,
+  searchVisible
 }: AdvancedSearchProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -264,7 +264,7 @@ export default function DBQLAdvancedSearch({
   const [savedQueries, setSavedQueries] = useState<ISavedQuery[]>([]);
   const [tempQuery, setTempQuery] = useState<ISavedQuery>();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSearchVisible, setIsSearchVisible] = useState(true);
+  const [isSearchVisible, setIsSearchVisible] = useState(searchVisible ?? true);
 
   // Refs
   const savedButtonRef = useRef<HTMLButtonElement>(null);
@@ -612,12 +612,13 @@ export default function DBQLAdvancedSearch({
           
           // Busca query temporária do usuário
           let tempQuery = queries.find((tmp: ISavedQuery) => tmp.visibility === 'temporary' && tmp.userId === userId)
+          const tenantIdRaw = session?.user?.tenantId;
           if (!tempQuery) {
             tempQuery = {
               userId: userId,
               name: `Temporary (${session?.user?.name})`,
               context: dbqlContext,
-              tenantId: session?.user?.tenantId,
+              tenantId: tenantIdRaw,
               visibility: 'temporary',
               queryString: ''
             } as ISavedQuery;
@@ -1006,14 +1007,17 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
       <button
         type="button"
         onClick={() => setIsSearchVisible(!isSearchVisible)}
-        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark shadow-sm text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors z-20"
+        className={`absolute top-2 right-2 p-2 rounded-xl group text-apple-tertiary-light hover:text-apple-red ${isSearchVisible ? null : '-top-150 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark shadow-sm hover:bg-apple-blue/10'} transition-colors z-20`}
         title={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
         aria-label={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
       >
         {isSearchVisible ? (
-          <ChevronUp className="w-4 h-4" />
+          <X className="w-4 h-4" />
         ) : (
-          <ChevronDown className="w-4 h-4" />
+          <div className="relative flex gap-4 w-150 transition-all group-hover:text-apple-blue" >
+            <span className="font-mono text-xs hidden group-hover:block">DBQL Advanced Search </span>
+            <SearchCode className="w-4 h-4 group-hover:animate-bounce group-hover:[animation-duration:0.8s]" />
+          </div>
         )}
       </button>
 
@@ -1025,9 +1029,9 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               : "border-apple-border-light dark:border-apple-border-dark"
           }`}
         >
-          <div className="flex items-start gap-3 w-full">
-            <Search
-              className={`w-4 h-4 shrink-0 mt-2.5 ${syntaxErrors.length > 0 ? "text-apple-red" : "text-apple-tertiary-light"}`}
+          <div className="flex items-start gap-2 w-full">
+            <TriangleAlert
+              className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-apple-red" : "hidden"}`}
             />
 
             <div className="flex flex-col flex-1 gap-1.5 min-w-0">
@@ -1274,15 +1278,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
           </div>
         </div>
       ) : (
-        <div className="h-10 items-end pr-10 text-apple-tertiary-light text-[12px] relative flex flex-col  px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3">
-          DBQL Advanced Search
+        <div className="items-end pr-10 mb-5 flex flex-col px-4 py-3 bg-transparent transition-all outline-none ring-0 focus-within:ring-0 focus:outline-none">
         </div>
       )}
 
       {syntaxErrors.length > 0 && isSearchVisible && (
         <div className="flex flex-col gap-2 text-[12px] text-apple-red mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
           <div className="flex items-center gap-1.5 font-bold">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <TriangleAlert className="w-4 h-4 shrink-0" />
             <span>Erros detectados ({syntaxErrors.length}):</span>
           </div>
           <ol className="list-decimal pl-5 space-y-2">

@@ -1,20 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, ChartAreaIcon, Download } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import type { Column } from '@/components/DataTable';
 import TeamStatsCard from "@/components/TeamStatsCard";
-
-// const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-//   open: { label: "Novo", bg: "bg-blue-100", color: "text-blue-600" },
-//   resolved: { label: "Corrigido", bg: "bg-green-100", color: "text-green-600" },
-//   recurring: { label: "Recorrente", bg: "bg-red-100", color: "text-red-600" },
-//   wont_fix: { label: "Não Corrigir", bg: "bg-gray-100", color: "text-gray-600" },
-// };
+import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
 
 // Coluna do Grid (agora recebendo dados da rota /api/dashboard/stats)
 const columns: Column<any>[] = [
@@ -31,22 +25,22 @@ const columns: Column<any>[] = [
       return (
         <div className="flex flex-col gap-1">
           <div className="grid grid-cols-4 gap-2 hover:scale-150">
-            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 border border-red-600/50 text-xs font-bold">
               {sev.critical || 0}
-              <span className="text-[7px] text-xs text-red-600/50 align-center uppercase">critical</span>
+              <span className="text-[7px] text-red-600/50 align-center uppercase">critical</span>
             </div>
             
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 border border-orange-600/50 text-xs font-bold">
               {sev.high || 0}
-              <span className="text-[7px] text-xs text-orange-600/50 uppercase">high</span>
+              <span className="text-[7px] text-orange-600/50 uppercase">high</span>
             </div>
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 text-xs font-bold">
+            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 border border-yellow-600/50 text-xs font-bold">
               {sev.medium || 0}
-              <span className="text-[7px] text-xs text-yellow-600/50 uppercase">medium</span>
+              <span className="text-[7px] text-yellow-600/50 uppercase">medium</span>
             </div>
-            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 text-green-600 text-xs font-bold">
+            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 border border-green-600/50 text-green-600 text-xs font-bold">
               {sev.low || 0}
-              <span className="text-[7px] text-xs text-green-600/50 uppercase">low</span>
+              <span className="text-[7px] text-green-600/50 uppercase">low</span>
             </div>
           </div>
         </div>
@@ -77,8 +71,8 @@ function DashboardContent() {
   const searchParams = useSearchParams();
 
   const [teamId, setTeamId] = useState(searchParams.get('teamId') || '');
+  const [teamName, setTeamName] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
-  const [effectiveTeamId, setEffectiveTeamId] = useState('');
   const [searchTerm, setSearchTerm] = useState(''); // ID da query DBQL
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -90,6 +84,9 @@ function DashboardContent() {
     projectStats: {}
   });
 
+  // 🔥 Dados dos projetos para exportar PDF
+  const [projects, setProjects] = useState<any[]>([]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -100,6 +97,12 @@ function DashboardContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const effectiveTeamId = useMemo(() => {
+    if (!teamId) return '';
+    const selected = teams.find(t => t._id === teamId);
+    return selected?.isGlobal ? 'all' : teamId;
+  }, [teamId, teams]);
+
   // Busca os Teams (Prioridade: Global ou único time)
   useEffect(() => {
     fetch("/api/teams")
@@ -107,45 +110,61 @@ function DashboardContent() {
       .then(json => {
         const allTeams = json.data || [];
         setTeams(allTeams);
-
         const globalTeam = allTeams.find((t: any) => t.isGlobal);
         const nonGlobalTeams = allTeams.filter((t: any) => !t.isGlobal);
-
         if (!teamId && allTeams.length > 0) {
           if (nonGlobalTeams.length === 1) {
             setTeamId(nonGlobalTeams[0]._id);
-            setEffectiveTeamId(nonGlobalTeams[0]._id);
           } else {
             setTeamId(globalTeam?._id || allTeams[0]._id);
-            setEffectiveTeamId(globalTeam ? 'all' : allTeams[0]._id);
           }
         }
       });
-  }, []);
-
-  useEffect(() => {
-    if (!teamId) return;
-    const selected = teams.find(t => t._id === teamId);
-    if (selected?.isGlobal) setEffectiveTeamId('all');
-    else setEffectiveTeamId(teamId);
-  }, [teamId, teams]);
+  }, [teamId]);
 
   // 🔥 Busca as Stats na nova Rota Dedicada (com DBQL aplicado)
   useEffect(() => {
     if (!effectiveTeamId) return;
-    
-    const params = new URLSearchParams({
-      teamId: effectiveTeamId,
-      range: "30d"
-    });
-    
+    const params = new URLSearchParams({ teamId: effectiveTeamId, range: "30d" });
     if (searchTerm) params.set('q', searchTerm);
-
     fetch(`/api/dashboard/stats?${params.toString()}`)
       .then(res => res.json())
       .then(data => setStats(data))
       .catch(console.error);
   }, [effectiveTeamId, searchTerm]);
+
+  // 🔥 Busca dados da tabela de projetos (para o PDF)
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+    const params = new URLSearchParams({ teamId: effectiveTeamId, page: "1", limit: "100", sort: "name", order: "asc" });
+    if (searchTerm) params.set('q', searchTerm);
+    fetch(`/api/dashboard?${params.toString()}`)
+      .then(res => res.json())
+      .then(json => setProjects(json.data || []))
+      .catch(console.error);
+  }, [effectiveTeamId, searchTerm]);
+
+  // 🔥 Função de exportação PDF
+  const handleExportPDF = useCallback(async () => {
+    const projectsForPDF = projects.map((p: any) => {
+      const projectStat = stats.projectStats?.[p.name] || {};
+      return {
+        name: p.name,
+        description: p.description,
+        lastScan: p.syncDate ? new Date(p.syncDate).toLocaleDateString("pt-BR") : "—",
+        severity: projectStat.severity || {},
+      };
+    });
+
+    await exportDashboardPDF({
+      teamName: teamName,
+      generatedAt: new Date(),
+      teamStats: stats.teamStats,
+      projectStats: stats.projectStats,
+      projects: projectsForPDF,
+      categoryDetails: stats.categoryDetails,
+    });
+  }, [projects, stats, teamName]);
 
   if (status === "loading") return <div className="py-10 text-center">Carregando...</div>;
   if (!session) {
@@ -157,44 +176,57 @@ function DashboardContent() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Dashboard"
+        icon={<ChartAreaIcon className="w-10 h-10 text-apple-blue" />}
         subtitle="Visão geral do time selecionado."
         actions={
-          <div className="relative" ref={dropdownRef}>
+          <div className="flex items-center gap-3">
+            {/* 🔥 Botão Exportar PDF */}
             <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+              onClick={handleExportPDF}
+              disabled={projects.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-apple-blue text-white text-sm font-medium hover:bg-apple-blue/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="font-bold">
-                {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
-              </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              <Download className="w-4 h-4" />
+              Exportar PDF
             </button>
 
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
-                {teams.map((team) => (
-                  <button
-                    key={team._id}
-                    onClick={() => {
-                      const newTeamId = team.isGlobal ? 'all' : team._id;
-                      setTeamId(team._id);
-                      setEffectiveTeamId(newTeamId);
-                      setDropdownOpen(false);
-                    }}
-                    className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
-                      teamId === team._id
-                        ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
-                        : "text-apple-label-light dark:text-apple-label-dark"
-                    }`}
-                  >
-                    <span className="truncate">
-                      {team.isGlobal ? `${team.name} (Todos)` : team.name}
-                    </span>
-                    {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Seletor de Time */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+              >
+                <span className="font-bold">
+                  {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
+                  {teams.map((team) => (
+                    <button
+                      key={team._id}
+                      onClick={() => {
+                        setTeamId(team._id);
+                        setTeamName(team.name);
+                        setDropdownOpen(false);
+                      }}
+                      className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
+                        teamId === team._id
+                          ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
+                          : "text-apple-label-light dark:text-apple-label-dark"
+                      }`}
+                    >
+                      <span className="truncate">
+                        {team.isGlobal ? `${team.name} (Todos)` : team.name}
+                      </span>
+                      {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         }
       />
@@ -212,15 +244,19 @@ function DashboardContent() {
             />
             <TeamStatsCard
               type="category"
-              title="Categoria"
+              title="Distribuição por Categoria"
               total={stats.teamStats.total}
               category={stats.teamStats.categoryTotals}
+              categoryGroup={stats.teamStats.categoryGroupTotals}
+              categoryDetails={stats.categoryDetails}
             />
           </div>
 
           {/* Projects Table (usando a rota /api/dashboard e projectStats para extraData) */}
           <div className="pt-4 border-t border-apple-border-light dark:border-apple-border-dark">
-            <h3 className="text-lg font-semibold mb-4">Projetos do Time</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              Projetos {teamName === 'Global' ? '' : teamName }
+            </h3>
             <DataTable
               endpoint="/api/dashboard"
               columns={columns}
@@ -228,6 +264,7 @@ function DashboardContent() {
               defaultLimit={10}
               searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
               searchContext="projects"
+              searchVisible={false}
               userId={session?.user?._id?.toString()}
               teamId={effectiveTeamId}
               extraData={stats.projectStats} // 🔥 Usa o map de stats dedicado

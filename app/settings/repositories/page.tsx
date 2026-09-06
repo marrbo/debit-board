@@ -19,6 +19,7 @@ const columns: Column<IRepository>[] = [
   {
     key: "project", 
     label: "Projeto",
+    sortKey: "project.name",
     sortable: true, 
     render: (item: IRepository) => item.project?.name || "Sem projeto",
   },
@@ -35,6 +36,7 @@ const columns: Column<IRepository>[] = [
     label: "Ações",
     sortable: false,
     width: "120px",
+    exportable: false,
     render: () => (
       <span className="text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark">
         Em breve
@@ -120,7 +122,8 @@ function RepositoriesContent() {
         endpoint="/api/repositories"
         columns={columns}
         defaultSort={{ field: "name", order: "asc" }}
-        defaultLimit={10}
+        defaultLimit={8}
+        pdfTitle="Repositórios"
         searchPlaceholder="Buscar repositórios (ex: name:repo-backend OR projectId:...)"
         searchContext="repositories"
         userId={session.user.id}

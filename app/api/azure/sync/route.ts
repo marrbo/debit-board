@@ -6,9 +6,11 @@ import { Project } from '@/models/Project';
 import { Repository } from '@/models/Repository';
 import * as azdev from 'azure-devops-node-api';
 import { getPersonalAccessTokenHandler } from 'azure-devops-node-api';
+import { getServerSessionIds } from '@/lib/session-server';
 
-export async function POST(req: NextRequest) {
-  const tenantId = req.headers.get('x-tenant-id');
+export async function POST(_: NextRequest) {
+  const sessionIds = await getServerSessionIds();
+  const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 

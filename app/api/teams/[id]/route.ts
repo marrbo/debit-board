@@ -8,7 +8,7 @@ import { Types } from 'mongoose';
 // Ajuste na tipagem dos params para Promise
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+    const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 
@@ -59,9 +59,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(team);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+    const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 

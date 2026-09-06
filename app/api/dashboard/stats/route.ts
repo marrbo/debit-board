@@ -5,13 +5,16 @@ import { Observation } from '@/models/Observation';
 import { Project } from '@/models/Project';
 import { Team } from '@/models/Team';
 import { SavedQuery } from '@/models/SavedQuery';
+import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import { getServerSessionIds } from '@/lib/session-server';
 import { parseDBQL } from '@/lib/parseDBQL';
 import { subDays } from 'date-fns';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
+
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
@@ -20,7 +23,6 @@ export async function GET(req: NextRequest) {
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
 
-  // 1. Resolve DBQL
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
     try {
@@ -29,7 +31,6 @@ export async function GET(req: NextRequest) {
     } catch {}
   }
 
-  // 2. Determina os projetos permitidos (para filtrar as observations)
   let allowedProjectNames: string[] | null = null;
   let allowedProjectIds: any[] | null = null;
 
@@ -42,9 +43,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. Filtro de Observations por DBQL
+  // Filtro base
   const obsMatch: any = { tenantId };
-  
+
   if (finalSearchQuery) {
     const parsedMatch = parseDBQL(finalSearchQuery);
     if (parsedMatch && Object.keys(parsedMatch).length > 0) {
@@ -56,12 +57,17 @@ export async function GET(req: NextRequest) {
   else if (range === '14d') obsMatch.firstSeen = { $gte: subDays(new Date(), 14) };
   else if (range === '30d') obsMatch.firstSeen = { $gte: subDays(new Date(), 30) };
 
-  // Se tem time, filtra pelos nomes dos projetos
   if (allowedProjectNames) {
     obsMatch.project = { $in: allowedProjectNames };
   }
 
-  // 4. Stats do Time (Cards)
+  // 🔥 Filtro extra para agregações de categoria: ignora patternId nulo/vazio
+  const categoryMatch = {
+    ...obsMatch,
+    patternId: { $exists: true, $nin: [null, ""] },
+  };
+
+  // 4. Stats do Time (Cards) - mantém para os cards principais
   const teamPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -85,9 +91,65 @@ export async function GET(req: NextRequest) {
   ];
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
-  const teamStats = teamStatsResult[0] || { total: 0, statusTotals: {}, severityTotals: {}, categoryTotals: {} };
 
-  // 5. Stats por Projeto (Grid)
+  // 4.1 - Agrupamento por categoria e patternId (somente com patternId válido)
+  const categoryPipeline = [
+    { $match: categoryMatch },
+    { $group: { _id: { category: "$category", patternId: "$patternId" } } },
+    { $group: { _id: "$_id.category", count: { $sum: 1 } } },
+    { $project: { _id: 0, category: "$_id", count: 1 } }
+  ];
+
+  const categoryStatsResult = await Observation.aggregate(categoryPipeline);
+  const categoryGroupTotals: Record<string, number> = {};
+  categoryStatsResult.forEach((item: any) => {
+    categoryGroupTotals[item.category] = item.count;
+  });
+
+  const teamStats = teamStatsResult[0] || { total: 0, statusTotals: {}, severityTotals: {}, categoryTotals: {} };
+  teamStats.categoryTotals = teamStats.categoryTotals || {};
+  teamStats.categoryGroupTotals = categoryGroupTotals;
+
+  // 4.2 - Detalhes por categoria (padrões distintos) com filtro de patternId válido
+  const detailPipeline = [
+    { $match: categoryMatch },
+    { $group: { _id: { category: "$category", patternId: "$patternId" }, count: { $sum: 1 } } },
+    { $project: { _id: 0, category: "$_id.category", patternId: "$_id.patternId", count: 1 } }
+  ];
+  const detailResults = await Observation.aggregate(detailPipeline);
+  const categoryDetails: Record<string, Record<string, number>> = {};
+  detailResults.forEach((item: any) => {
+    if (!categoryDetails[item.category]) categoryDetails[item.category] = {};
+    // Converte patternId para string para usar como chave
+    categoryDetails[item.category][item.patternId] = item.count;
+  });
+
+  // 🔥 Busca nomes dos patterns - converte IDs para ObjectId
+  const allPatternIds = new Set<string>();
+  Object.values(categoryDetails).forEach((patterns) => {
+    Object.keys(patterns).forEach((id) => allPatternIds.add(id));
+  });
+
+  const validObjectIds = Array.from(allPatternIds)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  const patterns = await VulnerabilityPattern.find({ _id: { $in: validObjectIds } }).select('_id name').lean();
+  const patternNameMap: Record<string, string> = {};
+  patterns.forEach((p: any) => {
+    patternNameMap[p._id] = p.name;
+  });
+
+  const categoryDetailsWithNames: Record<string, Record<string, number>> = {};
+  Object.entries(categoryDetails).forEach(([category, patterns]) => {
+    categoryDetailsWithNames[category] = {};
+    Object.entries(patterns).forEach(([patternId, count]) => {
+      const patternName = patternNameMap[patternId] || patternId; // fallback para o ID se não encontrar
+      categoryDetailsWithNames[category][patternName] = count;
+    });
+  });
+
+  // 5. Stats por Projeto (Grid) - mantém sem filtro de patternId
   const projectPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -122,5 +184,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ teamStats, projectStats });
+  return NextResponse.json({ teamStats, projectStats, categoryDetails: categoryDetailsWithNames });
 }

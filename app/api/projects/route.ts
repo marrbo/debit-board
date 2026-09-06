@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
+  const isAll = searchParams.get('all') === 'true'; 
 
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
     model: Project,
     defaultSort: 'createdAt',
     overrideSearchQuery: finalSearchQuery,
+    all: isAll,
     projection: {
       _id: 1, name: 1, azureProjectId: 1, url: 1, description: 1,
       defaultTeamImageUrl: 1, repositoryCount: 1, syncDate: 1,

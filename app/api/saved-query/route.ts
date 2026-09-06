@@ -1,4 +1,6 @@
+//app/api/saved-query/route.ts
 import { handleGenericGet } from "@/lib/api-handler";
+import { getServerSessionIds } from "@/lib/session-server";
 import { SavedQuery } from "@/models/SavedQuery";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -65,7 +67,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const tenantId = req.headers.get('x-tenant-id');
+    const sessionIds = await getServerSessionIds();
+    const tenantId = sessionIds.tenantId;
 
     if (!body.name || !body.queryString) {
       return NextResponse.json({ error: 'Nome e Query são obrigatórios' }, { status: 400 });

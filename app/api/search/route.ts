@@ -6,10 +6,14 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { User } from '@/models/User';
 import { Tenant } from '@/models/Tenant';
 import mongoose from 'mongoose';
-import { useClientSessionIds } from '@/lib/utils';
+import { getServerSessionIds } from '@/lib/session-server';
 
 export async function POST(req: NextRequest) {
-  const {tenantId, userId, azureSettings} = useClientSessionIds();
+  const sessionIds = await getServerSessionIds();
+  const tenantId = sessionIds.tenantId;
+  const userId = sessionIds.userId;
+  const azureSettings = sessionIds.azureSettings;
+  
 
   try {
     const settingsHeader = req.headers.get('X-Settings');
@@ -27,10 +31,6 @@ export async function POST(req: NextRequest) {
 
     let tenant = null;
     const tenantIdCandidate = dbUser?.tenantId;
-
-    if (tenantIdCandidate) {
-      tenant = await Tenant.findOne({ uuid: tenantIdCandidate });
-    }
 
     if (!tenant && tenantIdCandidate && mongoose.Types.ObjectId.isValid(tenantIdCandidate)) {
       tenant = await Tenant.findById(tenantIdCandidate);

@@ -9,7 +9,7 @@ import { getServerSessionIds } from '@/lib/session-server';
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get('teamId');
   const range = searchParams.get('range') || '30d';

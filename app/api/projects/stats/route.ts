@@ -8,7 +8,7 @@ import { parseDBQL } from '@/lib/parseDBQL'; // Assumindo que você tem essa lib
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+    const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 

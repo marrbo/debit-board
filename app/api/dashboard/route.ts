@@ -11,7 +11,7 @@ import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);

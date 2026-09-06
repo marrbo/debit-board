@@ -40,7 +40,7 @@ export async function handleGenericGet<T>(
   } = options;
 
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 

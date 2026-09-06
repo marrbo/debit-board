@@ -99,9 +99,10 @@ export default function ObservationsClient({ azureSettings }: { azureSettings: I
   // Colunas
   const columns: Column<IObservation>[] = useMemo(
     () => [
-      { key: "status", label: "Status", width: '90px', sortable: true, render: (item) => <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${statusColor(item.status)}`}>{item.status}</span> },
-      { key: "fileName", width: '400px', label: "Arquivo / Observação", sortable: true, render: (item) => <div className="flex flex-col"><span className="text-xs font-semibold truncate max-w-xs text-apple-blue cursor-pointer hover:underline" onClick={() => setSelectedObservation(item)}>{item.fileName}</span><span className="text-[10px] font-mono text-gray-400 truncate max-w-xs">{item.filePath}</span></div> },
-      { key: "category", width: '170px', label: "Categoria", sortable: true },
+      { key: "status", label: "Status", width: '70px', sortable: true, render: (item) => <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${statusColor(item.status)}`}>{item.status}</span> },
+      { key: "fileName", width: '350px', label: "Arquivo / Observação", sortable: true, render: (item) => <div className="flex flex-col"><span className="text-xs font-semibold truncate max-w-xs text-apple-blue cursor-pointer hover:underline" onClick={() => setSelectedObservation(item)}>{item.fileName}</span><span className="text-[10px] font-mono text-gray-400 truncate max-w-xs">{item.filePath}</span></div> },
+      { key: "category", width: '150px', label: "Categoria", sortable: true, className: "font-mono text-[10px]" },
+      { key: "patternName", width: '220px', label: "Sub Categoria", sortable: true, className: "font-mono text-[10px]" },
       { key: "branch", width: '90px', label: "Branch", sortable: true, render: (item) => <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">{item.branch}</span> },
       { key: "severity", width: '110px', label: "Severidade", sortable: true, render: (item) => <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase rounded ${severityColor(item.severity)}`}>{item.severity}</span> },
       { key: "slaDueAt", width: '90px', label: "SLA", sortable: true, render: (item) => slaRender(item) },

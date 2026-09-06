@@ -13,6 +13,7 @@ import {
   toggleUserStatus,
   createUser,
 } from "./actions";
+import type mongoose from "mongoose";
 
 export default function AdminTabs({
   tenants,
@@ -26,7 +27,7 @@ export default function AdminTabs({
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [filterPending, setFilterPending] = useState<boolean>(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [bulkTargetTenant, setBulkTargetTenant] = useState<string>("");
+  const [bulkTargetTenant, setBulkTargetTenant] = useState<string>();
   const [loading, setLoading] = useState(false);
 
   const [editingTenant, setEditingTenant] = useState<any>(null);
@@ -64,7 +65,7 @@ export default function AdminTabs({
   };
 
   const handleToggleTenant = async (
-    id: string,
+    id: mongoose.Types.ObjectId,
     currentStatus: boolean | undefined
   ) => {
     const isActive = currentStatus ?? true;
@@ -251,7 +252,7 @@ export default function AdminTabs({
                     {selectedUsers.length} selecionado(s)
                   </span>
                   <select
-                    value={bulkTargetTenant}
+                    value={bulkTargetTenant.toString()}
                     onChange={(e) => setBulkTargetTenant(e.target.value)}
                     className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-2 py-1 text-sm text-apple-label-light dark:text-apple-label-dark focus:outline-none focus:ring-2 focus:ring-apple-blue/30 transition-colors"
                   >

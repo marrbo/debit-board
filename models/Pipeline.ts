@@ -4,7 +4,7 @@ import type { Model } from 'mongoose';
 import mongoose, { Schema } from 'mongoose';
 
 const PipelineSchema = new Schema<IPipeline>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, ref: 'Tenant' },
   repositoryId: { type: String, required: true, ref: 'Repository' },
   name: { type: String, required: true },
   type: { type: String, enum: ['yaml', 'classic'], required: true },

@@ -26,7 +26,10 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-base-url', baseUrl);
   requestHeaders.set('x-sentry-trace', request.headers.get('x-sentry-trace') || '');
-  requestHeaders.set('x-tenant-id', tenantId || '');
+
+  const tenantCripto = btoa(tenantId.toString())
+
+  requestHeaders.set('x-tenant-id', tenantCripto);
   requestHeaders.set('x-user-id', userId);
 
   // ------------------------------------------------

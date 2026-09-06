@@ -7,10 +7,11 @@ import { Team } from '@/models/Team';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  
+
   // 1. Identificação da Query (ID Salvo ou String na URL)
   const dbqlId = searchParams.get('q'); // ou 'dbqlId' dependendo da sua convenção
   const searchQueryRaw = searchParams.get('search') || '';
+  const isAll = searchParams.get('all') === 'true'; 
 
   const additionalMatch: Record<string, unknown> = {};
   const projectId = searchParams.get('projectId');
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       additionalMatch.projectId = { $in: projectIds };
     }
   }
-  
+
   let finalSearchQuery = searchQueryRaw;
 
   if (dbqlId) {
@@ -67,20 +68,30 @@ export async function GET(req: NextRequest) {
         as: 'projectInfo'
       }
     },
-    { $unwind: { path: '$projectInfo', preserveNullAndEmptyArrays: true } }
+    { $unwind: { path: '$projectInfo', preserveNullAndEmptyArrays: true } },
+    // 🔥 Cria o campo "project" para que o $sort consiga usar "project.name"
+    {
+      $addFields: {
+        project: {
+          _id: '$projectInfo._id',
+          name: '$projectInfo.name'
+        }
+      }
+    }
   ];
 
   // Se houver busca por nome de projeto, injetamos o match após o lookup
   if (projectNameFilter) {
     const escaped = projectNameFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regexPattern = projectNameFilter.includes('*') 
-      ? escaped.replace(/\*/g, '.*') 
+    const regexPattern = projectNameFilter.includes('*')
+      ? escaped.replace(/\*/g, '.*')
       : '^' + escaped + '$';
 
     customPipeline.push({
       $match: {
-        'projectInfo.name': { $regex: regexPattern, $options: 'i' }
-      }
+        'projectInfo.name': { $regex: regexPattern, $options: 'i' },
+        'project.name': { $regex: regexPattern, $options: 'i' }
+      },
     });
   }
 
@@ -91,6 +102,7 @@ export async function GET(req: NextRequest) {
     additionalMatch,
     overrideSearchQuery: finalSearchQuery,
     customPipeline,
+    all: isAll,
     projection: {
       _id: 1,
       name: 1,
