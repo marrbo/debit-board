@@ -18,6 +18,7 @@ const ProjectSchema = new Schema<IProject>({
   pipelineClassicCount: { type: Number, default: 0 },
   pipelineYamlCount: { type: Number, default: 0 },
   pipelineSuccessCount: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true },
 });
 
 ProjectSchema.index({ tenantId: 1, azureProjectId: 1 }, { unique: true });

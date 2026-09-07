@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Folder, FileText, PanelLeftClose, PanelLeftOpen, BookOpen } from 'lucide-react';
+import { Folder, FileText, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export function WikiSidebar({ items }: { items: any[] }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -11,14 +11,14 @@ export function WikiSidebar({ items }: { items: any[] }) {
   return (
     <div
       className={`relative flex flex-col h-full transition-all duration-300 ease-in-out  bg-apple-secondary-light text-apple-label-dark border-r border-apple-border-dark ${
-        collapsed ? 'w-16' : 'w-64'
+        collapsed ? 'w-4' : 'w-76'
       }`}
     >
       {/* 🔥 Botão estilo DeepSeek no topo direito */}
-      <div className="absolute top-3 right-3 z-20">
+      <div className={`absolute top-5 z-20 bg-apple-tertiary-dark p-1 rounded-lg transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`flex items-center justify-center w-8 h-8 rounded-lg  text-apple-tertiary-dark hover:text-apple-blue hover:bg-apple-card-light/20 transition-all ${
+          className={`flex items-center justify-center w-5 h-5 rounded-lg  text-apple-card-dark hover:text-white transition-all ${
             collapsed ? 'bg-transparent' : ''
           }`}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
@@ -35,13 +35,6 @@ export function WikiSidebar({ items }: { items: any[] }) {
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6">
-          <BookOpen className="w-6 h-6 text-apple-tertiary-dark" />
-          <span
-            className="text-xs font-medium text-apple-tertiary-dark"
-            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-          >
-            Wiki
-          </span>
         </div>
       )}
     </div>

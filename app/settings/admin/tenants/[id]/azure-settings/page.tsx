@@ -12,7 +12,7 @@ export default async function TenantAzureSettings(props: { params: Promise<{ id:
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   if (session?.user?.email !== adminEmail) {
-    redirect("/stats");
+    redirect("/");
   }
 
   await connectToDatabase();

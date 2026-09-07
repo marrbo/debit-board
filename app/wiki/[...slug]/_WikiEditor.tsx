@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 
 export default function WikiEditor({ slug }: { slug: string }) {
   const router = useRouter();
@@ -126,7 +125,7 @@ export default function WikiEditor({ slug }: { slug: string }) {
         </div>
         <div className="w-1/2 overflow-y-auto p-8 bg-white dark:bg-zinc-900">
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+            <MarkdownRenderer content={content}></MarkdownRenderer>
           </div>
         </div>
       </div>

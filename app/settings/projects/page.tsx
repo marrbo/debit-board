@@ -45,6 +45,16 @@ function ProjectsContent() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [filterValue, setFilterValue] = useState("");
+
+  const handleSimpleSearch = (column: string | null, value: string) => {
+    setFilterColumn(column);
+    setFilterValue(value);
+    // Reset para a primeira página é feito pelo DataTable via useEffect? Não, precisa controlar aqui? 
+    // O DataTable já não renderiza busca, então resetamos a página manualmente? Vamos deixar o DataTable lidar com isso via filterValue (client-side).
+  };
+
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
@@ -76,6 +86,13 @@ function ProjectsContent() {
       <PageHeader
         title="Projetos"
         subtitle="Gerencie os projetos do Tenant. Projetos possuem repositórios vinculados."
+        search={{
+          type: 'simple',
+          onSearch: handleSimpleSearch,
+          userId: session?.user?._id?.toString(),
+          columns: columns.map(c => ({ key: c.key, label: c.label })),
+          placeholder: "Buscar projetos (ex: name:MeuProjeto OR projectId:...)",
+        }}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -112,12 +129,11 @@ function ProjectsContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Projetos"
-        searchPlaceholder="Buscar projetos (ex: name:MeuProjeto OR projectId:...)"
-        searchContext="none"
-        userId={session.user.id}
-        // onRowClick={(project: unknown) => setSelectedProject(project as IProject)}
+        onRowClick={(project: unknown) => setSelectedProject(project as IProject)}
         onSelectionChange={setSelectedProjectIds}
         selectable={true}
+        filterColumn={filterColumn}
+        filterValue={filterValue}
       />
 
       <ProjectDrawer

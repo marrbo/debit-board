@@ -4,6 +4,7 @@ import { SavedQuery } from '@/models/SavedQuery';
 import { handleGenericGet } from '@/lib/api-handler';
 import type { PipelineStage } from 'mongoose';
 import { Team } from '@/models/Team';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,7 +19,8 @@ export async function GET(req: NextRequest) {
 
   const teamId = searchParams.get('teamId');
   if (teamId && teamId !== 'all') {
-    const team = await Team.findById(teamId).lean();
+    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId) ? new mongoose.Types.ObjectId(teamId) : null;
+    const team = await Team.findById(teamObjectId).lean();
     if (team) {
       const projectIds = (team.projectIds || []).map((id: any) => id.toString());
       additionalMatch.projectId = { $in: projectIds };

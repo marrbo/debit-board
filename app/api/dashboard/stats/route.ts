@@ -32,18 +32,25 @@ export async function GET(req: NextRequest) {
   }
 
   let allowedProjectNames: string[] | null = null;
-  let allowedProjectIds: any[] | null = null;
-
+  let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
+  
   if (teamId && teamId !== 'all') {
-    const team = await Team.findById(teamId).lean();
+    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId) ? new mongoose.Types.ObjectId(teamId) : null;
+    const team = await Team.findById(teamObjectId).lean();
     if (team) {
-      allowedProjectIds = team.projectIds || [];
+      // 🔥 Converte todos os projectIds para ObjectId (defensivo)
+      allowedProjectIds = (team.projectIds || []).map((id: any) => {
+        if (typeof id === 'string' && mongoose.Types.ObjectId.isValid(id)) {
+          return new mongoose.Types.ObjectId(id);
+        }
+        return id;
+      });
+      
       const teamProjects = await Project.find({ _id: { $in: allowedProjectIds } }).select('name').lean();
       allowedProjectNames = teamProjects.map(p => p.name);
     }
   }
-
-  // Filtro base
+// Filtro base
   const obsMatch: any = { tenantId };
 
   if (finalSearchQuery) {

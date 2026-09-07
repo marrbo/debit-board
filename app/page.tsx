@@ -3,12 +3,11 @@
 import { Suspense, useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Check, ChartAreaIcon, Download } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
-import { DataTable } from "@/components/DataTable";
-import type { Column } from '@/components/DataTable';
-import TeamStatsCard from "@/components/TeamStatsCard";
 import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
+import PageHeader from "@/components/PageHeader";
+import { ChartAreaIcon, Check, ChevronDown, FileText } from "lucide-react";
+import TeamStatsCard from "@/components/TeamStatsCard";
+import { DataTable, type Column } from "@/components/DataTable";
 
 // Coluna do Grid (agora recebendo dados da rota /api/dashboard/stats)
 const columns: Column<any>[] = [
@@ -73,19 +72,18 @@ function DashboardContent() {
   const [teamId, setTeamId] = useState(searchParams.get('teamId') || '');
   const [teamName, setTeamName] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState(''); // ID da query DBQL
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Dados dos Cards e do Grid (vindo da rota dedicada /api/dashboard/stats)
   const [stats, setStats] = useState<any>({
     teamStats: { total: 0, severityTotals: {}, statusTotals: {}, categoryTotals: {} },
     projectStats: {}
   });
 
-  // 🔥 Dados dos projetos para exportar PDF
   const [projects, setProjects] = useState<any[]>([]);
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -103,7 +101,6 @@ function DashboardContent() {
     return selected?.isGlobal ? 'all' : teamId;
   }, [teamId, teams]);
 
-  // Busca os Teams (Prioridade: Global ou único time)
   useEffect(() => {
     fetch("/api/teams")
       .then(res => res.json())
@@ -119,32 +116,73 @@ function DashboardContent() {
             setTeamId(globalTeam?._id || allTeams[0]._id);
           }
         }
-      });
+      })
+      .catch(() => setTeams([]));
   }, [teamId]);
 
-  // 🔥 Busca as Stats na nova Rota Dedicada (com DBQL aplicado)
   useEffect(() => {
     if (!effectiveTeamId) return;
     const params = new URLSearchParams({ teamId: effectiveTeamId, range: "30d" });
     if (searchTerm) params.set('q', searchTerm);
+    
     fetch(`/api/dashboard/stats?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(console.error);
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+        return res.text();
+      })
+      .then(text => {
+        if (text) {
+          try {
+            const data = JSON.parse(text);
+            setStats(data);
+          } catch (e) {
+            console.error('Erro ao parsear JSON de stats:', e);
+            setStats({ teamStats: { total: 0, severityTotals: {}, statusTotals: {}, categoryTotals: {} }, projectStats: {} });
+          }
+        } else {
+          setStats({ teamStats: { total: 0, severityTotals: {}, statusTotals: {}, categoryTotals: {} }, projectStats: {} });
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao buscar stats:', err);
+        setStats({ teamStats: { total: 0, severityTotals: {}, statusTotals: {}, categoryTotals: {} }, projectStats: {} });
+      });
   }, [effectiveTeamId, searchTerm]);
 
-  // 🔥 Busca dados da tabela de projetos (para o PDF)
+  // 🔹 Handler de busca simplificado
+  const handleSearch = useCallback((newQuery: string) => {
+    setSearchTerm(newQuery);
+  }, []);
+
   useEffect(() => {
     if (!effectiveTeamId) return;
     const params = new URLSearchParams({ teamId: effectiveTeamId, page: "1", limit: "100", sort: "name", order: "asc" });
     if (searchTerm) params.set('q', searchTerm);
+    
     fetch(`/api/dashboard?${params.toString()}`)
-      .then(res => res.json())
-      .then(json => setProjects(json.data || []))
-      .catch(console.error);
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+        return res.text();
+      })
+      .then(text => {
+        if (text) {
+          try {
+            const json = JSON.parse(text);
+            setProjects(json.data || []);
+          } catch (e) {
+            console.error('Erro ao parsear JSON de projetos:', e);
+            setProjects([]);
+          }
+        } else {
+          setProjects([]);
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao buscar projetos:', err);
+        setProjects([]);
+      });
   }, [effectiveTeamId, searchTerm]);
 
-  // 🔥 Função de exportação PDF
   const handleExportPDF = useCallback(async () => {
     const projectsForPDF = projects.map((p: any) => {
       const projectStat = stats.projectStats?.[p.name] || {};
@@ -178,16 +216,23 @@ function DashboardContent() {
         title="Dashboard"
         icon={<ChartAreaIcon className="w-10 h-10 text-apple-blue" />}
         subtitle="Visão geral do time selecionado."
+        search={{
+          type: 'advanced',
+          onSearch: handleSearch,
+          userId: session?.user?._id?.toString() || session?.user?.id,
+          placeholder: "Filtrar stats, e.g. severity:critical OR project:my-api",
+          context: "observations"
+        }}
         actions={
           <div className="flex items-center gap-3">
             {/* 🔥 Botão Exportar PDF */}
             <button
               onClick={handleExportPDF}
               disabled={projects.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-apple-blue text-white text-sm font-medium hover:bg-apple-blue/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center group gap-2 px-4 py-2 rounded-2xl bg-apple-blue text-white text-sm font-medium hover:bg-apple-blue/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download className="w-4 h-4" />
-              Exportar PDF
+              <span className="hidden group-hover:block">Relatório PDF</span>
+              <FileText className="w-4 h-4" />
             </button>
 
             {/* Seletor de Time */}
@@ -262,13 +307,13 @@ function DashboardContent() {
               columns={columns}
               defaultSort={{ field: "name", order: "asc" }}
               defaultLimit={10}
-              searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
-              searchContext="projects"
-              searchVisible={false}
-              userId={session?.user?._id?.toString()}
+              // searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
+              // searchContext="projects"
+              // searchVisible={false}
+              // userId={session?.user?._id?.toString()}
               teamId={effectiveTeamId}
               extraData={stats.projectStats} // 🔥 Usa o map de stats dedicado
-              onSearchChange={(value) => setSearchTerm(value)}
+              // onSearchChange={(value) => setSearchTerm(value)}
               onRowClick={() => {}}
             />
           </div>

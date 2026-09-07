@@ -45,11 +45,23 @@ function TeamsContent() {
   const [selectedTeam, setSelectedTeam] = useState<ITeam | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Estados para busca simples (client-side)
+  const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [filterValue, setFilterValue] = useState("");
+
   if (status === "loading") return <div className="py-10 text-center">Carregando...</div>;
   if (!session) {
     router.push("/login");
     return null;
   }
+
+  // Callback da busca simples
+  const handleSimpleSearch = (column: string | null, value: string) => {
+    setFilterColumn(column);
+    setFilterValue(value);
+    // Reset para a primeira página é feito pelo DataTable via useEffect? Não, precisa controlar aqui? 
+    // O DataTable já não renderiza busca, então resetamos a página manualmente? Vamos deixar o DataTable lidar com isso via filterValue (client-side).
+  };
 
   return (
     <div className="w-full space-y-4">
@@ -64,6 +76,13 @@ function TeamsContent() {
             <CirclePlus className="w-4 h-4"/> Novo Time
           </button>
         }
+        search={{
+          type: 'simple',
+          onSearch: handleSimpleSearch,
+          userId: session?.user?._id?.toString(),
+          columns: columns.map(c => ({ key: c.key, label: c.label })),
+          placeholder: 'Filtrar times...',
+        }}
       />
 
       <DataTable
@@ -73,10 +92,12 @@ function TeamsContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Times"
-        searchPlaceholder="Buscar times (ex: name:DevOps)"
-        searchContext="none"
-        userId={session?.user?._id?.toString()}
+        // Remove searchContext e searchPlaceholder
+        
         onRowClick={(team: unknown) => setSelectedTeam(team as ITeam)}
+        // 🔥 Novas props para busca simples externa
+        filterColumn={filterColumn}
+        filterValue={filterValue}
       />
 
       <TeamDrawer

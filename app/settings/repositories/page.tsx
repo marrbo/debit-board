@@ -8,6 +8,7 @@ import { RefreshCw, ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable, type Column } from "@/components/DataTable";
 import type { IRepository } from "@/types/IRepository";
+import DBQLAdvancedSearch from "@/components/dbql/DBQLAdvancedSearch";
 
 // ============================================================================
 // Configuração das Colunas
@@ -50,6 +51,7 @@ function RepositoriesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [syncing, setSyncing] = useState(false);
 
@@ -116,6 +118,13 @@ function RepositoriesContent() {
             )}
           </div>
         }
+        search={{
+          type: 'advanced',
+          onSearch: setSearchQuery,
+          userId: session?.user?._id?.toString() || session?.user?.id,
+          placeholder: 'Buscar repositórios (ex: name:repo-backend)',
+          context: 'repositories',
+        }}
       />
 
       <DataTable
@@ -124,9 +133,7 @@ function RepositoriesContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Repositórios"
-        searchPlaceholder="Buscar repositórios (ex: name:repo-backend OR projectId:...)"
-        searchContext="repositories"
-        userId={session.user.id}
+        searchQuery={searchQuery}
         projectId={projectId || undefined}
       />
     </div>

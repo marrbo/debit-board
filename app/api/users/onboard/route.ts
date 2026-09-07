@@ -55,7 +55,4 @@ export async function POST(req: NextRequest) {
     },
     { upsert: true, new: true }
   );
-
-  // FORÇA O NAVEGADOR A IR PARA O DASHBOARD AGORA!
-  // return NextResponse.redirect(new URL('/stats', req.url));
 }

@@ -9,9 +9,29 @@ import { getServerSessionIds } from '@/lib/session-server';
 import { parseDBQL } from '@/lib/parseDBQL';
 import mongoose from 'mongoose';
 
+// 🔥 Função para achatar e validar IDs
+function normalizeProjectIds(ids: any[]): mongoose.Types.ObjectId[] {
+  const flat = Array.isArray(ids) ? ids.flat() : [];
+  return flat
+    .map((id) => {
+      if (typeof id === 'string' && mongoose.Types.ObjectId.isValid(id)) {
+        return new mongoose.Types.ObjectId(id);
+      }
+      if (id instanceof mongoose.Types.ObjectId) return id;
+      return null;
+    })
+    .filter((id): id is mongoose.Types.ObjectId => id !== null);
+}
+
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = sessionIds.tenantId;
+  const tenantIdRaw = sessionIds.tenantId;
+  
+  // 🔥 Converte tenantId para ObjectId se for uma string válida
+  const tenantId = mongoose.Types.ObjectId.isValid(tenantIdRaw)
+    ? new mongoose.Types.ObjectId(tenantIdRaw)
+    : tenantIdRaw;
+
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
@@ -23,7 +43,6 @@ export async function GET(req: NextRequest) {
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
 
-  // 1. Resolve a query do DBQL
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
     try {
@@ -34,25 +53,32 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Lógica para achar os IDs de Projetos permitidos
+  // 🔥 Lógica para achar os IDs de Projetos permitidos
   let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
 
-  // Se há um Time específico, começa com os projetos dele
   if (teamId && teamId !== 'all') {
-    const team = await Team.findById(teamId).lean();
-    if (!team) return NextResponse.json({ data: [], total: 0 });
-    
-    const teamProjectIds = (team.projectIds || []).map((id: any) => new mongoose.Types.ObjectId(id));
-    allowedProjectIds = teamProjectIds;
+    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId)
+      ? new mongoose.Types.ObjectId(teamId)
+      : null;
+
+    const team = await Team.findById(teamObjectId).lean();
+    if (!team) {
+      return NextResponse.json({ data: [], total: 0, message: 'Time não encontrado' });
+    }
+
+    // 🔥 Normaliza projectIds (achatamento + validação)
+    allowedProjectIds = normalizeProjectIds(team.projectIds);
+
+    // 🔥 Log para diagnóstico
+    console.log(`[Dashboard] Time: ${team.name}, projectIds normalizados: ${allowedProjectIds.length}`);
   }
 
-  // Se há DBQL, busca os nomes de projetos que batem com a query
+  // Se houver DBQL, filtra pelos nomes de projetos que batem com a query
   if (finalSearchQuery) {
     const parsedMatch = parseDBQL(finalSearchQuery);
-    
     if (parsedMatch && Object.keys(parsedMatch).length > 0) {
       const obsMatch: any = { tenantId };
-      
+
       // Intersecta com os projetos do time, se existir
       if (allowedProjectIds) {
         const teamProjects = await Project.find({ _id: { $in: allowedProjectIds } }).select('name').lean();
@@ -63,10 +89,10 @@ export async function GET(req: NextRequest) {
       const matchedProjectNames = await Observation.distinct('project', obsMatch);
 
       const matchedProjects = await Project.find({ name: { $in: matchedProjectNames } }).select('_id').lean();
-      
-      // Atualiza os IDs permitidos (intersecção)
+
       if (allowedProjectIds) {
         const matchedIds = matchedProjects.map(p => p._id);
+        // Intersecção
         allowedProjectIds = allowedProjectIds.filter(id => matchedIds.some(mid => mid.equals(id)));
       } else {
         allowedProjectIds = matchedProjects.map(p => p._id);
@@ -74,22 +100,27 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. Busca os Projetos com paginação
+  // 🔥 Busca os Projetos com paginação
   const filter: any = { tenantId };
-  if (allowedProjectIds) {
+  if (allowedProjectIds && allowedProjectIds.length > 0) {
     filter._id = { $in: allowedProjectIds };
   }
 
   const skip = (page - 1) * limit;
-  
-  const [projects, total] = await Promise.all([
-    Project.find(filter)
-      .sort({ [sortField]: sortOrder })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Project.countDocuments(filter)
-  ]);
 
-  return NextResponse.json({ data: projects, total });
+  try {
+    const [projects, total] = await Promise.all([
+      Project.find(filter)
+        .sort({ [sortField]: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Project.countDocuments(filter)
+    ]);
+
+    return NextResponse.json({ data: projects, total });
+  } catch (error: any) {
+    console.error('Erro ao buscar projetos:', error);
+    return NextResponse.json({ data: [], total: 0, error: error.message }, { status: 500 });
+  }
 }

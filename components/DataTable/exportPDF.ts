@@ -1,6 +1,37 @@
 // components/DataTable/exportPDF.ts
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import React from "react";
+
+// Função para extrair texto de elementos React ou valores primitivos
+function extractText(value: any): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+
+  // Se for um elemento React (objeto com $$typeof ou type)
+  if (React.isValidElement(value)) {
+    // Tenta extrair children recursivamente
+    const children = (value.props as any)?.children;
+    if (children !== undefined && children !== null) {
+      if (Array.isArray(children)) {
+        return children.map((child) => extractText(child)).join(" ");
+      }
+      return extractText(children);
+    }
+    return "";
+  }
+
+  // Se for um objeto comum, tenta converter para string JSON
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+
+  return String(value);
+}
 
 export interface ExportColumn {
   key: string;
@@ -14,6 +45,7 @@ export interface ExportOptions {
   columns: ExportColumn[];
   data: any[];
   filename?: string;
+  orientation?: "portrait" | "landscape";
 }
 
 export function exportTableToPDF({
@@ -22,16 +54,17 @@ export function exportTableToPDF({
   columns,
   data,
   filename,
+  orientation = "portrait",
 }: ExportOptions) {
   const doc = new jsPDF({
-    orientation: "portrait",
+    orientation,
     unit: "mm",
     format: "a4",
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 10;
+  const margin = 8;
 
   // ===================== CABEÇALHO =====================
   doc.setFillColor(30, 41, 59);
@@ -67,7 +100,7 @@ export function exportTableToPDF({
   const body = data.map((item) =>
     columns.map((col) => {
       const value = col.render ? col.render(item) : item[col.key];
-      return String(value ?? "");
+      return extractText(value);
     })
   );
 

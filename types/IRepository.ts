@@ -20,4 +20,5 @@ export interface IRepository extends GitRepository, Document {
   pipelineFailedCount?: number; // Total de pipelines com falha
   pipelineClassicCount?: number; // Total de pipelines clássicas
   pipelineYamlCount?: number; // Total de pipelines YAML
+  isActive: boolean;
 }

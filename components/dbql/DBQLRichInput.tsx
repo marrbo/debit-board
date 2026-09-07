@@ -21,15 +21,27 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
 
   const renderDBQLColoredQuery = (text: string) => {
     if (!text) return null;
-    const regex = /("[^"]*"|!?\b[a-zA-Z0-9_]+(?:>=|<=|>|<|!=|:|=)"[^"]*"|!?\b[a-zA-Z0-9_]+(?:>=|<=|>|<|!=|:|=)[^\s\(\)]+|\b(?:and|or|not)\b|[\(\)]|\s+|[^\s]+)/gi;
+
+    // 🔥 Regex atualizada: permite ponto em campos (ex: pattern.name) e
+    // captura valores entre aspas mesmo contendo espaços e parênteses
+    const regex = /("[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)"[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)[^\s\(\)]+|\b(?:and|or|not)\b|[\(\)]|\s+|[^\s]+)/gi;
     const parts = text.match(regex) || [text];
 
     return parts.map((part, i) => {
       const lower = part.toLowerCase();
-      if (['and', 'or', 'not'].includes(lower)) return <span key={i} className="text-purple-600 dark:text-purple-400 font-bold">{part}</span>;
-      if (part === '(' || part === ')') return <span key={i} className="text-pink-600 dark:text-pink-400 font-bold">{part}</span>;
-      
-      const matchField = part.match(/^(!?)([a-zA-Z0-9_]+)(>=|<=|>|<|!=|:|=)(.*)$/);
+
+      // Operadores lógicos
+      if (['and', 'or', 'not'].includes(lower)) {
+        return <span key={i} className="text-purple-600 dark:text-purple-400 font-bold">{part}</span>;
+      }
+
+      // Parênteses
+      if (part === '(' || part === ')') {
+        return <span key={i} className="text-pink-600 dark:text-pink-400 font-bold">{part}</span>;
+      }
+
+      // 🔥 Campo com operador (aceita ponto no nome)
+      const matchField = part.match(/^(!?)([a-zA-Z0-9_.]+)(>=|<=|>|<|!=|:|=)(.*)$/);
       if (matchField) {
         const [, excl, field, op, val] = matchField;
         return (
@@ -40,8 +52,18 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
           </span>
         );
       }
-      if (/^["'].*?["']$/.test(part)) return <span key={i} className="text-amber-600 dark:text-amber-400">{part}</span>;
-      if (/^\s+$/.test(part)) return <span key={i}>{part}</span>;
+
+      // Strings entre aspas (valores)
+      if (/^".*"$/.test(part)) {
+        return <span key={i} className="text-amber-600 dark:text-amber-400">{part}</span>;
+      }
+
+      // Espaços em branco
+      if (/^\s+$/.test(part)) {
+        return <span key={i}>{part}</span>;
+      }
+
+      // Qualquer outra coisa (texto solto)
       return <span key={i} className="text-apple-label-light dark:text-apple-label-dark">{part}</span>;
     });
   };

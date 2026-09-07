@@ -4,7 +4,7 @@ Esta é a documentação oficial da plataforma DebitBoard.
 
 ## 📚 Navegação Rápida
 - [Primeiros Passos](/wiki/getting-started/quick-start) - Como começar.
-- [Referência DBQL](/wiki/dbql/syntax) - Linguagem de consulta.
+- [Referência DBQL](/wiki/DBQL/1.Syntax) - Linguagem de consulta.
 - [Configurações de Admin](/wiki/admin/setup) - Configuração do sistema.
 
 ---

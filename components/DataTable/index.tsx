@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
-import { SimpleColumnSearch } from '@/components/dbql/SimpleColumnSearch';
 import { ChevronUp, ChevronDown, LoaderCircle, Trash2, FileText, FileSpreadsheet } from 'lucide-react';
 import { exportTableToPDF } from "./exportPDF";
 
@@ -44,29 +42,28 @@ export interface DataTableProps<T> {
   columns: Column<T | any>[];
   defaultSort?: { field: string; order: 'asc' | 'desc' };
   defaultLimit?: number;
-  searchPlaceholder?: string;
-  searchContext?: string;
-  searchVisible?: boolean;
-  userId: string;
   projectId?: string;
   teamId?: string;
   refreshKey?: number;
   onRowClick?: (item: T) => void;
-  selectable?: boolean;               // exibir coluna de checkboxes (default true)
-  actions?: DataTableAction<T>[];     // ações customizadas
-  canDelete?: boolean;                // permitir exclusão (default true)
-  onDelete?: (selectedIds: string[]) => void; // callback de exclusão
-  
-  exportPDF?: boolean;               // 🔥 nativo, default true
-  pdfTitle?: string;                 // 🔥 título do PDF
+  selectable?: boolean;
+  actions?: DataTableAction<T>[];
+  canDelete?: boolean;
+  onDelete?: (selectedIds: string[]) => void;
+  exportPDF?: boolean;
+  exportOrientation?: 'portrait' | 'landscape';
+  pdfTitle?: string;
   onExportPDF?: (filters: ExportFilters) => void;
   onExportExcel?: (filters: ExportFilters) => void;
   onSelectionChange?: (ids: string[]) => void;
-  onSearchChange?: (search: string) => void;
-
   variant?: 'table' | 'cards';
   renderCard?: (item: T, extraData?: Record<string, any>) => React.ReactNode;
   extraData?: Record<string, any>;
+
+  // 🔥 Novas props para busca externa
+  searchQuery?: string;        // Para DBQL (server-side)
+  filterColumn?: string | null; // Para Simple (client-side)
+  filterValue?: string;         // Para Simple (client-side)
 }
 
 // ============================================================
@@ -77,10 +74,6 @@ export function DataTable<T extends { _id: string }>({
   columns,
   defaultSort = { field: 'createdAt', order: 'desc' },
   defaultLimit = 10,
-  searchPlaceholder = 'Buscar...',
-  searchContext = 'none',
-  searchVisible,
-  userId,
   projectId,
   teamId,
   refreshKey = 0,
@@ -90,15 +83,17 @@ export function DataTable<T extends { _id: string }>({
   canDelete = true,
   onDelete,
   exportPDF = true,
+  exportOrientation = 'portrait',
   pdfTitle,
-  onExportExcel,
   onExportPDF,
+  onExportExcel,
   variant = 'table',
   renderCard,
   extraData,
   onSelectionChange,
-  onSearchChange,
-  
+  searchQuery = '',
+  filterColumn = null,
+  filterValue = '',
 }: DataTableProps<T>) {
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -112,28 +107,6 @@ export function DataTable<T extends { _id: string }>({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
 
-  // Estado da busca (DBQL ou simples)
-  const [currentDbqlId, setCurrentDbqlId] = useState('');
-
-  // ============================================================
-  // Filtro client-side (para searchContext === 'none')
-  // ============================================================
-  const [filterColumn, setFilterColumn] = useState<string | null>(null);
-  const [filterValue, setFilterValue] = useState("");
-  
-  // ✅ Callback memoizado para busca DBQL
-  const handleDbqlSearch = useCallback((id: string) => {
-    setCurrentDbqlId(id);
-    setPage(1);
-    if (onSearchChange) onSearchChange(id); // 🔥 Dispara o filtro
-  }, [onSearchChange]);
-
-  // ✅ Callback memoizado para busca simples (client-side)
-  const handleSimpleSearch = useCallback((column: string | null, value: string) => {
-    setFilterColumn(column);
-    setFilterValue(value);
-    setPage(1); // reseta página apenas quando o filtro muda de fato
-  }, []);
 
   // Sempre que selectedIds mudar, chame o callback
   useEffect(() => {
@@ -144,17 +117,16 @@ export function DataTable<T extends { _id: string }>({
   // Exportação com filtros atuais
   const buildExportFilters = useCallback((): ExportFilters => {
     return {
-      q: currentDbqlId || undefined,
       projectId: projectId || undefined,
     };
-  }, [currentDbqlId, projectId]);
+  }, [projectId]);
 
   // ============================================================
-  // Busca de dados (server-side para DBQL, client-side para simples)
+  // Fetch de dados (usa searchQuery para server-side)
   // ============================================================
   useEffect(() => {
     let cancelled = false;
-    
+
     const loadData = async () => {
       setLoading(true);
       try {
@@ -167,36 +139,29 @@ export function DataTable<T extends { _id: string }>({
           ...(teamId && { teamId }),
         });
 
-        if (searchContext !== 'none' && currentDbqlId) {
-          params.set('q', currentDbqlId);
+        // 🔥 Se houver busca server-side, adiciona o parâmetro
+        if (searchQuery) {
+          params.set('q', searchQuery);
         }
 
         const url = new URL(endpoint, window.location.origin);
         params.forEach((value, key) => {
           url.searchParams.append(key, value);
         });
-        const res = await fetch(url.toString());
 
+        const res = await fetch(url.toString());
 
         if (res.ok) {
           const json = await res.json();
           if (!cancelled) {
-            // ✅ Extrai os dados e o total geral
             const items = json.data || [];
-            const totalItems = json.total ?? items.length; // total deve ser o total geral (14)
-
+            const totalItems = json.total ?? items.length;
             setData(items);
             setTotal(totalItems);
-
-            // ✅ Calcula totalPages localmente - nunca confiar em json.totalPages
             const calculatedTotalPages = Math.ceil(totalItems / limit);
-
-            // ✅ Se a página atual exceder o total de páginas, volta para a última
             if (page > calculatedTotalPages) {
               setPage(Math.max(1, calculatedTotalPages));
             }
-
-            // ✅ Limpa seleção se os itens não estão mais na lista
             const newIds = items.map((item: T) => item._id);
             setSelectedIds(prev => prev.filter(id => newIds.includes(id)));
           }
@@ -212,34 +177,29 @@ export function DataTable<T extends { _id: string }>({
 
     loadData();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [endpoint, page, limit, sortField, sortOrder, teamId, currentDbqlId, projectId, refreshKey, searchContext]);
+    return () => { cancelled = true; };
+  }, [endpoint, page, limit, sortField, sortOrder, teamId, searchQuery, projectId, refreshKey]);
 
   // ============================================================
-  // Filtro client-side
+  // Filtro client-side (para SimpleSearch)
   // ============================================================
-  const filteredData = (() => {
-    if (searchContext !== 'none') return data;
+  const filteredData = useMemo(() => {
     if (!filterValue) return data;
 
     return data.filter((item) => {
       const value = String(filterValue).toLowerCase();
       if (!filterColumn) {
-        // Busca em todas as propriedades primitivas do objeto
-        return Object.entries(item).some(([_, val]) => {
-          // Ignora objetos e null
-          if (typeof val === 'object' || val === null) return false;
-          return String(val).toLowerCase().includes(value);
-        });
+        return Object.entries(item).some(([_, val]) =>
+          typeof val !== 'object' && val !== null &&
+          String(val).toLowerCase().includes(value)
+        );
       } else {
         const cellValue = (item as unknown as Record<string, unknown>)[filterColumn];
         if (cellValue === undefined) return false;
         return String(cellValue).toLowerCase().includes(value);
       }
     });
-  })();
+  }, [data, filterColumn, filterValue]);
 
 
   // ============================================================
@@ -257,17 +217,6 @@ export function DataTable<T extends { _id: string }>({
         ...(teamId && { teamId }),
       });
 
-      // Se tiver busca DBQL (server-side)
-      if (searchContext !== 'none' && currentDbqlId) {
-        params.set('q', currentDbqlId);
-      }
-
-      // Se tiver busca simples (client-side) e não for server-side,
-      // o filtro é client-side, então buscamos todos e filtramos depois.
-      if (searchContext === 'none' && filterValue) {
-        // Não passa o filtro para a API (é client-side), mas buscamos todos e filtramos abaixo
-      }
-
       const url = new URL(endpoint, window.location.origin);
       params.forEach((value, key) => {
         url.searchParams.append(key, value);
@@ -279,7 +228,7 @@ export function DataTable<T extends { _id: string }>({
       let items = json.data || [];
 
       // Se for busca client-side, aplica o filtro local
-      if (searchContext === 'none' && filterValue) {
+      if (filterValue) {
         const value = String(filterValue).toLowerCase();
         items = items.filter((item: any) => {
           if (!filterColumn) {
@@ -298,7 +247,7 @@ export function DataTable<T extends { _id: string }>({
       console.error('Erro ao buscar todos os dados para exportação:', error);
       return []; // fallback vazio
     }
-  }, [endpoint, sortField, sortOrder, projectId, teamId, searchContext, currentDbqlId, filterValue, filterColumn]);
+  }, [endpoint, sortField, sortOrder, projectId, teamId, filterValue, filterColumn]);
 
   // ============================================================
   // Exportação nativa básica de PDF
@@ -338,8 +287,9 @@ export function DataTable<T extends { _id: string }>({
       columns: exportColumns,
       data: finalData,
       filename: safeFilename,
+      orientation: exportOrientation
     });
-  }, [fetchAllForExport, filteredData, columns, pdfTitle, extraData]);
+  }, [fetchAllForExport, filteredData, columns, pdfTitle, exportOrientation, extraData]);
 
 
   const exportActions = useMemo(() => {
@@ -486,11 +436,6 @@ export function DataTable<T extends { _id: string }>({
   if (variant === 'cards') {
     return (
       <div className="space-y-4">
-        {searchContext !== 'none' ? (
-          <DBQLAdvancedSearch searchVisible={searchVisible} onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
-        ) : (
-          <SimpleColumnSearch columns={columns} onSearch={handleSimpleSearch} placeholder={searchPlaceholder} />
-        )}
 
         {showExportBar && (
           <div className="flex justify-end gap-2">
@@ -550,22 +495,6 @@ export function DataTable<T extends { _id: string }>({
   // ============================================================
   return (
     <div className="space-y-4">
-      {/* Barra de busca */}
-      {searchContext !== 'none' ? (
-        <DBQLAdvancedSearch
-          onSearch={handleDbqlSearch}
-          searchVisible={searchVisible}
-          userId={userId}
-          placeholder={searchPlaceholder}
-          context={searchContext}
-        />
-      ) : (
-        <SimpleColumnSearch
-          columns={columns}
-          onSearch={handleSimpleSearch}
-          placeholder={searchPlaceholder}
-        />
-      )}
 
       {/* Barra de exportação (sem seleção) */}
       <div className="flex justify-between items-center align-middle">

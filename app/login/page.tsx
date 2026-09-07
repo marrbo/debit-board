@@ -4,6 +4,7 @@ import { Suspense, useEffect } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldKeyhole } from 'lucide-react';
+import Image from 'next/image';
 
 // Componente interno que usa useSearchParams (precisa do Suspense)
 function LoginErrorHandler() {
@@ -31,13 +32,19 @@ export default function LoginPage() {
   }, [sessionStatus, router]);
 
   const handleSSOLogin = () => {
-    signIn('keycloak', { callbackUrl: '/stats' });
+    signIn('keycloak', { callbackUrl: '/' });
   };
 
   return (
     <div className="relative min-h-screen -p-6 -m-6 -t-6 flex items-center justify-center overflow-hidden bg-slate-900">
       <div className="absolute inset-0 z-0">
-        <img src="/login-bg.png" alt="Background" className="w-full h-full object-cover opacity-50" onError={(e) => (e.currentTarget.style.display = 'none')} />
+        <Image 
+          src="/login-bg.png" 
+          alt="Background" 
+          width="2048"
+          height="2048"
+          className="w-full h-full object-cover opacity-50" 
+          onError={(e) => (e.currentTarget.style.display = 'none')} />
         <div className="absolute inset-0 bg-slate-900/60"></div>
       </div>
 

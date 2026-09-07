@@ -7,7 +7,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Charts from '@/components/Charts';
 import PageHeader from '@/components/PageHeader';
-import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
 import { BarChart3, X, Maximize2, XCircle } from 'lucide-react';
 import type { StatsData, DailyStats } from './services/statsService';
 
@@ -50,7 +49,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   // Refs
   const lastSearchQueryRef = useRef<string>('');
   const originalQueryRef = useRef<string>('');
-  const lastSearchValueRef = useRef<string>(''); // ✅ NOVO: rastreia o último valor passado
+  const lastSearchValueRef = useRef<string>('');
 
   // Helper: resolve ID para string
   const resolveQuery = useCallback(async (queryOrId: string): Promise<string> => {
@@ -80,24 +79,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return await res.json() as StatsData;
   }, []);
 
-  // ✅ HANDLER DE BUSCA - sempre força atualização
-  const handleSearch = useCallback((newQuery: string) => {
-    // Se for o mesmo valor, ainda força re-render criando novo objeto de estado
-    if (newQuery !== lastSearchValueRef.current) {
-      lastSearchValueRef.current = newQuery;
-      setSearchQuery(newQuery);
-    } else {
-      // Mesmo valor - força re-render com um objeto novo para garantir que o useEffect rode
-      setSearchQuery(prev => prev === newQuery ? `${newQuery}_${Date.now()}` : newQuery);
-      // Restaura o valor correto após o fetch (ou o useEffect resolve)
-      setTimeout(() => {
-        lastSearchValueRef.current = newQuery;
-        setSearchQuery(newQuery);
-      }, 0);
-    }
-    lastSearchQueryRef.current = newQuery;
-  }, []);
-
+  
   // Carregar dados
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
@@ -128,38 +110,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
     return () => { cancelled = true; };
   }, [searchQuery, fetchStats, resolveQuery, status, session]);
-
-  // Handlers de categoria
-  const clearCategoryFilter = useCallback(() => {
-    if (!lastCategory) return;
-    const original = originalQueryRef.current;
-    lastSearchValueRef.current = original;
-    setSearchQuery(original);
-    setLastCategory(null);
-    originalQueryRef.current = '';
-    lastSearchQueryRef.current = original;
-  }, [lastCategory]);
-
-  const handleSliceClick = useCallback(async (label: string) => {
-    const cleanLabel = label.replace(/"/g, '');
-    if (lastCategory) clearCategoryFilter();
-
-    originalQueryRef.current = searchQuery;
-    const resolved = await resolveQuery(searchQuery);
-    const currentQuery = resolved;
-
-    let newQuery: string;
-    if (currentQuery.trim()) {
-      newQuery = `(${currentQuery}) AND category:"${cleanLabel}"`;
-    } else {
-      newQuery = `category:"${cleanLabel}"`;
-    }
-
-    lastSearchValueRef.current = newQuery;
-    setSearchQuery(newQuery);
-    setLastCategory(cleanLabel);
-    lastSearchQueryRef.current = newQuery;
-  }, [lastCategory, searchQuery, resolveQuery, clearCategoryFilter]);
 
   // ================= DADOS DERIVADOS =================
   const severityTotals = stats?.severityTotals || {};
@@ -317,27 +267,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
   return (
     <div className="w-full space-y-6 p-8">
-      <PageHeader
-        title="Stats & Usage"
-        icon={<BarChart3 className="w-10 h-10 text-apple-blue" />}
-        subtitle="Visão geral das observations de segurança do seu Tenant."
-        searchBar={
-          <div className="relative">
-            <DBQLAdvancedSearch 
-              onSearch={handleSearch} 
-              userId={session.user.id || ''} 
-              placeholder="Search stats, e.g. severity:critical OR project:my-api" 
-              context="observations"
-            />
-            {lastCategory && (
-              <button onClick={clearCategoryFilter} className="absolute -top-2 -right-2 bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-full p-1 shadow-md text-apple-tertiary-light hover:text-apple-red transition-colors" title="Limpar filtro de categoria">
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        }
-      />
-
       {/* KPIs de Status */}
       <div className="grid grid-cols-2 md:grid-cols-5 text-center gap-4">
         {[

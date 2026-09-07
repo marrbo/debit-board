@@ -5,16 +5,12 @@ import { Project } from '@/models/Project';
 import { getServerSessionIds } from '@/lib/session-server';
 import { Types } from 'mongoose';
 
-// Ajuste na tipagem dos params para Promise
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sessionIds = await getServerSessionIds();
-    const tenantId = sessionIds.tenantId;
-
+  const tenantId = sessionIds.tenantId;
   await connectToDatabase();
 
-  // Aguarda a resolução dos params
   const { id } = await params;
-
   if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) {
     return NextResponse.json({ error: 'ID de team inválido' }, { status: 400 });
   }
@@ -22,61 +18,69 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json();
   const { name, description, projectIds } = body;
 
-  if (
-    projectIds !== undefined &&
-    (!Array.isArray(projectIds) ||
-      projectIds.some((projectId) => typeof projectId !== 'string' || !/^[a-f\d]{24}$/i.test(projectId)))
-  ) {
-    return NextResponse.json({ error: 'IDs de projeto inválidos' }, { status: 400 });
+  // Validação dos projectIds
+  if (projectIds !== undefined && !Array.isArray(projectIds)) {
+    return NextResponse.json({ error: 'projectIds deve ser um array' }, { status: 400 });
   }
 
-  const team = await Team.findOne({ _id: { $eq: id }, tenantId: { $eq: tenantId } });
+  const team = await Team.findOne({ _id: id, tenantId });
   if (!team) return NextResponse.json({ error: 'Team não encontrado' }, { status: 404 });
 
-  // Remove teamId dos projetos antigos
-  await Project.updateMany(
-    { teamId: team._id, tenantId: { $eq: tenantId } },
-    { $unset: { teamId: 1 } }
-  );
+  // 🔥 Converte e valida os novos projectIds
+  const flatProjectIds = Array.isArray(projectIds) ? projectIds.flat() : [];
 
-  // Atualiza o Team
+  const validProjectIds = (flatProjectIds || []).map((pId: any) => {
+    if (typeof pId === 'string' && Types.ObjectId.isValid(pId)) return new Types.ObjectId(pId);
+    return null;
+  }).filter((id): id is Types.ObjectId => id !== null);
+
+  // Busca projetos existentes
+  const existingProjects = await Project.find({ _id: { $in: validProjectIds }, tenantId }).select('_id').lean();
+  const existingIds = existingProjects.map(p => p._id.toString());
+  const finalProjectIds = validProjectIds.filter(id => existingIds.includes(id.toString()));
+
+  // Remove teamId dos projetos antigos que NÃO estão na nova lista
+  const oldProjectIds = team.projectIds || [];
+  const projectsToRemove = oldProjectIds.filter(id => !finalProjectIds.some(newId => newId.equals(id)));
+  if (projectsToRemove.length > 0) {
+    await Project.updateMany(
+      { _id: { $in: projectsToRemove }, tenantId },
+      { $unset: { teamId: 1 } }
+    );
+  }
+
+  // Atualiza team
   team.name = name || team.name;
   team.description = description || team.description;
-  team.projectIds = projectIds || [];
+  team.projectIds = finalProjectIds;
   await team.save();
 
   // Atribui teamId aos novos projetos
-  await Project.updateMany(
-    {
-      _id: {
-        $in: (projectIds || []).map((projectId: string) => new Types.ObjectId(projectId)),
-      },
-      tenantId: { $eq: tenantId },
-    },
-    { $set: { teamId: team._id } }
-  );
+  if (finalProjectIds.length > 0) {
+    await Project.updateMany(
+      { _id: { $in: finalProjectIds }, tenantId },
+      { $set: { teamId: team._id } }
+    );
+  }
 
   return NextResponse.json(team);
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sessionIds = await getServerSessionIds();
-    const tenantId = sessionIds.tenantId;
-
+  const tenantId = sessionIds.tenantId;
   await connectToDatabase();
 
-  // Aguarda a resolução dos params
   const { id } = await params;
-
   if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) {
     return NextResponse.json({ error: 'ID de team inválido' }, { status: 400 });
   }
 
-  const team = await Team.findOne({ _id: { $eq: id }, tenantId: { $eq: tenantId } });
+  const team = await Team.findOne({ _id: id, tenantId });
   if (!team) return NextResponse.json({ error: 'Team não encontrado' }, { status: 404 });
 
   await Project.updateMany(
-    { teamId: team._id, tenantId: { $eq: tenantId } },
+    { teamId: team._id, tenantId },
     { $unset: { teamId: 1 } }
   );
 

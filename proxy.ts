@@ -26,10 +26,7 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-base-url', baseUrl);
   requestHeaders.set('x-sentry-trace', request.headers.get('x-sentry-trace') || '');
-
-  const tenantCripto = btoa(tenantId.toString())
-
-  requestHeaders.set('x-tenant-id', tenantCripto);
+  requestHeaders.set('x-tenant-id', tenantId?.toString());
   requestHeaders.set('x-user-id', userId);
 
   // ------------------------------------------------
@@ -51,7 +48,7 @@ export async function proxy(request: NextRequest) {
 
   // FLUXO DO ADMIN
   if (isAdmin) {
-    if (pathname === '/stats') {
+    if (pathname === '/') {
       return NextResponse.next({ request: { headers: requestHeaders } });
     }
 
@@ -72,7 +69,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isOnboardingCompleted && isOnSetupPage) {
-    return NextResponse.redirect(new URL('/stats', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next({

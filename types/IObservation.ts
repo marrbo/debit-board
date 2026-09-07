@@ -1,4 +1,5 @@
 // types/IObservation.ts
+import type { IVulnerabilityPattern } from '@/models/VulnerabilityPattern';
 import type { Document } from 'mongoose';
 import type mongoose from 'mongoose';
 
@@ -6,8 +7,11 @@ export type IObservation = Document & {
   tenantId: mongoose.Types.ObjectId;
   scanId: mongoose.Types.ObjectId;
   patternId: mongoose.Types.ObjectId;
-  pattern?: string;
+  pattern?: Partial<IVulnerabilityPattern>;
+  patternName?: string;
   query: string;
+  description?: string;
+  recommendation?: string;
   category: string;
   fileName: string;
   filePath: string;

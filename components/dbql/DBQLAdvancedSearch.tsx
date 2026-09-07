@@ -1,13 +1,7 @@
 // components/dbql/DBQLAdvancedSearch.tsx
 "use client";
 
-import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import type { CSSProperties } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
@@ -21,7 +15,6 @@ import {
   Trash2,
   Copy,
   PlayCircleIcon,
-  SearchCode,
   TriangleAlert,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
@@ -29,7 +22,6 @@ import DBQLHelpModal from "./DBQLHelpModal";
 import DBQLSuggestions from "./DBQLSuggestions";
 import type { ISavedQuery } from "@/types/ISavedQuery";
 import { useSession } from "next-auth/react";
-
 
 // ============================================================
 // Tipos e interfaces
@@ -41,7 +33,6 @@ interface AdvancedSearchProps {
   userId: string;
   onManageQueries?: () => void;
   value?: string;
-  searchVisible?: boolean;
 }
 
 interface ValidationError {
@@ -70,7 +61,7 @@ const MEME_QUIPS = [
   "Erro de CORS: Sua requisição tentou cruzar a fronteira, mas o passaporte não tava carimbado. 🛂",
   "Man-in-the-Middle detectado: e ele ficou confuso com a bagunça que está esse payload. 🥷",
   "Criptografia de ponta a ponta? Só se for da ponta do desespero até a ponta da gambiarra. 🧵",
-  "Você tem certeza de que não é um script de ransomware disfarçado de JSON? 🏴‍☠️"
+  "Você tem certeza de que não é um script de ransomware disfarçado de JSON? 🏴‍☠️",
 ];
 
 // ============================================================
@@ -86,49 +77,61 @@ const parseInputToTags = (input: string): string[] => {
   return matches.map((m) => m.trim());
 };
 
+// ============================================================
+// Validação DBQL - Corrigida para suportar campos com pontos
+// e valores entre aspas contendo espaços
+// ============================================================
 const validateDBQL = (query: string): ValidationError[] => {
   if (!query) return [];
   const errors: ValidationError[] = [];
-  const tokens: string[] = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-  let searchIndex = 0;
+
+  // Tokenização robusta: captura campo:valor com ou sem aspas
+  const tokenRegex =
+    /!?[a-zA-Z0-9_.]+(>=|<=|>|<|!=|:|=)(?:"[^"]*"|[^\s()]+)|\(|\)|[^\s()]+/g;
+  const tokens = query.match(tokenRegex) || [];
+
+  let index = 0; // índice acumulado para highlight
   let looseTextStart: number | null = null;
   let looseTextEnd: number | null = null;
   let looseTextContent = "";
 
-  tokens.forEach((token) => {
-    const cleanToken = token.replace(/^[\(]+|[\)]+$/g, "");
-    const tokenIndex = query.indexOf(token, searchIndex);
+  for (const token of tokens) {
+    const tokenIndex = query.indexOf(token, index);
+    if (tokenIndex === -1) continue; // segurança extra
+    index = tokenIndex + token.length;
 
-    if (cleanToken !== "") {
-      const lower = cleanToken.toLowerCase();
-      const isOperator = ["and", "or", "not"].includes(lower);
-      const isField = /^!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)/i.test(cleanToken);
-      const isParens = /^[\(\)]+$/.test(token);
+    const cleanToken = token.replace(/^\(+/, '').replace(/\)+$/, '');
+    const lower = cleanToken.toLowerCase();
 
-      if (!isOperator && !isField && !isParens) {
-        if (looseTextStart === null) {
-          looseTextStart = tokenIndex;
-          looseTextContent = token;
-        } else {
-          looseTextContent += ` ${token}`;
-        }
-        looseTextEnd = tokenIndex + token.length;
-      } else {
-        if (looseTextStart !== null && looseTextEnd !== null) {
-          errors.push({
-            error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
-            highlightIndex: looseTextStart,
-            errorLength: looseTextEnd - looseTextStart,
-          });
-          looseTextStart = null;
-          looseTextEnd = null;
-          looseTextContent = "";
-        }
+    const isOperator = ['and', 'or', 'not'].includes(lower);
+    const isParen = /^[()]+$/.test(token);
+    const isField = /^!?[a-zA-Z0-9_.]+(>=|<=|>|<|!=|:|=)/.test(cleanToken);
+
+    if (isOperator || isParen || isField) {
+      // Se estávamos acumulando texto solto, fecha o erro
+      if (looseTextStart !== null && looseTextEnd !== null) {
+        errors.push({
+          error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
+          highlightIndex: looseTextStart,
+          errorLength: looseTextEnd - looseTextStart,
+        });
+        looseTextStart = null;
+        looseTextEnd = null;
+        looseTextContent = "";
       }
+    } else {
+      // Texto solto
+      if (looseTextStart === null) {
+        looseTextStart = tokenIndex;
+        looseTextContent = cleanToken;
+      } else {
+        looseTextContent += ` ${cleanToken}`;
+      }
+      looseTextEnd = tokenIndex + token.length;
     }
-    searchIndex = tokenIndex + token.length;
-  });
+  }
 
+  // Fecha último texto solto
   if (looseTextStart !== null && looseTextEnd !== null) {
     errors.push({
       error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
@@ -137,35 +140,40 @@ const validateDBQL = (query: string): ValidationError[] => {
     });
   }
 
+  // Validação de parênteses
   const stack: number[] = [];
   for (let i = 0; i < query.length; i++) {
-    if (query[i] === "(") stack.push(i);
-    else if (query[i] === ")") {
+    if (query[i] === '(') stack.push(i);
+    else if (query[i] === ')') {
       if (stack.length > 0) stack.pop();
-      else
-        errors.push({
-          error: "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
-          highlightIndex: i,
-          errorLength: 1,
-        });
+      else errors.push({
+        error: "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
+        highlightIndex: i,
+        errorLength: 1,
+      });
     }
   }
-  if (stack.length > 0)
+  if (stack.length > 0) {
     errors.push({
       error: "Erro de sintaxe: Parêntese aberto não foi fechado.",
       highlightIndex: stack[stack.length - 1] || null,
       errorLength: 1,
     });
-
-  if (/\(\s*\)[\)]*/.test(query)) {
-    const match = query.match(/\(\s*\)/);
-    errors.push({
-      error: "Erro de sintaxe: Agrupamento vazio ( ).",
-      highlightIndex: match?.index ?? 0,
-      errorLength: match ? match[0].length : 2,
-    });
   }
 
+  // Verifica agrupamento vazio ( )
+  if (/\(\s*\)/.test(query)) {
+    const match = query.match(/\(\s*\)/);
+    if (match) {
+      errors.push({
+        error: "Erro de sintaxe: Agrupamento vazio ( ).",
+        highlightIndex: match.index ?? 0,
+        errorLength: match[0].length,
+      });
+    }
+  }
+
+  // Verifica aspas não fechadas
   let openQuote = false;
   let firstUnclosedQuote = -1;
   for (let i = 0; i < query.length; i++) {
@@ -174,20 +182,20 @@ const validateDBQL = (query: string): ValidationError[] => {
       if (openQuote) firstUnclosedQuote = i;
     }
   }
-  if (openQuote)
+  if (openQuote) {
     errors.push({
       error: "Erro de sintaxe: Aspas duplas não fechadas.",
       highlightIndex: firstUnclosedQuote,
       errorLength: 1,
     });
+  }
 
+  // Mensagens aleatórias de caos
   const chaoticRegex = /\b(and|or|not)\s+(and|or|not)\s+(and|or|not)\b/i;
   const chaoticMatch = chaoticRegex.exec(query);
   if (chaoticMatch) {
-    const randomMeme =
-      MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)];
     errors.push({
-      error: `${randomMeme} (Detectado: '${chaoticMatch[0]}')`,
+      error: `${MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)]} (Detectado: '${chaoticMatch[0]}')`,
       highlightIndex: chaoticMatch.index ?? 0,
       errorLength: chaoticMatch[0].length,
     });
@@ -227,13 +235,12 @@ export default function DBQLAdvancedSearch({
   context: dbqlContext = "observations",
   userId = "",
   onManageQueries,
-  value,
-  searchVisible
+  value
 }: AdvancedSearchProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  
+
   // ========== Parâmetros da URL ==========
   const rawUrlQueryId = searchParams.get("q") || "";
   const urlModeParam = searchParams.get("m") || searchParams.get("mode");
@@ -245,7 +252,9 @@ export default function DBQLAdvancedSearch({
 
   // ========== ESTADO ATIVO (a query que está efetivamente sendo usada) ==========
   const [activeQueryString, setActiveQueryString] = useState<string>("");
-  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(null);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(
+    null,
+  );
   const [originalQueryString, setOriginalQueryString] = useState<string>("");
 
   // ========== ESTADOS DE UI ==========
@@ -257,14 +266,15 @@ export default function DBQLAdvancedSearch({
   const [saveName, setSaveName] = useState("");
   const [saveVisibility, setSaveVisibility] = useState<Visibility>("private");
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
-  const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>({});
+  const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>(
+    {},
+  );
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [savedQueries, setSavedQueries] = useState<ISavedQuery[]>([]);
   const [tempQuery, setTempQuery] = useState<ISavedQuery>();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSearchVisible, setIsSearchVisible] = useState(searchVisible ?? true);
 
   // Refs
   const savedButtonRef = useRef<HTMLButtonElement>(null);
@@ -359,9 +369,8 @@ export default function DBQLAdvancedSearch({
       setInputValue,
       setTags,
       setIsSavedDropdownOpen,
-    ]
+    ],
   );
-
 
   // ============================================================
   // 4. Carregar da URL (efeito principal) - com microtasks
@@ -395,7 +404,9 @@ export default function DBQLAdvancedSearch({
                 setActiveSavedQuery(query);
                 setOriginalQueryString(query.queryString);
                 setActiveQueryString(query.queryString);
-                const targetMode = hasComplexSyntax(query.queryString) ? "advanced" : "tags";
+                const targetMode = hasComplexSyntax(query.queryString)
+                  ? "advanced"
+                  : "tags";
                 setMode(targetMode);
                 if (targetMode === "advanced") {
                   setInputValue(query.queryString);
@@ -432,7 +443,9 @@ export default function DBQLAdvancedSearch({
           if (params.has("q") || params.has("m")) {
             params.delete("q");
             params.delete("m");
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+            router.replace(`${pathname}?${params.toString()}`, {
+              scroll: false,
+            });
           }
         });
       } catch (err) {
@@ -443,7 +456,15 @@ export default function DBQLAdvancedSearch({
     };
 
     loadFromUrl();
-  }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, dbqlContext, onSearch]);
+  }, [
+    rawUrlQueryId,
+    urlModeParam,
+    pathname,
+    router,
+    searchParams,
+    dbqlContext,
+    onSearch,
+  ]);
 
   // ============================================================
   // 5. Função para limpar (usada internamente e no botão)
@@ -495,7 +516,9 @@ export default function DBQLAdvancedSearch({
     try {
       const id = activeSavedQuery?._id || tempQuery?._id || null;
       const visibility = activeSavedQuery?.visibility || "temporary";
-      const name = activeSavedQuery?.name || `Temporária (${session?.user?.name} - ${dbqlContext})`;
+      const name =
+        activeSavedQuery?.name ||
+        `Temporária (${session?.user?.name} - ${dbqlContext})`;
 
       if (fullQuery === activeQueryString && currentMode === mode) {
         onSearch?.(id ? id.toString() : "");
@@ -509,8 +532,8 @@ export default function DBQLAdvancedSearch({
           queryString: fullQuery,
           context: dbqlContext,
           visibility: "temporary",
-          userId: session?.user?.id
-        }
+          userId: session?.user?.id,
+        };
         const method = id ? "PUT" : "POST";
         const body = id ? { ...payload, id } : payload;
 
@@ -520,7 +543,7 @@ export default function DBQLAdvancedSearch({
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          const saved = await res.json() as ISavedQuery;
+          const saved = (await res.json()) as ISavedQuery;
           Promise.resolve().then(() => {
             setActiveSavedQuery(saved);
             setOriginalQueryString(saved.queryString);
@@ -528,7 +551,9 @@ export default function DBQLAdvancedSearch({
             const params = new URLSearchParams(searchParams.toString());
             params.set("q", saved._id.toString());
             params.set("m", currentMode === "advanced" ? "a" : "t");
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+            router.replace(`${pathname}?${params.toString()}`, {
+              scroll: false,
+            });
             onSearch?.(saved._id.toString());
           });
         }
@@ -542,20 +567,22 @@ export default function DBQLAdvancedSearch({
               name: activeSavedQuery?.name,
               queryString: fullQuery,
               context: dbqlContext,
-              userId: session.user._id,
+              userId: session?.user?._id?.toString() || session?.user?.id,
             }),
           });
           if (res.ok) {
-            const updated = await res.json() as ISavedQuery;
+            const updated = (await res.json()) as ISavedQuery;
             Promise.resolve().then(() => {
               setActiveSavedQuery(updated);
               setOriginalQueryString(updated.queryString);
               setActiveQueryString(fullQuery);
               const params = new URLSearchParams(searchParams.toString());
               params.set("m", currentMode === "advanced" ? "a" : "t");
-              router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+              router.replace(`${pathname}?${params.toString()}`, {
+                scroll: false,
+              });
               onSearch?.(updated._id.toString());
-              if (updated.visibility === 'temporary') {
+              if (updated.visibility === "temporary") {
                 setTempQuery(updated);
               }
             });
@@ -565,7 +592,9 @@ export default function DBQLAdvancedSearch({
           const expectedMode = currentMode === "advanced" ? "a" : "t";
           if (params.get("m") !== expectedMode) {
             params.set("m", expectedMode);
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+            router.replace(`${pathname}?${params.toString()}`, {
+              scroll: false,
+            });
           }
           Promise.resolve().then(() => {
             setActiveQueryString(fullQuery);
@@ -609,9 +638,12 @@ export default function DBQLAdvancedSearch({
           const json = await res.json();
           const queries = Array.isArray(json) ? json : json.data || [];
           setSavedQueries(queries as ISavedQuery[]);
-          
+
           // Busca query temporária do usuário
-          let tempQuery = queries.find((tmp: ISavedQuery) => tmp.visibility === 'temporary' && tmp.userId === userId)
+          let tempQuery = queries.find(
+            (tmp: ISavedQuery) =>
+              tmp.visibility === "temporary" && tmp.userId === userId,
+          );
           const tenantIdRaw = session?.user?.tenantId;
           if (!tempQuery) {
             tempQuery = {
@@ -619,8 +651,8 @@ export default function DBQLAdvancedSearch({
               name: `Temporary (${session?.user?.name})`,
               context: dbqlContext,
               tenantId: tenantIdRaw,
-              visibility: 'temporary',
-              queryString: ''
+              visibility: "temporary",
+              queryString: "",
             } as ISavedQuery;
           }
           setTempQuery(tempQuery);
@@ -632,7 +664,6 @@ export default function DBQLAdvancedSearch({
     };
     fetchSavedQueries();
   }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userId]);
-  
 
   // ============================================================
   // 8. Handler do botão Executar e Enter
@@ -791,7 +822,9 @@ export default function DBQLAdvancedSearch({
             new Set(data.suggestions || data.values || []),
           ).filter((item): item is string => typeof item === "string");
           const filtered = list
-            .filter((item) => item.toLowerCase() !== tokenData.query?.toLowerCase())
+            .filter(
+              (item) => item.toLowerCase() !== tokenData.query?.toLowerCase(),
+            )
             .slice(0, 10);
           setSuggestions(filtered);
           setIsOpen(filtered.length > 0);
@@ -824,8 +857,8 @@ export default function DBQLAdvancedSearch({
           queryString: currentEditingQuery,
           context: dbqlContext,
           visibility: saveVisibility,
-          userId: userId
-        } as ISavedQuery)
+          userId: userId,
+        } as ISavedQuery);
       }
 
       const res = await fetch("/api/saved-query", {
@@ -836,11 +869,11 @@ export default function DBQLAdvancedSearch({
           queryString: currentEditingQuery,
           context: dbqlContext,
           visibility: saveVisibility,
-          userId: userId
+          userId: userId,
         }),
       });
       if (res.ok) {
-        const saved = await res.json() as ISavedQuery;
+        const saved = (await res.json()) as ISavedQuery;
         setActiveSavedQuery(saved);
         setOriginalQueryString(saved.queryString);
         setActiveQueryString(saved.queryString);
@@ -854,10 +887,10 @@ export default function DBQLAdvancedSearch({
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
+          const data = (await listRes.json()) as ISavedQuery[];
           setSavedQueries(data);
         }
-        
+
         onSearch?.(saved._id.toString());
       }
     } catch (err) {
@@ -867,7 +900,8 @@ export default function DBQLAdvancedSearch({
 
   const handleUpdateActiveQuery = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!activeSavedQuery || activeSavedQuery.visibility === "temporary") return;
+    if (!activeSavedQuery || activeSavedQuery.visibility === "temporary")
+      return;
     try {
       const res = await fetch("/api/saved-query", {
         method: "PUT",
@@ -877,11 +911,11 @@ export default function DBQLAdvancedSearch({
           name: activeSavedQuery.name,
           queryString: currentEditingQuery,
           context: dbqlContext,
-          userId: userId
+          userId: userId,
         }),
       });
       if (res.ok) {
-        const updated = await res.json() as ISavedQuery;
+        const updated = (await res.json()) as ISavedQuery;
         setActiveSavedQuery(updated);
         setOriginalQueryString(updated.queryString);
         setActiveQueryString(updated.queryString);
@@ -889,10 +923,10 @@ export default function DBQLAdvancedSearch({
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
+          const data = (await listRes.json()) as ISavedQuery[];
           setSavedQueries(data);
         }
-        onSearch?.(updated._id.toString())
+        onSearch?.(updated._id.toString());
       }
     } catch (err) {
       console.error("Erro ao atualizar query salva", err);
@@ -915,7 +949,7 @@ export default function DBQLAdvancedSearch({
           cache: "no-store",
         });
         if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
+          const data = (await listRes.json()) as ISavedQuery[];
           setSavedQueries(data);
         }
       }
@@ -999,293 +1033,274 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
     [currentEditingQuery],
   );
 
-  const realSavedQueries = savedQueries?.filter((q) => q.visibility !== "temporary");
+  const realSavedQueries = savedQueries?.filter(
+    (q) => q.visibility !== "temporary",
+  );
   const isQueryModified = isModified;
 
   return (
     <div className="relative w-full flex flex-col gap-1.5">
-      <button
-        type="button"
-        onClick={() => setIsSearchVisible(!isSearchVisible)}
-        className={`absolute top-2 right-2 p-2 rounded-xl group text-apple-tertiary-light hover:text-apple-red ${isSearchVisible ? null : '-top-150 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark shadow-sm hover:bg-apple-blue/10'} transition-colors z-20`}
-        title={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
-        aria-label={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
+      {/* Painel de busca (sempre visível quando montado) */}
+      <div
+        className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
+          syntaxErrors.length > 0
+            ? "border-apple-red"
+            : "border-apple-border-light dark:border-apple-border-dark"
+        }`}
       >
-        {isSearchVisible ? (
-          <X className="w-4 h-4" />
-        ) : (
-          <div className="relative flex gap-4 w-150 transition-all group-hover:text-apple-blue" >
-            <span className="font-mono text-xs hidden group-hover:block">DBQL Advanced Search </span>
-            <SearchCode className="w-4 h-4 group-hover:animate-bounce group-hover:[animation-duration:0.8s]" />
-          </div>
-        )}
-      </button>
+        <div className="flex items-start gap-2 w-full">
+          <TriangleAlert
+            className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-apple-red" : "hidden"}`}
+          />
 
-      {isSearchVisible ? (
-        <div
-          className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
-            syntaxErrors.length > 0
-              ? "border-apple-red"
-              : "border-apple-border-light dark:border-apple-border-dark"
-          }`}
-        >
-          <div className="flex items-start gap-2 w-full">
-            <TriangleAlert
-              className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-apple-red" : "hidden"}`}
-            />
-
-            <div className="flex flex-col flex-1 gap-1.5 min-w-0">
-              {mode === "tags" && tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  {tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark px-2 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark shadow-sm font-mono font-medium"
+          <div className="flex flex-col flex-1 gap-1.5 min-w-0">
+            {mode === "tags" && tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                {tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark px-2 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark shadow-sm font-mono font-medium"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(idx)}
+                      className="text-apple-tertiary-light hover:text-apple-red transition-colors"
                     >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => removeTag(idx)}
-                        className="text-apple-tertiary-light hover:text-apple-red transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="relative w-full min-h-[44px]">
-                <DBQLRichInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onKeyDown={handleKeyDown}
-                  placeholder={placeholder}
-                  rows={2}
-                  className="!bg-transparent !border-none !p-0 shadow-none py-1.5 px-0 z-10"
-                />
-
-                <DBQLSuggestions
-                  isOpen={isOpen}
-                  suggestions={suggestions}
-                  activeField={activeField}
-                  onSelect={handleSuggestionSelect}
-                  onClose={() => setIsOpen(false)}
-                />
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
-            <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
-              {(tags.length > 0 || inputValue) && (
-                <div className="flex items-center gap-1.5 mr-5">
-                  <button
-                    type="button"
-                    onClick={handleExecuteSearch}
-                    disabled={syntaxErrors.length > 0}
-                    className="text-apple-tertiary-light hover:text-apple-green transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-apple-tertiary-light"
-                  >
-                    <PlayCircleIcon className="w-3 h-3" />
-                    <span>Executar</span>
-                  </button>
-                </div>
-              )}
-              {(tags.length > 0 || inputValue) && (
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" />
-                  <span>Limpar</span>
-                </button>
-              )}
-              {activeSavedQuery &&
-                activeSavedQuery.visibility !== "temporary" && (
-                  <div className="flex ml-5 items-center gap-1.5 border-l border-apple-border-light px-7">
-                    <span
-                      className={`w-2 h-2 rounded-full ${isQueryModified ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
-                      title={
-                        isQueryModified
-                          ? "Consulta modificada (alterações não salvas)"
-                          : "Consulta salva e sincronizada"
-                      }
-                    />
-                    <span>
-                      Consulta:{" "}
-                      <strong className="text-apple-label-light dark:text-apple-label-dark">
-                        {activeSavedQuery.name}
-                      </strong>
-                    </span>
-                    {isQueryModified && (
-                      <span className="text-amber-500 font-semibold text-[10px]">
-                        (modificada)
-                      </span>
-                    )}
-                  </div>
-                )}
-            </div>
+            <div className="relative w-full min-h-[44px]">
+              <DBQLRichInput
+                value={inputValue}
+                onChange={setInputValue}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                rows={2}
+                className="!bg-transparent !border-none !p-0 shadow-none py-1.5 px-0 z-10"
+              />
 
-            <div className="flex items-center gap-2 ml-auto">
-              {activeSavedQuery &&
-                isQueryModified &&
-                activeSavedQuery.visibility !== "temporary" && (
-                  <button
-                    type="button"
-                    onClick={handleUpdateActiveQuery}
-                    className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Salvar Alterações</span>
-                  </button>
-                )}
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsSaveModalOpen(true);
-                }}
-                disabled={!currentEditingQuery || syntaxErrors.length > 0}
-                className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
-              >
-                <BookmarkPlus className="w-3.5 h-3.5" />
-                <span>Salvar</span>
-              </button>
-
-              <div className="relative">
-                <button
-                  ref={savedButtonRef}
-                  type="button"
-                  onClick={handleToggleSavedDropdown}
-                  className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  <span>Salvas</span>
-                  {realSavedQueries.length > 0 && (
-                    <span className="bg-apple-blue/20 text-apple-blue text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                      {realSavedQueries.length}
-                    </span>
-                  )}
-                </button>
-
-                {!isLoading && isSavedDropdownOpen && (
-                  <div
-                    ref={savedDropdownRef}
-                    style={savedDropdownStyle}
-                    className="bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg p-2 z-50 flex flex-col gap-1 max-h-72 overflow-y-auto"
-                  >
-                    <div className="flex items-center justify-between px-2 py-1.5  mb-1">
-                      <span className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
-                        CONSULTAS SALVAS E PÚBLICAS
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setIsSavedDropdownOpen(false);
-                          if (onManageQueries) onManageQueries();
-                          else router.push("/settings/saved-queries");
-                        }}
-                        className="text-xs text-apple-blue hover:underline font-medium"
-                      >
-                        gerenciar
-                      </button>
-                    </div>
-
-                    {realSavedQueries.length === 0 ? (
-                      <div className="text-xs text-apple-tertiary-light px-2 py-4 text-center">
-                        Nenhuma consulta salva ainda.
-                      </div>
-                    ) : (
-                      realSavedQueries.map((q) => (
-                        <div
-                          key={q._id.toString()}
-                          onClick={() => handleSelectSavedQuery(q)}
-                          className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
-                            activeSavedQuery?._id === q._id
-                              ? "bg-apple-blue/10 text-apple-blue font-semibold"
-                              : "text-apple-label-light dark:text-apple-label-dark"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <span className="font-medium truncate">
-                              {q.name}
-                            </span>
-                            <span className="font-mono text-[10px] text-apple-tertiary-light truncate">
-                              {q.queryString}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteSavedQuery(e, q._id.toString())}
-                            title="Excluir consulta"
-                            className="opacity-0 group-hover:opacity-100 p-1 text-apple-tertiary-light hover:text-apple-red transition-opacity"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={toggleMode}
-                className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
-                  mode === "advanced"
-                    ? "bg-apple-blue/10 text-apple-blue border-apple-blue/20"
-                    : "text-apple-tertiary-light border-transparent hover:border-apple-border-light"
-                }`}
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>DBQL</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsAiModalOpen(true);
-                }}
-                title="Gerar com IA"
-                className="p-1.5 rounded-md text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors"
-              >
-                <Bot className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsHelpModalOpen(true);
-                }}
-                className="ml-2 p-2 text-gray-400 hover:text-[#007AFF] transition-colors"
-                title="Ajuda DBQL"
-              >
-                <HelpCircle className="w-5 h-5" />
-              </button>
-
-              <DBQLHelpModal
-                isOpen={isHelpModalOpen}
-                onClose={() => setIsHelpModalOpen(false)}
-                context={dbqlContext}
+              <DBQLSuggestions
+                isOpen={isOpen}
+                suggestions={suggestions}
+                activeField={activeField}
+                onSelect={handleSuggestionSelect}
+                onClose={() => setIsOpen(false)}
               />
             </div>
           </div>
         </div>
-      ) : (
-        <div className="items-end pr-10 mb-5 flex flex-col px-4 py-3 bg-transparent transition-all outline-none ring-0 focus-within:ring-0 focus:outline-none">
-        </div>
-      )}
 
-      {syntaxErrors.length > 0 && isSearchVisible && (
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
+          <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
+            {(tags.length > 0 || inputValue) && (
+              <div className="flex items-center gap-1.5 mr-5">
+                <button
+                  type="button"
+                  onClick={handleExecuteSearch}
+                  disabled={syntaxErrors.length > 0}
+                  className="text-apple-tertiary-light hover:text-apple-green transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-apple-tertiary-light"
+                >
+                  <PlayCircleIcon className="w-3 h-3" />
+                  <span>Executar</span>
+                </button>
+              </div>
+            )}
+            {(tags.length > 0 || inputValue) && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                <span>Limpar</span>
+              </button>
+            )}
+            {activeSavedQuery &&
+              activeSavedQuery.visibility !== "temporary" && (
+                <div className="flex ml-5 items-center gap-1.5 border-l border-apple-border-light px-7">
+                  <span
+                    className={`w-2 h-2 rounded-full ${isQueryModified ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
+                    title={
+                      isQueryModified
+                        ? "Consulta modificada (alterações não salvas)"
+                        : "Consulta salva e sincronizada"
+                    }
+                  />
+                  <span>
+                    Consulta:{" "}
+                    <strong className="text-apple-label-light dark:text-apple-label-dark">
+                      {activeSavedQuery.name}
+                    </strong>
+                  </span>
+                  {isQueryModified && (
+                    <span className="text-amber-500 font-semibold text-[10px]">
+                      (modificada)
+                    </span>
+                  )}
+                </div>
+              )}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {activeSavedQuery &&
+              isQueryModified &&
+              activeSavedQuery.visibility !== "temporary" && (
+                <button
+                  type="button"
+                  onClick={handleUpdateActiveQuery}
+                  className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Salvar Alterações</span>
+                </button>
+              )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsSaveModalOpen(true);
+              }}
+              disabled={!currentEditingQuery || syntaxErrors.length > 0}
+              className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
+            >
+              <BookmarkPlus className="w-3.5 h-3.5" />
+              <span>Salvar</span>
+            </button>
+
+            <div className="relative">
+              <button
+                ref={savedButtonRef}
+                type="button"
+                onClick={handleToggleSavedDropdown}
+                className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors"
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                <span>Salvas</span>
+                {realSavedQueries.length > 0 && (
+                  <span className="bg-apple-blue/20 text-apple-blue text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                    {realSavedQueries.length}
+                  </span>
+                )}
+              </button>
+
+              {!isLoading && isSavedDropdownOpen && (
+                <div
+                  ref={savedDropdownRef}
+                  style={savedDropdownStyle}
+                  className="bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg p-2 z-50 flex flex-col gap-1 max-h-72 overflow-y-auto"
+                >
+                  <div className="flex items-center justify-between px-2 py-1.5  mb-1">
+                    <span className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                      CONSULTAS SALVAS E PÚBLICAS
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setIsSavedDropdownOpen(false);
+                        if (onManageQueries) onManageQueries();
+                        else router.push("/settings/saved-queries");
+                      }}
+                      className="text-xs text-apple-blue hover:underline font-medium"
+                    >
+                      gerenciar
+                    </button>
+                  </div>
+
+                  {realSavedQueries.length === 0 ? (
+                    <div className="text-xs text-apple-tertiary-light px-2 py-4 text-center">
+                      Nenhuma consulta salva ainda.
+                    </div>
+                  ) : (
+                    realSavedQueries.map((q) => (
+                      <div
+                        key={q._id.toString()}
+                        onClick={() => handleSelectSavedQuery(q)}
+                        className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
+                          activeSavedQuery?._id === q._id
+                            ? "bg-apple-blue/10 text-apple-blue font-semibold"
+                            : "text-apple-label-light dark:text-apple-label-dark"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <span className="font-medium truncate">{q.name}</span>
+                          <span className="font-mono text-[10px] text-apple-tertiary-light truncate">
+                            {q.queryString}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) =>
+                            handleDeleteSavedQuery(e, q._id.toString())
+                          }
+                          title="Excluir consulta"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-apple-tertiary-light hover:text-apple-red transition-opacity"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleMode}
+              className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
+                mode === "advanced"
+                  ? "bg-apple-blue/10 text-apple-blue border-apple-blue/20"
+                  : "text-apple-tertiary-light border-transparent hover:border-apple-border-light"
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>DBQL</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsAiModalOpen(true);
+              }}
+              title="Gerar com IA"
+              className="p-1.5 rounded-md text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors"
+            >
+              <Bot className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsHelpModalOpen(true);
+              }}
+              className="ml-2 p-2 text-gray-400 hover:text-[#007AFF] transition-colors"
+              title="Ajuda DBQL"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+
+            <DBQLHelpModal
+              isOpen={isHelpModalOpen}
+              onClose={() => setIsHelpModalOpen(false)}
+              context={dbqlContext}
+            />
+          </div>
+        </div>
+      </div>
+
+      {syntaxErrors.length > 0 && (
         <div className="flex flex-col gap-2 text-[12px] text-apple-red mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
-          <div className="flex items-center gap-1.5 font-bold">
-            <TriangleAlert className="w-4 h-4 shrink-0" />
+          <div className="flex items-center gap-1.5 font-bold text-[14px]">
+            <TriangleAlert className="w-5 h-5 shrink-0 animate-pulse text-yellow-500" />
             <span>Erros detectados ({syntaxErrors.length}):</span>
           </div>
           <ol className="list-decimal pl-5 space-y-2">
@@ -1350,7 +1365,9 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 </label>
                 <select
                   value={saveVisibility}
-                  onChange={(e) => setSaveVisibility(e.target.value as Visibility)}
+                  onChange={(e) =>
+                    setSaveVisibility(e.target.value as Visibility)
+                  }
                   className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
                 >
                   <option value="private">Privada (Apenas você)</option>
@@ -1403,7 +1420,9 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <p className="text-xs text-apple-tertiary-light">
                 Descreva abaixo o que deseja buscar. O sistema vai gerar um
                 prompt estruturado contendo todas as regras da sintaxe DBQL e o
-                contexto atual (<code className="text-apple-blue">{dbqlContext}</code>) para você colar na sua IA favorita.
+                contexto atual (
+                <code className="text-apple-blue">{dbqlContext}</code>) para
+                você colar na sua IA favorita.
               </p>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">

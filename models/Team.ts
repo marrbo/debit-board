@@ -8,8 +8,8 @@ const TeamSchema = new Schema<ITeam>({
   name: { type: String, required: true },
   description: { type: String },
   members: [{ type: String, ref: 'User' }],
-  projectIds: [{ type: String, ref: 'Project' }],
-  projectCount: [{ type: Number, default: 0 }],
+  projectIds: [{ type: mongoose.Types.ObjectId, ref: 'Project' }],
+  projectCount: { type: Number, default: 0 },
   isGlobal: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });

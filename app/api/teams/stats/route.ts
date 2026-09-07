@@ -6,6 +6,7 @@ import { Project } from '@/models/Project';
 import { subDays } from 'date-fns';
 import type { PipelineStage } from 'mongoose';
 import { getServerSessionIds } from '@/lib/session-server';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
   let projectNames: string[] | null = null;
 
   if (teamId && teamId !== 'all') {
-    const team = await Team.findById(teamId).lean();
+    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId) ? new mongoose.Types.ObjectId(teamId) : null;
+        const team = await Team.findById(teamObjectId).lean();
     if (!team) return NextResponse.json({ message: 'Team não encontrado' }, { status: 404 });
 
     // Se for Global, pega tudo

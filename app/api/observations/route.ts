@@ -2,17 +2,55 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { handleGenericGet } from '@/lib/api-handler';
 import { Observation } from '@/models/Observation';
 import { SavedQuery } from '@/models/SavedQuery';
-import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
+import { VulnerabilityPattern, type IVulnerabilityPattern } from '@/models/VulnerabilityPattern';
+import type { IObservation } from '@/types/IObservation';
+
+// Função auxiliar para resolver pattern.name na query
+async function resolvePatternNameQuery(query: string): Promise<{ cleanedQuery: string, patternIds: any[] } | null> {
+  if (!query || !query.includes('pattern.name')) return { cleanedQuery: query, patternIds: [] };
+
+  // Regex para capturar pattern.name:"valor" ou pattern.name:valor
+  const patternRegex = /pattern\.name:(?:"([^"]*)"|(\S+))/gi;
+  let match: RegExpExecArray | null;
+  const patternNames: string[] = [];
+
+  while ((match = patternRegex.exec(query)) !== null) {
+    const value = match[1] || match[2];
+    if (value) patternNames.push(value);
+  }
+
+  // Se não encontrou nomes, retorna vazio
+  if (patternNames.length === 0) return { cleanedQuery: query, patternIds: [] };
+
+  // Busca os patterns pelos nomes
+  const patterns = await VulnerabilityPattern.find({ name: { $in: patternNames } })
+    .select('_id')
+    .lean();
+
+  const patternIds = patterns.map(p => p._id);
+
+  // Se nenhum pattern foi encontrado, retorna vazio para não trazer resultados
+  if (patternIds.length === 0) {
+    return { cleanedQuery: '', patternIds: [] };
+  }
+
+  // Remove as ocorrências de pattern.name:... da query
+  let cleanedQuery = query.replace(patternRegex, '');
+
+  // Limpa espaços extras e operadores soltos
+  cleanedQuery = cleanedQuery.replace(/\s+/g, ' ').trim();
+  cleanedQuery = cleanedQuery.replace(/^(AND|OR)\s+/i, '').replace(/\s+(AND|OR)$/i, '');
+
+  return { cleanedQuery, patternIds };
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const dbqlId = searchParams.get('q');
-  const searchQueryRaw = searchParams.get('search') || '';
   const isAll = searchParams.get('all') === 'true';
 
-  let finalSearchQuery = searchQueryRaw;
+  let finalSearchQuery = '';
 
-  // Se houver um ID de saved query, busca a query e usa como filtro
   if (dbqlId) {
     try {
       const savedQuery = await SavedQuery.findById(dbqlId).lean();
@@ -29,12 +67,19 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId');
   if (projectId && projectId !== 'all') additionalMatch.projectId = projectId;
 
-  // Filtro por tenantId (se existir)
   const tenantId = searchParams.get('tenantId');
   if (tenantId) additionalMatch.tenantId = tenantId;
 
+  // 🔥 Resolver pattern.name antes de processar a query
+  const patternResolution = await resolvePatternNameQuery(finalSearchQuery);
+  if (patternResolution) {
+    finalSearchQuery = patternResolution.cleanedQuery;
+    if (patternResolution.patternIds.length > 0) {
+      additionalMatch.patternId = { $in: patternResolution.patternIds };
+    }
+  }
+
   try {
-    // Chama o handler genérico e obtém a resposta
     const result = await handleGenericGet(req, {
       model: Observation,
       defaultSort: 'firstSeen',
@@ -49,39 +94,50 @@ export async function GET(req: NextRequest) {
       all: isAll,
     });
 
-    // Extrai o JSON da resposta
     const responseData = await result.json();
 
-    // Determina a lista de observações (pode ser array ou {data: array})
     const observations = Array.isArray(responseData)
       ? responseData
       : (responseData.data || []);
 
+    // Enriquecimento com dados do pattern
     if (observations.length > 0) {
       const patternIds = observations
-        .map((o: any) => o.patternId)
-        .filter((id: any) => id !== undefined && id !== null);
+        .map((o: IObservation) => o.patternId)
+        .filter((id: IObservation) => id !== undefined && id !== null);
 
       if (patternIds.length > 0) {
         const patterns = await VulnerabilityPattern.find({ _id: { $in: patternIds } })
-          .select('_id name')
+          .select('_id name description recommendation score severity category externalId externalLink')
           .lean();
 
         const patternMap = new Map(
-          patterns.map((p: any) => [p._id.toString(), p.name])
+          patterns.map((p: IVulnerabilityPattern) => [p._id.toString(), p])
         );
 
-        observations.forEach((obs: any) => {
-          if (obs.patternId) {
-            obs.patternName = patternMap.get(obs.patternId.toString()) || '';
+        observations.forEach((obs: IObservation) => {
+          const pattern = patternMap.get(obs.patternId?.toString());
+          if (pattern) {
+            obs.patternName = pattern.name;
+            obs.description = pattern.description;
+            obs.recommendation = pattern.recommendation;
+            obs.pattern = pattern;
           } else {
             obs.patternName = '';
+            obs.description = '';
+            obs.recommendation = '';
+            obs.pattern = null;
           }
+        });
+      } else {
+        observations.forEach((obs: IObservation) => {
+          obs.patternName = '';
+          obs.description = '';
+          obs.recommendation = '';
         });
       }
     }
 
-    // Retorna o mesmo formato original (array ou objeto com data)
     if (Array.isArray(responseData)) {
       return NextResponse.json(observations);
     } else {
