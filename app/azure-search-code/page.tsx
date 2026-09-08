@@ -183,13 +183,13 @@ export default function AzureSearchCodePage() {
         <div className="flex flex-wrap gap-3 justify-end">
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
           >
             <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
           </button>
           <button
             onClick={handlePrintPDF}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
           >
             <FileText className="w-4 h-4" /> Imprimir PDF
           </button>
@@ -220,7 +220,7 @@ export default function AzureSearchCodePage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 shadow-sm">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 shadow-sm hover:drop-shadow-lg">
           <h2 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-4">
             Projeto x Quantidade (Hits)
           </h2>
@@ -228,7 +228,7 @@ export default function AzureSearchCodePage() {
             <Charts data={filteredItems} type="project" />
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 shadow-sm">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 shadow-sm hover:drop-shadow-lg">
           <h2 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-4">
             Projeto x Repositórios x Ocorrências
           </h2>

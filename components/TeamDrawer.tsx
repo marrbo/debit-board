@@ -121,7 +121,7 @@ function TeamDrawerForm({ team, onClose }: TeamDrawerProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-      <div className="w-full max-w-md bg-white dark:bg-apple-card-dark p-6 shadow-xl overflow-y-auto">
+      <div className="w-full max-w-md bg-white dark:bg-surface p-6 shadow-xl overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">{isEditing ? "Editar Time" : "Criar Time"}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100">
@@ -157,7 +157,7 @@ function TeamDrawerForm({ team, onClose }: TeamDrawerProps) {
                 associatedProjects.map(project => (
                   <div key={project._id.toString()} className="flex items-center justify-between p-2 border-b border-gray-100">
                     <span className="flex items-center gap-2">
-                      <FolderGit2 className="w-4 h-4 text-apple-tertiary-light" />
+                      <FolderGit2 className="w-4 h-4 text-muted" />
                       <span>{project.name}</span>
                       {project.isActive === false && (
                         <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded">Inativo</span>
@@ -194,7 +194,7 @@ function TeamDrawerForm({ team, onClose }: TeamDrawerProps) {
             {filteredAvailable.length > 0 && (
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-2 mt-2 text-sm text-apple-blue hover:underline"
+                className="flex items-center gap-2 mt-2 text-sm text-brand hover:underline"
               >
                 {selectAll ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                 {selectAll ? "Desmarcar todos" : "Selecionar todos"}
@@ -234,7 +234,7 @@ function TeamDrawerForm({ team, onClose }: TeamDrawerProps) {
               type="button"
               onClick={handleSave}
               disabled={saving || !name}
-              className="px-4 py-2 rounded-lg bg-apple-blue text-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-brand text-white disabled:opacity-50"
             >
               {saving ? "Salvando..." : "Salvar"}
             </button>

@@ -12,14 +12,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isPublicPage) {
     return (
-      <div className="min-h-screen w-full bg-apple-bg-light dark:bg-apple-bg-dark flex flex-col transition-colors duration-200">
+      <div className="min-h-screen w-full flex flex-col transition-colors duration-200">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-apple-bg-light dark:bg-apple-bg-dark transition-colors duration-200">
+    <div className="flex min-h-screen w-full transition-colors duration-200">
       <Sidebar />
       <main className="flex-1 w-full ml-20 h-screen overflow-y-auto">
         {children}

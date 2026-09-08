@@ -99,14 +99,14 @@ export default function WikiEditor({ slug }: { slug: string }) {
         <div className="flex gap-3">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
+            className="inline-flex items-center gap-1.5 border border-default dark:border-strong text-heading dark:text-heading px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
+            className="inline-flex items-center gap-1.5 border border-brand text-brand px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-brand/30"
           >
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
@@ -132,7 +132,7 @@ export default function WikiEditor({ slug }: { slug: string }) {
 
       {/* Mensagens de erro (opcional) */}
       {error && (
-        <div className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-xl text-sm shadow-lg">
+        <div className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-xl text-sm shadow-sm hover:drop-shadow-lg">
           {error}
         </div>
       )}

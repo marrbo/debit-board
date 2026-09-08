@@ -53,7 +53,7 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-full max-w-md bg-white dark:bg-apple-card-dark p-6 rounded-2xl shadow-xl">
+      <div className="w-full max-w-md bg-white dark:bg-surface p-6 rounded-2xl shadow-xl">
         <h2 className="text-xl font-bold mb-4">Atribuir {projectIds.length} projeto(s) a um Time</h2>
 
         <div className="space-y-4">
@@ -113,7 +113,7 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
             <button
               onClick={handleSubmit}
               disabled={loading || (!creatingNew && !selectedTeamId) || (creatingNew && !newTeamName)}
-              className="px-4 py-2 rounded-lg bg-apple-blue text-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-brand text-white disabled:opacity-50"
             >
               {loading ? "Atribuindo..." : "Confirmar"}
             </button>

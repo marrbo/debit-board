@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { DoorOpen, UserCog2, UserMinus } from 'lucide-react';
+import { DoorOpen, ShieldKeyhole, UserCog2, UserMinus } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
 import Image from 'next/image';
@@ -26,7 +26,7 @@ export default function Sidebar() {
   const getAvatarUrl = () => {
       if (session?.user?.avatar) return session?.user?.avatar;
       const name = session?.user?.name || 'U';
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&length=2&background=0D8ABC&color=fff&width=28&height=28`;
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&length=2&background=b62539&color=fff&width=32&height=32`;
     };
 
   // Verifica se o Admin está impersonando
@@ -48,39 +48,37 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-20 bg-[#1C1C1E] border-r border-[#38383A] h-screen fixed left-0 top-0 flex flex-col pt-6 pb-6 z-40 items-center overflow-y-auto transition-colors">
-      {/* Logo (Azul Apple) */}
-      <div className="mb-8">
-        <div className="p-2 bg-[#007AFF] rounded-lg text-white">
-          <svg width="24" height="24" viewBox="0 0 40 40" fill="none">
-            <path d="M12 26 C4 26 2 20 2 20 C2 20 4 14 12 14 C18 14 20 20 20 20 C20 20 18 26 12 26 Z" fill="#ffffff" opacity="0.8"/>
-            <path d="M28 26 C36 26 38 20 38 20 C38 20 36 14 28 14 C22 14 20 20 20 20 C20 20 22 26 28 26 Z" fill="#ffffff" opacity="0.8"/>
-            <circle cx="12" cy="20" r="4" fill="#1e293b" stroke="#fff" strokeWidth="2"/>
-            <circle cx="28" cy="20" r="4" fill="#1e293b" stroke="#fff" strokeWidth="2"/>
-          </svg>
+    <aside className="w-20 bg-surface dark:bg-sunken border-r border-subtle h-screen fixed left-0 top-0 flex flex-col pt-2 pb-2 z-40 items-center overflow-y-auto transition-colors">
+      {/* Logo */}
+      <div className="align-center flex-col space-y-0 h-[85px]">
+        <div className="bg-brand rounded-lg p-2 text-page items-center flex justify-center">
+          <ShieldKeyhole className='w-10 h-10'/>
         </div>
+        <span className='text-[9px] text-brand font-mono'>debit-board</span>
       </div>
+      
+      <span className="divide-x-2 border-b border-sunken w-full mb-4"/>
 
       {/* Menu Principal (Topo) */}
-      <nav className="flex-1 w-full space-y-2 flex flex-col items-center">
+      <nav className="flex-1 w-full px-1.5 space-y-1 flex flex-col items-center">
         {topNavItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-3 px-1 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'bg-[#007AFF]/10 text-[#007AFF]' : 'text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7]'}`}
+              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-brand font-bold'   : ''}`}
             >
-              <item.icon className={`w-6 h-6 mb-1 ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`} />
-              <span className="text-center leading-tight">{item.label}</span>
+              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand w-8 h-8' : 'text-muted'}`} />
+              <span className={`text-center leading-tight group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`}>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
       {/* 🔽 Bloco da Base (Wiki, Settings, Theme e Account) */}
-      <div className="mt-auto w-full px-1.5 flex flex-col items-center gap-4 relative">
-        
+      <div className="w-full flex flex-col items-center gap-0 h-30 px-1.5 relative">
+        <span className={`divide-x-2 border-b border-sunken w-full`}/>
         {/* Items da Base (Wiki e Settings) */}
         {bottomNavItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -88,25 +86,27 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7]'}`}
+              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-brand bg-page font-bold'   : ''}`}
             >
-              <item.icon className={`w-5 h-5 mb-1 ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`} />
-              <span className="text-center leading-tight">{item.label}</span>
+              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand w-8 h-8' : 'text-muted'}`} />
+              <span className={`text-center leading-tight group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`}>{item.label}</span>
             </Link>
           );
         })}
+
+        <span className="divide-x-2 border-b border-sunken w-full mb-4"/>
 
         {/* 🌗 Theme Toggle */}
         <ThemeToggle />
         
         {/* Divisória Cinza Escura */}
-        <div className="w-8 h-px bg-[#38383A]"></div>
+        <div className="w-full h-px mt-4 mb-2 bg-sunken"></div>
 
         {/* 🚀 CORREÇÃO DEFINITIVA: O Popover agora usa `fixed` para flutuar fora da Sidebar */}
         <div className="w-full">
           <button
             onClick={() => setIsAccountOpen(!isAccountOpen)}
-            className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[9px] font-medium text-[#8E8E93] hover:text-[#F5F5F7] transition-colors w-full cursor-pointer hover:bg-[#2C2C2E]"
+            className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[9px] font-medium text-muted hover:text-link transition-colors w-full cursor-pointer hover:bg-brand"
           >
             <Image 
               src={getAvatarUrl()} 
@@ -121,11 +121,11 @@ export default function Sidebar() {
           {/* Popover Flutuante (Fora do fluxo da Sidebar) */}
           {isAccountOpen && (
             <div 
-              className="fixed bottom-4 left-20 z-[200] w-80 bg-[#1C1C1E] border border-[#38383A] rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-4 flex flex-col gap-2 transition-colors"
+              className="fixed bottom-4 left-20 z-[200] w-80 bg-elevated border border-subtle rounded-2xl shadow-sm hover:drop-shadow-lg drop-shadow-sm hover:drop-shadow-lg p-4 flex flex-col gap-2 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-3 pb-3 border-b border-[#38383A]">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base text-[#F5F5F7] font-bold`}>
+              <div className="flex items-center gap-3 pb-3 border-b border-subtle">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base text-body font-bold`}>
                   <Image 
                     src={getAvatarUrl()} 
                     width={32}
@@ -135,7 +135,7 @@ export default function Sidebar() {
                   />
                 </div>
                 <div className="overflow-hidden">
-                  <p className="text-sm font-semibold text-[#F5F5F7] truncate">{session?.user?.name || 'Usuário'}</p>
+                  <p className="text-sm font-semibold text-body truncate">{session?.user?.name || 'Usuário'}</p>
                   <p className="text-xs text-[#8E8E93] truncate lowercase">{session?.user?.email}</p>
                   {isImpersonating && (
                     <span className="mt-1 inline-block text-[9px] bg-[#AF52DE]/20 text-[#AF52DE] border border-[#AF52DE]/40 px-2 py-0.5 rounded-full">🔀 Impersonating</span>

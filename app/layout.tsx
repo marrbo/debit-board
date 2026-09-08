@@ -17,7 +17,7 @@ export default function RootLayout({
   return (
     // 🔹 suppressHydrationWarning evita flashes de luz brancos ao carregar o modo escuro salvo
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen bg-surface/80 dark:bg-surface flex flex-col">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

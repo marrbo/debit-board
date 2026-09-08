@@ -11,7 +11,7 @@ export default function WikiViewer({ slug, content, isAdmin = false }: { slug: s
         <div className="flex justify-end mb-4">
           <Link
             href={`/wiki/${slug}?edit=true`}
-            className="text-apple-tertiary-dark hover:text-apple-blue rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-apple-blue/30"
+            className="text-muted hover:text-brand rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-brand/30"
           >
             <SquarePen className="w-6 h-6" />
           </Link>

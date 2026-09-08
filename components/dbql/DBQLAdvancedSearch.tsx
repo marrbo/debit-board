@@ -1042,15 +1042,15 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
     <div className="relative w-full flex flex-col gap-1.5">
       {/* Painel de busca (sempre visível quando montado) */}
       <div
-        className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
+        className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm hover:drop-shadow-lg transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
           syntaxErrors.length > 0
             ? "border-apple-red"
-            : "border-apple-border-light dark:border-apple-border-dark"
+            : "border-default dark:border-strong"
         }`}
       >
         <div className="flex items-start gap-2 w-full">
           <TriangleAlert
-            className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-apple-red" : "hidden"}`}
+            className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-error" : "hidden"}`}
           />
 
           <div className="flex flex-col flex-1 gap-1.5 min-w-0">
@@ -1059,13 +1059,13 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 {tags.map((tag, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark px-2 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark shadow-sm font-mono font-medium"
+                    className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-heading dark:text-heading px-2 py-1 rounded-md border border-default dark:border-strong shadow-sm hover:drop-shadow-lg font-mono font-medium"
                   >
                     {tag}
                     <button
                       type="button"
                       onClick={() => removeTag(idx)}
-                      className="text-apple-tertiary-light hover:text-apple-red transition-colors"
+                      className="text-muted hover:text-error transition-colors"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1095,15 +1095,15 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
-          <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-default dark:border-strong text-xs">
+          <div className="text-[11px] text-muted flex items-center gap-2">
             {(tags.length > 0 || inputValue) && (
               <div className="flex items-center gap-1.5 mr-5">
                 <button
                   type="button"
                   onClick={handleExecuteSearch}
                   disabled={syntaxErrors.length > 0}
-                  className="text-apple-tertiary-light hover:text-apple-green transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-apple-tertiary-light"
+                  className="text-muted hover:text-success transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-muted"
                 >
                   <PlayCircleIcon className="w-3 h-3" />
                   <span>Executar</span>
@@ -1114,7 +1114,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <button
                 type="button"
                 onClick={clearAll}
-                className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1"
+                className="text-muted hover:text-error transition-colors flex items-center gap-1"
               >
                 <X className="w-3 h-3" />
                 <span>Limpar</span>
@@ -1122,7 +1122,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
             )}
             {activeSavedQuery &&
               activeSavedQuery.visibility !== "temporary" && (
-                <div className="flex ml-5 items-center gap-1.5 border-l border-apple-border-light px-7">
+                <div className="flex ml-5 items-center gap-1.5 border-l border-default px-7">
                   <span
                     className={`w-2 h-2 rounded-full ${isQueryModified ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
                     title={
@@ -1133,7 +1133,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   />
                   <span>
                     Consulta:{" "}
-                    <strong className="text-apple-label-light dark:text-apple-label-dark">
+                    <strong className="text-heading dark:text-heading">
                       {activeSavedQuery.name}
                     </strong>
                   </span>
@@ -1153,7 +1153,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={handleUpdateActiveQuery}
-                  className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
+                  className="px-2.5 py-1 rounded-md bg-brand/10 text-brand hover:bg-brand/20 font-medium flex items-center gap-1 transition-colors"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Salvar Alterações</span>
@@ -1167,7 +1167,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 setIsSaveModalOpen(true);
               }}
               disabled={!currentEditingQuery || syntaxErrors.length > 0}
-              className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
+              className="px-2.5 py-1 rounded-md text-muted hover:text-heading dark:hover:text-heading hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
             >
               <BookmarkPlus className="w-3.5 h-3.5" />
               <span>Salvar</span>
@@ -1178,12 +1178,12 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 ref={savedButtonRef}
                 type="button"
                 onClick={handleToggleSavedDropdown}
-                className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors"
+                className="px-2.5 py-1 rounded-md text-muted hover:text-heading dark:hover:text-heading hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors"
               >
                 <Bookmark className="w-3.5 h-3.5" />
                 <span>Salvas</span>
                 {realSavedQueries.length > 0 && (
-                  <span className="bg-apple-blue/20 text-apple-blue text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  <span className="bg-brand/20 text-brand text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                     {realSavedQueries.length}
                   </span>
                 )}
@@ -1193,10 +1193,10 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <div
                   ref={savedDropdownRef}
                   style={savedDropdownStyle}
-                  className="bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg p-2 z-50 flex flex-col gap-1 max-h-72 overflow-y-auto"
+                  className="bg-white dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl shadow-sm hover:drop-shadow-lg p-2 z-50 flex flex-col gap-1 max-h-72 overflow-y-auto"
                 >
                   <div className="flex items-center justify-between px-2 py-1.5  mb-1">
-                    <span className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                       CONSULTAS SALVAS E PÚBLICAS
                     </span>
                     <button
@@ -1207,14 +1207,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         if (onManageQueries) onManageQueries();
                         else router.push("/settings/saved-queries");
                       }}
-                      className="text-xs text-apple-blue hover:underline font-medium"
+                      className="text-xs text-brand hover:underline font-medium"
                     >
                       gerenciar
                     </button>
                   </div>
 
                   {realSavedQueries.length === 0 ? (
-                    <div className="text-xs text-apple-tertiary-light px-2 py-4 text-center">
+                    <div className="text-xs text-muted px-2 py-4 text-center">
                       Nenhuma consulta salva ainda.
                     </div>
                   ) : (
@@ -1224,13 +1224,13 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         onClick={() => handleSelectSavedQuery(q)}
                         className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
                           activeSavedQuery?._id === q._id
-                            ? "bg-apple-blue/10 text-apple-blue font-semibold"
-                            : "text-apple-label-light dark:text-apple-label-dark"
+                            ? "bg-brand/10 text-brand font-semibold"
+                            : "text-heading dark:text-heading"
                         }`}
                       >
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                           <span className="font-medium truncate">{q.name}</span>
-                          <span className="font-mono text-[10px] text-apple-tertiary-light truncate">
+                          <span className="font-mono text-[10px] text-muted truncate">
                             {q.queryString}
                           </span>
                         </div>
@@ -1240,7 +1240,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                             handleDeleteSavedQuery(e, q._id.toString())
                           }
                           title="Excluir consulta"
-                          className="opacity-0 group-hover:opacity-100 p-1 text-apple-tertiary-light hover:text-apple-red transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-muted hover:text-error transition-opacity"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1256,8 +1256,8 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               onClick={toggleMode}
               className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
                 mode === "advanced"
-                  ? "bg-apple-blue/10 text-apple-blue border-apple-blue/20"
-                  : "text-apple-tertiary-light border-transparent hover:border-apple-border-light"
+                  ? "bg-brand/10 text-brand border-brand/20"
+                  : "text-muted border-transparent hover:border-default"
               }`}
             >
               <Code2 className="w-3.5 h-3.5" />
@@ -1271,7 +1271,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 setIsAiModalOpen(true);
               }}
               title="Gerar com IA"
-              className="p-1.5 rounded-md text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors"
+              className="p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 transition-colors"
             >
               <Bot className="w-4 h-4" />
             </button>
@@ -1282,7 +1282,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 e.preventDefault();
                 setIsHelpModalOpen(true);
               }}
-              className="ml-2 p-2 text-gray-400 hover:text-[#007AFF] transition-colors"
+              className="ml-2 p-2 text-gray-400 hover:text-brand transition-colors"
               title="Ajuda DBQL"
             >
               <HelpCircle className="w-5 h-5" />
@@ -1298,7 +1298,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
       </div>
 
       {syntaxErrors.length > 0 && (
-        <div className="flex flex-col gap-2 text-[12px] text-apple-red mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
+        <div className="flex flex-col gap-2 text-[12px] text-error mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
           <div className="flex items-center gap-1.5 font-bold text-[14px]">
             <TriangleAlert className="w-5 h-5 shrink-0 animate-pulse text-yellow-500" />
             <span>Erros detectados ({syntaxErrors.length}):</span>
@@ -1308,14 +1308,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <li key={idx}>
                 <div className="mb-1">{err.error}</div>
                 {err.highlightIndex !== null && err.highlightIndex >= 0 && (
-                  <div className="font-mono text-[10px] bg-white dark:bg-[#1C1C1E] px-2 py-1 rounded border border-apple-border-light text-apple-label-light dark:text-apple-label-dark inline-block">
+                  <div className="font-mono text-[10px] bg-white dark:bg-[#1C1C1E] px-2 py-1 rounded border border-default text-heading dark:text-heading inline-block">
                     <span>
                       {currentEditingQuery.substring(
                         Math.max(0, err.highlightIndex - 10),
                         err.highlightIndex,
                       )}
                     </span>
-                    <span className="bg-apple-red/25 text-apple-red px-1 py-0.5 rounded font-bold mx-0.5">
+                    <span className="bg-apple-red/25 text-error px-1 py-0.5 rounded font-bold mx-0.5">
                       {currentEditingQuery.substring(
                         err.highlightIndex,
                         err.highlightIndex + err.errorLength,
@@ -1340,14 +1340,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={saveModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
           >
-            <h3 className="text-base font-bold text-apple-label-light dark:text-apple-label-dark">
+            <h3 className="text-base font-bold text-heading dark:text-heading">
               Salvar Consulta DBQL
             </h3>
             <form onSubmit={handleSaveSubmit} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-apple-tertiary-light">
+                <label className="text-xs font-medium text-muted">
                   Nome da consulta
                 </label>
                 <input
@@ -1355,12 +1355,12 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder="Ex: Observations Críticas de Segurança"
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl text-xs outline-none focus:border-brand text-heading dark:text-heading"
                   autoFocus
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-apple-tertiary-light">
+                <label className="text-xs font-medium text-muted">
                   Visibilidade
                 </label>
                 <select
@@ -1368,7 +1368,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   onChange={(e) =>
                     setSaveVisibility(e.target.value as Visibility)
                   }
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl text-xs outline-none focus:border-brand text-heading dark:text-heading"
                 >
                   <option value="private">Privada (Apenas você)</option>
                   <option value="shared">Compartilhada (Equipe)</option>
@@ -1379,14 +1379,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-apple-tertiary-light hover:bg-apple-border-light/30"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-muted hover:bg-apple-border-light/30"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={!saveName.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-apple-blue text-white hover:opacity-90 disabled:opacity-40"
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40"
                 >
                   Salvar Consulta
                 </button>
@@ -1401,31 +1401,31 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={aiModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-apple-label-light dark:text-apple-label-dark flex items-center gap-2">
-                <Bot className="w-4 h-4 text-apple-blue" />
+              <h3 className="text-base font-bold text-heading dark:text-heading flex items-center gap-2">
+                <Bot className="w-4 h-4 text-brand" />
                 <span>Gerar Query com IA (Copiar Prompt)</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsAiModalOpen(false)}
-                className="text-apple-tertiary-light hover:text-apple-label-light"
+                className="text-muted hover:text-heading"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-apple-tertiary-light">
+              <p className="text-xs text-muted">
                 Descreva abaixo o que deseja buscar. O sistema vai gerar um
                 prompt estruturado contendo todas as regras da sintaxe DBQL e o
                 contexto atual (
-                <code className="text-apple-blue">{dbqlContext}</code>) para
+                <code className="text-brand">{dbqlContext}</code>) para
                 você colar na sua IA favorita.
               </p>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                   Sua busca em linguagem natural:
                 </label>
                 <textarea
@@ -1436,19 +1436,19 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   }}
                   rows={3}
                   placeholder="Ex: Quero todas as observations de severidade crítica ou alta do projeto GEPIN que não sejam do arquivo Auth"
-                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl p-3 text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark resize-none font-mono"
+                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                  <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                     Prompt gerado com a documentação DBQL:
                   </label>
-                  <span className="text-[10px] text-apple-tertiary-light">
+                  <span className="text-[10px] text-muted">
                     Pronto para envio
                   </span>
                 </div>
-                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-apple-border-light dark:border-apple-border-dark rounded-xl p-3 text-[11px] font-mono text-apple-label-light dark:text-apple-label-dark max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
+                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-xl p-3 text-[11px] font-mono text-heading dark:text-heading max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
                   {generatedAiPromptText}
                 </div>
               </div>
@@ -1456,7 +1456,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-apple-tertiary-light hover:bg-apple-border-light/30"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-muted hover:bg-apple-border-light/30"
                 >
                   Fechar
                 </button>
@@ -1468,7 +1468,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                     setCopiedPrompt(true);
                     setTimeout(() => setCopiedPrompt(false), 3000);
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-apple-blue text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
                 >
                   {copiedPrompt ? (
                     <>

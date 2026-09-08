@@ -121,14 +121,14 @@ function SASTScansContent() {
     <div className="w-full space-y-4 p-8">
       <PageHeader
         title="SAST Scanner"
-        icon={<ShieldKeyhole className="w-10 h-10 text-apple-blue" />}
+        icon={<ShieldKeyhole className="w-10 h-10 text-brand" />}
         subtitle="Executa o scanner e acompanhe o histórico de execuções."
         actions={
           <div className="flex items-center gap-2">
             <button
               onClick={runScan}
               disabled={scanning}
-              className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               {scanning ? (
                 <>
@@ -144,7 +144,7 @@ function SASTScansContent() {
             </button>
             <button
               onClick={() => setRefreshKey(prev => prev + 1)}
-              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               <RefreshCw className="w-4 h-4" />
               Atualizar

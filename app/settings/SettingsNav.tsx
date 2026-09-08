@@ -12,16 +12,16 @@ export default function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div
-      className={`relative flex flex-col h-full transition-all duration-300 ease-in-out  bg-apple-secondary-light text-apple-label-dark border-r border-apple-border-dark ${
+      className={`relative flex flex-col h-full transition-all duration-300 ease-in-out bg-sunken dark:bg-black/20 text-heading border-r border-strong ${
         collapsed ? 'w-4' : 'w-76'
       }`}
     >
       {/* 🔥 Botão estilo DeepSeek no topo direito */}
-      <div className={`absolute top-5 z-20 bg-apple-tertiary-dark p-1 rounded-lg transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
+      <div className={`absolute top-5 z-20 bg-sunken p-1 rounded-sm transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`flex items-center justify-center w-5 h-5 rounded-lg  text-apple-card-dark hover:text-white transition-all ${
-            collapsed ? 'bg-transparent' : ''
+          className={`flex items-center justify-center w-5 h-5 rounded-lg  text-apple-card-dark hover:text-brand transition-all ${
+            collapsed ? 'bg-sunken' : ''
           }`}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
         >
@@ -37,7 +37,7 @@ export default function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
               if (group.adminOnly && !isAdmin) return null;
               return (
                 <div key={group.label} className="space-y-1">
-                  <div className="text-xs font-bold uppercase tracking-wider px-3 py-2 text-apple-tertiary-light">
+                  <div className="text-xs font-bold uppercase tracking-wider px-3 py-2 text-muted">
                     {group.label}
                   </div>
                   {group.items.map((item, index) => {
@@ -48,11 +48,11 @@ export default function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
                         href={item.href}
                         className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                           isActive
-                            ? 'bg-apple-blue/10 text-apple-blue'
-                            : 'text-apple-tertiary-light hover:bg-apple-card-light dark:hover:bg-apple-card-dark'
+                            ? 'bg-brand/10 text-brand'
+                            : 'text-muted hover:bg-surface dark:hover:bg-surface'
                         }`}
                       >
-                        <item.icon className={`w-5 h-5 ${isActive ? 'text-apple-blue' : 'text-apple-tertiary-light '}`} />
+                        <item.icon className={`w-5 h-5 ${isActive ? 'text-brand' : 'text-muted '}`} />
                         {item.label}
                       </Link>
                     );

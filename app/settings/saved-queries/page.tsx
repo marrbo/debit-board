@@ -163,13 +163,13 @@ function SavedQueriesContent() {
         render: (item: ISavedQuery) => (
           <div className="flex justify-center items-center">
             {item.visibility === "temporary" ? (
-              <TimerReset size={20} className="text-apple-tertiary-light" />
+              <TimerReset size={20} className="text-muted" />
             ) : item.visibility === "private" ? (
-              <FolderLock size={20} className="text-apple-tertiary-light" />
+              <FolderLock size={20} className="text-muted" />
             ) : item.visibility === "public" ? (
-              <Globe size={20} className="text-apple-tertiary-light" />
+              <Globe size={20} className="text-muted" />
             ) : (
-              <Share2 size={20} className="text-apple-tertiary-light" />
+              <Share2 size={20} className="text-muted" />
             )}
           </div>
         ),
@@ -180,7 +180,7 @@ function SavedQueriesContent() {
         sortable: true,
         width: "120px",
         className:
-          "text-sm text-center text-apple-label-light dark:text-apple-label-dark",
+          "text-sm text-center text-heading dark:text-heading",
         render: (item: ISavedQuery) =>
           new Date(item.createdAt).toLocaleDateString(),
       },
@@ -193,7 +193,7 @@ function SavedQueriesContent() {
           <div className="flex justify-center">
             <button
               onClick={() => handleOpenEdit(item)}
-              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-apple-blue"
+              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-brand"
               title="Editar"
             >
               <Pencil className="w-4 h-4" />
@@ -221,7 +221,7 @@ function SavedQueriesContent() {
         actions={
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+            className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
           >
             <Plus className="w-4 h-4" /> Nova Consulta
           </button>
@@ -259,7 +259,7 @@ function SavedQueriesContent() {
       {/* Modal de Criação/Edição */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-apple-card-dark rounded-2xl p-6 w-full max-w-lg shadow-xl">
+          <div className="bg-white dark:bg-surface rounded-2xl p-6 w-full max-w-lg shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">
                 {editingId ? "Editar Consulta" : "Nova Consulta"}
@@ -279,7 +279,7 @@ function SavedQueriesContent() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-apple-blue"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand"
                   required
                 />
               </div>
@@ -293,7 +293,7 @@ function SavedQueriesContent() {
                   onChange={(e) =>
                     setForm({ ...form, queryString: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-apple-blue"
+                  className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand"
                   rows={4}
                   required
                 />
@@ -354,7 +354,7 @@ function SavedQueriesContent() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 text-sm rounded-lg bg-apple-blue text-white hover:bg-apple-blue/80 disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:bg-brand/80 disabled:opacity-50"
                 >
                   {loading ? "Salvando..." : "Salvar"}
                 </button>
@@ -371,7 +371,7 @@ export default function SavedQueriesPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
+        <div className="py-12 text-center text-muted dark:text-muted">
           Carregando página de consultas salvas...
         </div>
       }

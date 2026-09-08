@@ -37,11 +37,11 @@ export default function DBQLSuggestions({
   return (
     <div
       ref={dropdownRef}
-      className="absolute left-0 top-full mt-1 w-full sm:w-auto min-w-[250px] max-w-full bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-50 overflow-hidden"
+      className="absolute left-0 top-full mt-1 w-full sm:w-auto min-w-[250px] max-w-full bg-white dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl shadow-sm hover:drop-shadow-lg z-50 overflow-hidden"
     >
-      <div className="px-3 py-2 border-b border-apple-border-light dark:border-apple-border-dark bg-apple-border-light/10 dark:bg-black/10">
-        <span className="text-[10px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
-          Sugestões para: <span className="text-apple-blue lowercase">{activeField}</span>
+      <div className="px-3 py-2 border-b border-default dark:border-strong bg-apple-border-light/10 dark:bg-black/10">
+        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+          Sugestões para: <span className="text-brand lowercase">{activeField}</span>
         </span>
       </div>
       <ul className="max-h-64 overflow-y-auto py-1">
@@ -50,7 +50,7 @@ export default function DBQLSuggestions({
             <button
               type="button"
               onClick={() => onSelect(suggestion)}
-              className="w-full text-left px-3 py-2 text-xs text-apple-label-light dark:text-apple-label-dark hover:bg-apple-blue/10 hover:text-apple-blue transition-colors truncate"
+              className="w-full text-left px-3 py-2 text-xs text-heading dark:text-heading hover:bg-brand/10 hover:text-brand transition-colors truncate"
             >
               {suggestion}
             </button>

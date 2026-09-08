@@ -28,7 +28,7 @@ const columns: Column<IProject>[] = [
     render: (item: IProject) => (
       <Link
         href={`/settings/repositories?projectId=${item._id}`}
-        className="inline-flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+        className="inline-flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
       >
         Ver Repositórios
       </Link>
@@ -98,14 +98,14 @@ function ProjectsContent() {
             <button
               onClick={() => setShowAssignModal(true)}
               disabled={selectedProjectIds.length === 0}
-              className="flex items-center gap-2 bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 disabled:opacity-50 text-apple-label-light dark:text-apple-label-dark px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm border border-apple-border-light dark:border-apple-border-dark"
+              className="flex items-center gap-2 bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 disabled:opacity-50 text-heading dark:text-heading px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg border border-default dark:border-strong"
             >
               <FolderPlus className="w-4 h-4" /> Atribuir a Time
             </button>
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               {syncing ? (
                 <>
@@ -159,7 +159,7 @@ export default function ProjectsPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
+        <div className="py-12 text-center text-muted dark:text-muted">
           Carregando página de projetos...
         </div>
       }

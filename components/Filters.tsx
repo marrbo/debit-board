@@ -71,11 +71,11 @@ export default function Filters({
   }, [allItems]);
 
   return (
-    <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 space-y-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none transition-colors">
+    <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-5 space-y-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none transition-colors">
       {/* Busca API */}
       <div className="flex flex-col md:flex-row gap-4 items-end">
         <div className="flex-1">
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Query de Busca (Azure API)
           </label>
           <div className="flex gap-2">
@@ -84,11 +84,11 @@ export default function Filters({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder='Ex: ext:cs file:*Controller.cs AllowAnonymous OR NOT Authorize'
-              className="flex-1 bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark placeholder:text-apple-tertiary-light dark:placeholder:text-apple-tertiary-dark focus:outline-none focus:ring-2 focus:ring-apple-blue/30 transition-colors"
+              className="flex-1 bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             />
             <button
               onClick={onSearch}
-              className="bg-apple-blue hover:bg-[#0063CE] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
+              className="bg-brand hover:bg-[#0063CE] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm hover:drop-shadow-lg"
             >
               Buscar
             </button>
@@ -97,31 +97,31 @@ export default function Filters({
       </div>
 
       {/* Filtros locais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-apple-border-light dark:border-apple-border-dark/50">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-default dark:border-strong/50">
         <div className="md:col-span-1">
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Filtrar localmente por Nome
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-apple-tertiary-light w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
             <input
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Filtrar resultados..."
-              className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl pl-9 pr-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark placeholder:text-apple-tertiary-light dark:placeholder:text-apple-tertiary-dark"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl pl-9 pr-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Projeto
           </label>
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
             {projects.map(p => <option key={p} value={p}>{p}</option>)}
@@ -129,13 +129,13 @@ export default function Filters({
         </div>
 
         <div>
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Gerência
           </label>
           <select
             value={selectedGerencia}
             onChange={(e) => setSelectedGerencia(e.target.value)}
-            className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todas</option>
             {gerencias.map(g => <option key={g} value={g}>{g}</option>)}
@@ -143,13 +143,13 @@ export default function Filters({
         </div>
 
         <div>
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Núcleo
           </label>
           <select
             value={selectedNucleo}
             onChange={(e) => setSelectedNucleo(e.target.value)}
-            className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
             {nucleos.map(n => <option key={n} value={n}>{n}</option>)}
@@ -157,13 +157,13 @@ export default function Filters({
         </div>
 
         <div>
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Repositório
           </label>
           <select
             value={selectedRepo}
             onChange={(e) => setSelectedRepo(e.target.value)}
-            className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
             {repos.map(r => <option key={r} value={r}>{r}</option>)}
@@ -171,13 +171,13 @@ export default function Filters({
         </div>
 
         <div className="md:col-span-1">
-          <label className="block text-[10px] font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-muted dark:text-muted uppercase tracking-wider mb-2">
             Agrupar Exibição Por
           </label>
           <select
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            className="w-full bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl px-3 py-2 text-sm text-apple-label-light dark:text-apple-label-dark"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="project-repo">Projeto → Repositório</option>
             <option value="gerencia-nucleo">Gerência → Núcleo</option>

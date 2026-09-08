@@ -87,7 +87,7 @@ export function PaginationInfo({
   }
 
   return (
-    <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-xs text-apple-tertiary-light ${className}`}>
+    <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-xs text-muted ${className}`}>
       <span className="whitespace-nowrap">
         Exibindo {start} – {end} de {totalItems}
       </span>
@@ -98,7 +98,7 @@ export function PaginationInfo({
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg px-2 py-1 text-xs"
+            className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-2 py-1 text-xs"
             aria-label="Itens por página"
           >
             {[10, 20, 50, 100].map((size) => (
@@ -153,8 +153,8 @@ export function PaginationInfo({
                   onClick={() => onPageChange(item)}
                   className={`w-10 h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                     currentPage === item
-                      ? 'bg-apple-blue/10 text-apple-blue font-bold'
-                      : 'hover:bg-apple-border-light/30 text-apple-tertiary-light'
+                      ? 'bg-brand/10 text-brand font-bold'
+                      : 'hover:bg-apple-border-light/30 text-muted'
                   }`}
                   aria-current={currentPage === item ? 'page' : undefined}
                 >
@@ -195,7 +195,7 @@ export function PaginationInfo({
             onChange={(e) => setInputPage({ page: currentPage, value: e.target.value })}
             onKeyDown={handlePageInput}
             placeholder={String(currentPage)}
-            className="w-14 bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg px-2 py-1 text-xs text-center"
+            className="w-14 bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-2 py-1 text-xs text-center"
             aria-label="Ir para página"
           />
           <span>/ {totalPages}</span>

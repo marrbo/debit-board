@@ -28,5 +28,5 @@ export const topNavItems: MenuItem[] = [
 // Itens da base (Wiki e Settings, logo acima do botão Account)
 export const bottomNavItems: MenuItem[] = [
   { href: '/wiki', label: 'Wiki', icon: BookOpen },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/settings', label: '', icon: Settings },
 ];

@@ -28,7 +28,7 @@ const columns: Column<IRepository>[] = [
     label: "Criado em",
     sortable: true,
     width: "120px",
-    className: "text-sm text-center text-apple-label-light dark:text-apple-label-dark",
+    className: "text-sm text-center text-heading dark:text-heading",
     render: (item: IRepository) => new Date(item.createdAt).toLocaleDateString(),
   },
   {
@@ -38,7 +38,7 @@ const columns: Column<IRepository>[] = [
     width: "120px",
     exportable: false,
     render: () => (
-      <span className="text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark">
+      <span className="text-xs text-muted dark:text-muted">
         Em breve
       </span>
     ),
@@ -94,7 +94,7 @@ function RepositoriesContent() {
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               {syncing ? (
                 <>
@@ -110,7 +110,7 @@ function RepositoriesContent() {
             {projectId && (
               <Link
                 href="/settings/projects"
-                className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-sm font-medium transition-colors"
+                className="flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-sm font-medium transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Voltar para Projetos
               </Link>
@@ -143,7 +143,7 @@ export default function RepositoriesPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
+        <div className="py-12 text-center text-muted dark:text-muted">
           Carregando página de repositórios...
         </div>
       }

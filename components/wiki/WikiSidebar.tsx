@@ -10,16 +10,16 @@ export function WikiSidebar({ items }: { items: any[] }) {
 
   return (
     <div
-      className={`relative flex flex-col h-full transition-all duration-300 ease-in-out  bg-apple-secondary-light text-apple-label-dark border-r border-apple-border-dark ${
+      className={`relative flex flex-col h-full transition-all duration-300 ease-in-out bg-sunken text-heading border-r border-strong ${
         collapsed ? 'w-4' : 'w-76'
       }`}
     >
       {/* 🔥 Botão estilo DeepSeek no topo direito */}
-      <div className={`absolute top-5 z-20 bg-apple-tertiary-dark p-1 rounded-lg transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
+      <div className={`absolute top-5 z-20 bg-sunken p-1 rounded-lg transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`flex items-center justify-center w-5 h-5 rounded-lg  text-apple-card-dark hover:text-white transition-all ${
-            collapsed ? 'bg-transparent' : ''
+          className={`flex items-center justify-center w-5 h-5 rounded-lg text-body hover:text-brand transition-all ${
+            collapsed ? 'bg-sunken' : ''
           }`}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
         >
@@ -28,7 +28,7 @@ export function WikiSidebar({ items }: { items: any[] }) {
       </div>
 
       {!collapsed ? (
-        <div className="flex-1 overflow-y-auto py-6 pr-10 pl-4">
+        <div className="flex-1 overflow-y-auto py-4 p-8 px-8">
           <div className="space-y-1 text-sm">
             <WikiSidebarItems items={items} depth={0} />
           </div>
@@ -51,18 +51,18 @@ function WikiSidebarItems({ items, depth }: { items: any[], depth: number }) {
           {item.type === 'folder' ? (
             <div
               style={{ paddingLeft: `${depth * 12}px` }}
-              className="flex items-center gap-2 py-1 text-apple-tertiary-dark hover:text-apple-label-dark cursor-pointer font-medium"
+              className="flex items-center gap-2 py-1 text-muted hover:text-heading cursor-pointer font-medium"
             >
-              <Folder size={16} className="text-apple-tertiary-dark" />
+              <Folder size={16} className="text-muted" />
               <span>{item.name}</span>
             </div>
           ) : (
             <Link
               href={item.url}
-              className={`block py-1 hover:text-apple-label-dark transition-colors ${
+              className={`block py-1 hover:text-heading transition-colors ${
                 pathname === item.url
-                  ? 'bg-apple-blue/10 text-apple-blue'
-                  : 'text-apple-tertiary-light hover:bg-apple-card-light dark:hover:bg-apple-card-dark'
+                  ? 'bg-brand/10 text-brand'
+                  : 'text-muted hover:bg-surface dark:hover:bg-surface'
               }`}
               style={{ paddingLeft: `${depth * 12 + 12}px` }}
             >

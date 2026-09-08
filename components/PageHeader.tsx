@@ -42,17 +42,17 @@ export default function PageHeader({
   const hasSearch = !!search;
 
   return (
-    <div className="border-b border-apple-border-light dark:border-apple-border-dark pb-4 mb-4 transition-colors">
+    <div className="border-b border-default dark:border-strong pb-4 mb-4 transition-colors">
       {/* Linha principal */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 min-w-0">
-          {icon && <div className="flex items-center text-apple-blue shrink-0">{icon}</div>}
+          {icon && <div className="flex items-center text-brand shrink-0">{icon}</div>}
           <div className="min-w-0">
-            <h1 className="text-xl -mt-2 font-bold text-apple-label-light dark:text-apple-label-dark truncate">
+            <h1 className="text-xl -mt-2 font-bold text-heading dark:text-heading truncate">
               {title}
             </h1>
             {subtitle && (
-              <p className="min-w-full text-xs font-mono text-apple-tertiary-light dark:text-apple-tertiary-light mt-1">
+              <p className="min-w-full text-xs font-mono text-muted dark:text-muted mt-1">
                 {subtitle}
               </p>
             )}
@@ -64,10 +64,10 @@ export default function PageHeader({
             {hasSearch && (
               <button
                 onClick={() => setIsSearchVisible(!isSearchVisible)}
-                className={`flex items-center group gap-2 px-4 py-2 rounded-2xl border border-apple-border-light bg-white text-apple-blue text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed" ${
+                className={`flex items-center group gap-2 px-4 py-2 rounded-2xl border border-default bg-white text-brand text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed" ${
                   isSearchVisible
-                    ? 'text-apple-tertiary-light hover:text-apple-red'
-                    : 'text-apple-tertiary-light hover:text-apple-blue'
+                    ? 'text-muted hover:text-error'
+                    : 'text-muted hover:text-brand'
                 }`}
                 title={isSearchVisible ? 'Ocultar busca' : 'Mostrar busca'}
                 aria-label={isSearchVisible ? 'Ocultar busca' : 'Mostrar busca'}

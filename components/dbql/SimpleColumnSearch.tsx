@@ -57,27 +57,27 @@ export function SimpleColumnSearch({
   return (
     <div className="flex items-center group gap-2 w-full">
       <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 group-hover:text-apple-blue -translate-y-1/2 w-4 h-4 text-apple-tertiary-light" />
+        <Search className="absolute left-3 top-1/2 group-hover:text-brand -translate-y-1/2 w-4 h-4 text-muted" />
         <input
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-sm focus:outline-none focus:ring-2 focus:ring-apple-blue"
+          className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         {inputValue && (
           <button
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-apple-tertiary-light hover:text-apple-red transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-error transition-colors"
           >
-            <X className="w-4 h-4 hover:text-apple-red" />
+            <X className="w-4 h-4 hover:text-error" />
           </button>
         )}
 
         {/* 🔥 Hint corretamente posicionado dentro do container com relative */}
         {showHint && (
-          <div className="absolute left-2 top-full mt-1 text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark flex items-center gap-1">
-            <Info className="w-3 h-3 text-apple-orange" />
+          <div className="absolute left-2 top-full mt-1 text-xs text-muted dark:text-muted flex items-center gap-1">
+            <Info className="w-3 h-3 text-warning" />
             Digite pelo menos {minLength} caracteres
           </div>
         )}
@@ -86,7 +86,7 @@ export function SimpleColumnSearch({
       <select
         value={selectedColumn}
         onChange={(e) => setSelectedColumn(e.target.value)}
-        className="px-3 py-2 rounded-xl bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-sm focus:outline-none focus:ring-2 focus:ring-apple-blue"
+        className="px-3 py-2 rounded-xl bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
       >
         <option value="all">Todas as colunas</option>
         {columns

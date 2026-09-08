@@ -18,10 +18,10 @@ function ChartCard({ title, children, chartKey, onExpand }: {
   onExpand: (chartKey: string) => void;
 }) {
   return (
-    <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
+    <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">{title}</h3>
-        <button onClick={() => onExpand(chartKey)} className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors" title="Expandir gráfico">
+        <h3 className="text-sm font-semibold text-body dark:text-body">{title}</h3>
+        <button onClick={() => onExpand(chartKey)} className="p-1.5 text-muted hover:text-brand transition-colors" title="Expandir gráfico">
           <Maximize2 className="w-4 h-4" />
         </button>
       </div>
@@ -288,7 +288,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   }, [projectTotals, projectViewMode]);
 
   if (status === 'loading') {
-    return <div className="text-apple-tertiary-light py-10 text-center">Carregando...</div>;
+    return <div className="text-muted py-10 text-center">Carregando...</div>;
   }
 
   if (!session) {
@@ -297,7 +297,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   }
 
   if (loading && !stats) {
-    return <div className="text-center py-12"><div className="w-8 h-8 border-4 border-apple-border-light dark:border-apple-border-dark border-t-[#007AFF] rounded-full animate-spin mx-auto"></div></div>;
+    return <div className="text-center py-12"><div className="w-8 h-8 border-4 border-default dark:border-strong border-t-[#007AFF] rounded-full animate-spin mx-auto"></div></div>;
   }
 
   if (error) {
@@ -308,7 +308,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Stats & Usage"
-        icon={<BarChart3 className="w-10 h-10 text-apple-blue" />}
+        icon={<BarChart3 className="w-10 h-10 text-brand" />}
         subtitle="Visão geral das observations de segurança do seu Tenant."
         search={{
           type: 'advanced',
@@ -319,7 +319,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         }}
         actions={
           lastCategory && (
-            <button onClick={clearCategoryFilter} className="px-4 py-2 bg-red-600 border border-apple-border-light dark:border-apple-border-dark rounded-full p-1 shadow-md text-apple-tertiary-light hover:text-apple-red transition-colors" title="Limpar filtro de categoria">
+            <button onClick={clearCategoryFilter} className="px-4 py-2 bg-red-600 border border-default dark:border-strong rounded-full p-1 shadow-md text-muted hover:text-error transition-colors" title="Limpar filtro de categoria">
               <FilterIcon className="w-4 h-4" />
             </button>
         )}
@@ -338,18 +338,18 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Evolução */}
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
+        <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Evolução: Novas ocorrências</h3>
-            <button onClick={() => setExpandedChart('evolution')} className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors" title="Expandir gráfico">
+            <h3 className="text-sm font-semibold text-body dark:text-body">Evolução: Novas ocorrências</h3>
+            <button onClick={() => setExpandedChart('evolution')} className="p-1.5 text-muted hover:text-brand transition-colors" title="Expandir gráfico">
               <Maximize2 className="w-4 h-4" />
             </button>
           </div>
           <div className="flex items-center justify-end mb-3">
             <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
-              <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm transition-all duration-300" style={{ left: evolutionViewMode === 'severity' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
-              <button onClick={() => setEvolutionViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'severity' ? 'text-apple-green' : 'text-apple-tertiary-light'}`}>Severidade</button>
-              <button onClick={() => setEvolutionViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'status' ? 'text-apple-orange' : 'text-apple-tertiary-light'}`}>Status</button>
+              <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm hover:drop-shadow-lg transition-all duration-300" style={{ left: evolutionViewMode === 'severity' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
+              <button onClick={() => setEvolutionViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'severity' ? 'text-success' : 'text-muted'}`}>Severidade</button>
+              <button onClick={() => setEvolutionViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'status' ? 'text-warning' : 'text-muted'}`}>Status</button>
             </div>
           </div>
           <div className="h-64">
@@ -362,34 +362,34 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
           {categoryTotals.length > 0 ? (
             <Charts data={categoryTotals} type="pie" onSliceClick={handleSliceClick} />
           ) : (
-            <div className="flex items-center justify-center h-full text-apple-tertiary-light text-sm">Nenhuma categoria encontrada.</div>
+            <div className="flex items-center justify-center h-full text-muted text-sm">Nenhuma categoria encontrada.</div>
           )}
           {lastCategory && (
             <div className="mt-2 flex items-center justify-between">
-              <p className="text-[11px] text-apple-tertiary-light">Filtro: <span className="font-mono text-apple-blue">category:`{lastCategory}`</span></p>
-              <button onClick={clearCategoryFilter} className="flex items-center gap-1 text-[11px] text-apple-red hover:underline"><XCircle className="w-3 h-3" /> Voltar</button>
+              <p className="text-[11px] text-muted">Filtro: <span className="font-mono text-brand">category:`{lastCategory}`</span></p>
+              <button onClick={clearCategoryFilter} className="flex items-center gap-1 text-[11px] text-error hover:underline"><XCircle className="w-3 h-3" /> Voltar</button>
             </div>
           )}
         </ChartCard>
 
         {/* Projetos */}
-        <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors relative">
+        <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-apple-secondary-light dark:text-apple-secondary-dark">Total por Projeto (TOP 10)</h3>
-            <button onClick={() => setExpandedChart('project')} className="p-1.5 text-apple-tertiary-light hover:text-apple-blue transition-colors" title="Expandir gráfico"><Maximize2 className="w-4 h-4" /></button>
+            <h3 className="text-sm font-semibold text-body dark:text-body">Total por Projeto (TOP 10)</h3>
+            <button onClick={() => setExpandedChart('project')} className="p-1.5 text-muted hover:text-brand transition-colors" title="Expandir gráfico"><Maximize2 className="w-4 h-4" /></button>
           </div>
           <div className="flex items-center justify-end mb-3">
             <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
-              <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm transition-all duration-300" style={{ left: projectViewMode === 'status' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
-              <button onClick={() => setProjectViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'status' ? 'text-apple-green' : 'text-apple-tertiary-light'}`}>Status</button>
-              <button onClick={() => setProjectViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'severity' ? 'text-apple-orange' : 'text-apple-tertiary-light'}`}>Severidade</button>
+              <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm hover:drop-shadow-lg transition-all duration-300" style={{ left: projectViewMode === 'status' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
+              <button onClick={() => setProjectViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'status' ? 'text-success' : 'text-muted'}`}>Status</button>
+              <button onClick={() => setProjectViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'severity' ? 'text-warning' : 'text-muted'}`}>Severidade</button>
             </div>
           </div>
           <div className="h-64">
             {projectStackedData.datasets.length > 0 ? (
               <Charts datasets={projectStackedData.datasets} labels={projectStackedData.labels} type="stacked-bar" />
             ) : (
-              <div className="flex items-center justify-center h-full text-apple-tertiary-light text-sm">Nenhum projeto encontrado.</div>
+              <div className="flex items-center justify-center h-full text-muted text-sm">Nenhum projeto encontrado.</div>
             )}
           </div>
         </div>
@@ -399,11 +399,11 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       {expandedChart && (
         <div className="fixed inset-0 -space-y-6 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-apple-border-light dark:border-apple-border-dark">
-              <h3 className="text-base font-semibold text-apple-label-light dark:text-apple-label-dark">
+            <div className="flex items-center justify-between p-4 border-b border-default dark:border-strong">
+              <h3 className="text-base font-semibold text-heading dark:text-heading">
                 {expandedChart === 'evolution' ? 'Evolução de Ocorrências' : expandedChart === 'category' ? 'Distribuição por Categoria' : 'Total por Projeto (TOP 10)'}
               </h3>
-              <button onClick={() => setExpandedChart(null)} className="p-2 text-apple-tertiary-light hover:text-apple-red transition-colors"><X className="w-5 h-5" /></button>
+              <button onClick={() => setExpandedChart(null)} className="p-2 text-muted hover:text-error transition-colors"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 p-6 overflow-auto">
               {expandedChart === 'evolution' && <Charts datasets={evolutionData.datasets} labels={evolutionData.labels} type="line" />}

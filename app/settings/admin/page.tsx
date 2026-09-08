@@ -23,15 +23,15 @@ export default async function AdminPage() {
   return (
     <div className="w-full mx-auto">
      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-heading dark:text-heading flex items-center gap-2">
             <UserCog className="w-5 h-5" />
             Admin
         </h1>
     </div>
 
-      <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm overflow-hidden transition-colors">
-        <div className="px-6 py-4 border-b border-apple-border-light dark:border-apple-border-dark flex items-center gap-3 bg-apple-card-light dark:bg-apple-card-dark/80">
-            <p className="text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark">Gerencie Tenants e Usuários</p>
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl shadow-sm hover:drop-shadow-lg overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-default dark:border-strong flex items-center gap-3 bg-surface dark:bg-surface/80">
+            <p className="text-xs text-muted dark:text-muted">Gerencie Tenants e Usuários</p>
         </div>
 
         <AdminTabs tenants={serializedTenants} users={serializedUsers} />

@@ -65,7 +65,7 @@ const columns: Column<any>[] = [
       );
     },
   },
-  { key: "description", label: "Descrição", sortable: true, exportable: false, className: 'text-ellipsis text-apple-tertiary-light italic font-mono text-xs line-clamp-1 text-wrap ' },
+  { key: "description", label: "Descrição", sortable: true, exportable: false, className: 'text-ellipsis text-muted italic font-mono text-xs line-clamp-1 text-wrap ' },
   {
     key: "lastScan",
     label: "Last scan",
@@ -253,7 +253,7 @@ function DashboardContent() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Dashboard"
-        icon={<ChartAreaIcon className="w-10 h-10 text-apple-blue" />}
+        icon={<ChartAreaIcon className="w-10 h-10 text-brand" />}
         subtitle="Visão geral do time selecionado."
         search={{
           type: 'advanced',
@@ -268,7 +268,7 @@ function DashboardContent() {
             <button
               onClick={handleExportPDF}
               disabled={projects.length === 0}
-              className="flex items-center group gap-2 px-4 py-2 rounded-2xl bg-apple-blue text-white text-sm font-medium hover:bg-apple-blue/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center group gap-2 px-4 py-2 rounded-2xl bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="hidden group-hover:block">Relatório PDF</span>
               <FileText className="w-4 h-4" />
@@ -278,7 +278,7 @@ function DashboardContent() {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+                className="flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
               >
                 <span className="font-bold">
                   {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
@@ -287,7 +287,7 @@ function DashboardContent() {
               </button>
 
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-surface border border-default dark:border-strong rounded-xl shadow-sm hover:drop-shadow-lg z-20 overflow-hidden">
                   {teams.map((team) => (
                     <button
                       key={team._id}
@@ -298,14 +298,14 @@ function DashboardContent() {
                       }}
                       className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
                         teamId === team._id
-                          ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
-                          : "text-apple-label-light dark:text-apple-label-dark"
+                          ? "bg-apple-tertiary-light/5 font-semibold text-brand"
+                          : "text-heading dark:text-heading"
                       }`}
                     >
                       <span className="truncate">
                         {team.isGlobal ? `${team.name} (Todos)` : team.name}
                       </span>
-                      {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
+                      {teamId === team._id && <Check className="w-4 h-4 text-brand" />}
                     </button>
                   ))}
                 </div>
@@ -337,7 +337,7 @@ function DashboardContent() {
           </div>
 
           {/* Projects Table (usando a rota /api/dashboard e projectStats para extraData) */}
-          <div className="pt-4 border-t border-apple-border-light dark:border-apple-border-dark">
+          <div className="pt-4 border-t border-default dark:border-strong">
             <h3 className="text-lg font-semibold mb-4">
               Projetos - {effectiveTeamId == 'all' ? 'Global' : teamName}
             </h3>
@@ -354,7 +354,7 @@ function DashboardContent() {
           </div>
         </>
       ) : (
-        <div className="py-12 text-center text-apple-tertiary-light">
+        <div className="py-12 text-center text-muted">
           Selecione um time para visualizar o dashboard.
         </div>
       )}

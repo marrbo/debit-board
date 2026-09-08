@@ -164,7 +164,7 @@ export default function DBQLHelpModal({ isOpen, onClose, context = 'observations
           <Link 
             href="/wiki/DBQL/1.Syntax"
             onClick={onClose}
-            className="shrink-0 bg-[#007AFF] hover:bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg transition-colors text-sm"
+            className="shrink-0 text-brand hover:bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg transition-colors text-sm"
           >
             Abrir Página de Ajuda Completa
           </Link>

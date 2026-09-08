@@ -7,10 +7,9 @@
    ============================================================== */
 :root {
   /* ── BRAND ── */
-  --brand-default: #68163a;
-  --brand: #68163a;
-  --brand-dark: #c42d76;
-  --brand-light: #a53b61;
+  --brand: #b62538;
+  --brand-dark: #9a0025;
+  --brand-light: #ee5b62;
   --brand-subtle: #b625381a;
   --brand-foreground: #ffffff;
 
@@ -62,8 +61,7 @@
   --text-body: #3a3838;
   --text-muted: #6a6868;
   --text-inverse: #ffffff;
-  --text-link: #68163a;
-  --text-brand: #68163a;
+  --text-link: #b62538;
 
   /* ── BACKGROUND ── */
   --bg-page: #f2eff0;
@@ -135,13 +133,13 @@
   --info-950: #00094e;
 
   /* ── CORES VARIANTES DARK (usadas no modo escuro) ── */
-  --brand-dark-variant: #c42d76;
+  --brand-dark-variant: #9a0025;
   --accent-dark-variant: #009d44;
   --text-heading-dark: #f2eff0;
   --text-body-dark: #d5d2d3;
   --text-muted-dark: #838181;
   --text-inverse-dark: #0e0c0c;
-  --text-link-dark: #ea4c54;
+  --text-link-dark: #ee5b62;
   --bg-page-dark: #0e0c0c;
   --bg-surface-dark: #242222;
   --bg-elevated-dark: #3a3838;

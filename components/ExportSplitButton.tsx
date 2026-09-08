@@ -32,7 +32,7 @@ export default function ExportSplitButton({
       {/* Botão principal: exportar PDF */}
       <button
         onClick={onExportPDF}
-        className="p-1.5 flex items-center gap-2 text-apple-tertiary-light hover:text-apple-red hover:bg-apple-red/10 rounded-md transition-colors"
+        className="p-1.5 flex items-center gap-2 text-muted hover:text-error hover:bg-apple-red/10 rounded-md transition-colors"
         title="Exportar PDF"
         aria-label="Exportar PDF"
       >
@@ -43,7 +43,7 @@ export default function ExportSplitButton({
       {/* Botão do chevron para abrir o menu */}
       <button
         onClick={() => setIsMenuOpen(!isMenuOpen)}
-        className="p-1.5 text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors"
+        className="p-1.5 text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-colors"
         title="Opções de exportação"
         aria-label="Opções de exportação"
       >
@@ -52,10 +52,10 @@ export default function ExportSplitButton({
 
       {/* Dropdown */}
       {isMenuOpen && (
-        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-md shadow-lg p-1 z-50">
+        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-md shadow-sm hover:drop-shadow-lg p-1 z-50">
           <button
             onClick={onExportPDF}
-            className="w-full text-left px-2 py-1.5 text-sm text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors"
+            className="w-full text-left px-2 py-1.5 text-sm text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-colors"
             title="Exportar PDF"
             aria-label="Exportar PDF"
           >
@@ -64,7 +64,7 @@ export default function ExportSplitButton({
           </button>
           <button
             onClick={onExportExcel}
-            className="w-full text-left px-2 py-1.5 text-sm text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 rounded-md transition-colors"
+            className="w-full text-left px-2 py-1.5 text-sm text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-colors"
             title="Exportar Excel"
             aria-label="Exportar Excel"
           >

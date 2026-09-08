@@ -422,7 +422,7 @@ export function DataTable<T extends { _id: string }>({
             type="checkbox"
             checked={selectedIds.includes(item._id)}
             onChange={() => toggleSelection(item._id)}
-            className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+            className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
           />
         ),
         headerClassName: 'w-10',
@@ -453,7 +453,7 @@ export function DataTable<T extends { _id: string }>({
         )}
 
         {selectable && selectedIds.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light rounded-xl shadow-sm">
+          <div className="flex items-center justify-between px-4 py-2 bg-page dark:bg-surface border border-default rounded-xl shadow-sm hover:drop-shadow-lg">
             <div className="text-sm">{selectedIds.length} selecionado(s)</div>
             <div className="flex gap-2">
               {allActions.map((action, idx) => (
@@ -468,10 +468,10 @@ export function DataTable<T extends { _id: string }>({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {loading ? (
             <div className="col-span-full p-4 text-center">
-              <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-apple-tertiary-light" />
+              <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-muted" />
             </div>
           ) : filteredData.length === 0 ? (
-            <div className="col-span-full p-4 text-center text-apple-tertiary-light">Nenhum registro encontrado.</div>
+            <div className="col-span-full p-4 text-center text-muted">Nenhum registro encontrado.</div>
           ) : (
             filteredData.map((item) => (
               <div key={item._id} onClick={() => onRowClick?.(item)} className="cursor-pointer">
@@ -504,7 +504,7 @@ export function DataTable<T extends { _id: string }>({
       {/* Barra de exportação (sem seleção) */}
       <div className="flex justify-between items-center align-middle">
         {!loading && total > 0 && (
-          <div className="relative h-10 px-2 py-5 w-100 text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark">
+          <div className="relative h-10 px-2 py-5 w-100 text-xs text-muted dark:text-muted">
                 Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}
           </div>
         )}
@@ -515,7 +515,7 @@ export function DataTable<T extends { _id: string }>({
               <button
                 key={idx}
                 onClick={() => action.onClick([], [])}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 text-heading dark:text-heading hover:bg-apple-tertiary-light/20"
               >
                 {action.icon}
                 {action.label}
@@ -526,15 +526,15 @@ export function DataTable<T extends { _id: string }>({
 
         {/* Barra de ações (aparece quando há seleção) */}
         {selectable && selectedIds.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-sm">
-            <div className="flex items-center gap-2 text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
+          <div className="flex items-center justify-between px-4 py-2 bg-page dark:bg-surface border border-default dark:border-strong rounded-xl shadow-sm hover:drop-shadow-lg">
+            <div className="flex items-center gap-2 text-sm text-muted dark:text-muted">
               <span className="font-semibold">{selectedIds.length} selecionado(s)</span>
               <button
                 onClick={() => {
                   setSelectedIds([]);
                   setSelectAll(false);
                 }}
-                className="text-apple-blue hover:underline"
+                className="text-brand hover:underline"
               >
                 Limpar
               </button>
@@ -548,7 +548,7 @@ export function DataTable<T extends { _id: string }>({
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     action.label === 'Excluir'
                       ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                      : 'bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20'
+                      : 'bg-apple-tertiary-light/10 text-heading dark:text-heading hover:bg-apple-tertiary-light/20'
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
                   {action.icon}
@@ -561,9 +561,9 @@ export function DataTable<T extends { _id: string }>({
       </div>
 
       {/* Tabela */}
-      <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-elevated dark:bg-dark/20 border border-default dark:border-strong rounded-2xl overflow-hidden shadow-sm hover:drop-shadow-lg">
         <table className="w-full text-sm text-left" style={{ tableLayout: renderColumns.some(c => c.width) ? 'fixed' : 'auto' }}>
-          <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-apple-tertiary-light dark:text-apple-tertiary-dark border-b border-apple-border-light dark:border-apple-border-dark">
+          <thead className="bg-sunken text-muted dark:text-muted border-b border-default dark:border-strong">
             <tr>
               {/* Checkbox para selecionar todos */}
               {selectable && (
@@ -572,7 +572,7 @@ export function DataTable<T extends { _id: string }>({
                     type="checkbox"
                     checked={selectAll && filteredData.length > 0}
                     onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+                    className="w-4 h-4 rounded border text-brand"
                   />
                 </th>
               )}
@@ -598,14 +598,14 @@ export function DataTable<T extends { _id: string }>({
           <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
             {loading ? (
               <tr>
-                <td colSpan={renderColumns.length} className="p-4 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
-                  <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-apple-tertiary-light dark:text-apple-tertiary-dark" />
+                <td colSpan={renderColumns.length} className="p-4 text-center text-muted dark:text-muted">
+                  <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-muted dark:text-muted" />
                   Carregando...
                 </td>
               </tr>
             ) : filteredData.length === 0 ? (
               <tr>
-                <td colSpan={renderColumns.length} className="p-4 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
+                <td colSpan={renderColumns.length} className="p-4 text-center text-muted dark:text-muted">
                   Nenhum registro encontrado.
                 </td>
               </tr>
@@ -614,7 +614,7 @@ export function DataTable<T extends { _id: string }>({
                 <tr
                   key={item._id}
                   onClick={() => onRowClick?.(item)}
-                  className={`hover:bg-apple-bg-light dark:hover:bg-apple-card-dark/80 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                  className={`hover:bg-page dark:hover:bg-surface border-sunken dark:border-surface  transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                 >
                   {/* Coluna de seleção */}
                   {selectable && (
@@ -623,7 +623,7 @@ export function DataTable<T extends { _id: string }>({
                         type="checkbox"
                         checked={selectedIds.includes(item._id)}
                         onChange={() => toggleSelection(item._id)}
-                        className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+                        className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
                       />
                     </td>
                   )}
@@ -647,15 +647,15 @@ export function DataTable<T extends { _id: string }>({
 
       {/* Paginação */}
       {!loading && total > 0 && (
-        <div className="flex items-center justify-between text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
-          <div className="px-2 w-100 text-xs text-apple-tertiary-light dark:text-apple-tertiary-dark" >
+        <div className="flex items-center justify-between text-sm text-muted dark:text-muted">
+          <div className="px-2 w-100 text-xs text-muted dark:text-muted" >
             Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="px-3 py-1 rounded border border-apple-border-light dark:border-apple-border-dark disabled:opacity-50"
+              className="px-3 py-1 rounded border border-default dark:border-strong disabled:opacity-50"
             >
               Anterior
             </button>
@@ -663,7 +663,7 @@ export function DataTable<T extends { _id: string }>({
             <button
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 rounded border border-apple-border-light dark:border-apple-border-dark disabled:opacity-50"
+              className="px-3 py-1 rounded border border-default dark:border-strong disabled:opacity-50"
             >
               Próxima
             </button>
@@ -672,7 +672,7 @@ export function DataTable<T extends { _id: string }>({
             <select
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="border border-apple-border-light dark:border-apple-border-dark rounded px-2 py-1 bg-transparent"
+              className="border border-default dark:border-strong rounded px-2 py-1 bg-transparent"
             >
               {[5, 10, 25, 50].map((l) => (
                 <option key={l} value={l}>{l} por página</option>

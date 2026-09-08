@@ -76,7 +76,7 @@ export default function AssigneeSelect({ users, value, onChange, className = "" 
           alt="Assignee" 
           width={28}
           height={28}
-          className="w-7 h-7 rounded-full border-2 border-transparent group-hover:border-apple-blue transition-all object-cover"
+          className="w-7 h-7 rounded-full border-2 border-transparent group-hover:border-brand transition-all object-cover"
         />
         {/* Tooltip simples para indicar que é clicável */}
         <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
@@ -87,19 +87,19 @@ export default function AssigneeSelect({ users, value, onChange, className = "" 
       {/* DROPDOWN VIA PORTAL */}
       {isOpen && createPortal(
         <div 
-          className="fixed z-[9999] w-64 bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-2xl overflow-hidden"
+          className="fixed z-[9999] w-64 bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-xl shadow-2xl overflow-hidden"
           style={{ 
             top: `${coords.top}px`, 
             left: `${coords.left}px`,
             position: 'absolute' 
           }}
         >
-          <div className="p-2 border-b border-apple-border-light dark:border-apple-border-dark">
+          <div className="p-2 border-b border-default dark:border-strong">
             <div className="relative">
-              <Search className="absolute left-2 top-2 w-3 h-3 text-apple-tertiary-light" />
+              <Search className="absolute left-2 top-2 w-3 h-3 text-muted" />
               <input
                 autoFocus
-                className="w-full pl-7 pr-2 py-1 text-xs bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg focus:outline-none"
+                className="w-full pl-7 pr-2 py-1 text-xs bg-page dark:bg-surface border border-default dark:border-strong rounded-lg focus:outline-none"
                 placeholder="Buscar usuários..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -113,7 +113,7 @@ export default function AssigneeSelect({ users, value, onChange, className = "" 
                 <button
                   key={user.sub}
                   onClick={() => { onChange(user.sub); setIsOpen(false); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 hover:bg-apple-blue/10 rounded-lg transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-2 py-2 hover:bg-brand/10 rounded-lg transition-colors text-left"
                 >
                   <Image 
                     src={getAvatarUrl(user)} 
@@ -124,18 +124,18 @@ export default function AssigneeSelect({ users, value, onChange, className = "" 
                   />
                   <div className="flex flex-col overflow-hidden">
                     <span className="text-xs font-medium truncate">{user.name}</span>
-                    <span className="text-[10px] text-apple-tertiary-light truncate">{user.email}</span>
+                    <span className="text-[10px] text-muted truncate">{user.email}</span>
                   </div>
                 </button>
               ))
             ) : (
-              <div className="p-4 text-center text-xs text-apple-tertiary-light">
+              <div className="p-4 text-center text-xs text-muted">
                 Nenhum usuário encontrado.
               </div>
             )}
             <button 
               onClick={() => { onChange(null); setIsOpen(false); }}
-              className="w-full text-left px-2 py-2 text-xs text-apple-red hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+              className="w-full text-left px-2 py-2 text-xs text-error hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
             >
               Limpar Responsável
             </button>

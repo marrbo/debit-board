@@ -13,7 +13,7 @@ export default async function WikiLayout({ children }: { children: React.ReactNo
         <WikiSidebar items={tree} />
       </div>
       {/* Área de conteúdo */}
-      <main className="flex-1 h-full overflow-y-auto bg-apple-bg-light dark:bg-apple-bg-dark text-apple-label-light dark:text-apple-label-dark transition-colors duration-200">
+      <main className="flex-1 h-full overflow-y-auto bg-page text-heading dark:text-heading transition-colors duration-200">
         {children}
       </main>
     </div>

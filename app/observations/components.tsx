@@ -10,7 +10,7 @@ export function UserAvatar({ name, sub, className = "" }: { name?: string; sub?:
   const colors = ['bg-blue-600', 'bg-red-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 'bg-pink-600'];
   const colorIndex = (sub || name || '').length % colors.length;
   return (
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${colors[colorIndex]} ${className}`}>
+    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white ${colors[colorIndex]} ${className}`}>
       {initial}
     </div>
   );

@@ -64,12 +64,12 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
       }
 
       // Qualquer outra coisa (texto solto)
-      return <span key={i} className="text-apple-label-light dark:text-apple-label-dark">{part}</span>;
+      return <span key={i} className="text-heading dark:text-heading">{part}</span>;
     });
   };
 
   return (
-    <div className={`relative grid grid-cols-1 items-stretch w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl overflow-hidden ${className}`}>
+    <div className={`relative grid grid-cols-1 items-stretch w-full bg-bg-sunken  border border-default dark:border-strong rounded-xl overflow-hidden ${className}`}>
       <div className="col-start-1 row-start-1 text-[13px] font-mono pointer-events-none whitespace-pre-wrap break-words leading-relaxed p-3 select-none w-full h-full">
         {renderDBQLColoredQuery(value)}
       </div>
@@ -80,7 +80,7 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className="col-start-1 row-start-1 w-full h-full bg-transparent text-[13px] font-mono outline-none ring-0 border-none shadow-none p-3 text-transparent caret-apple-label-light dark:caret-white resize-none overflow-hidden leading-relaxed whitespace-pre-wrap break-words"
+        className="col-start-1 row-start-1 w-full h-full bg-transparent text-[13px] font-mono outline-none ring-0 border-none shadow-none p-3 text-transparent caret-brand resize-none overflow-hidden leading-relaxed whitespace-pre-wrap break-words"
       />
     </div>
   );

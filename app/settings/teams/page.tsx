@@ -31,7 +31,7 @@ const columns: Column<ITeam>[] = [
     render: (item: ITeam) => (
       <Link
         href={`/?teamId=${item._id.toString()}`}
-        className="inline-flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+        className="inline-flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
       >
         Ver Dashboard
       </Link>
@@ -67,12 +67,12 @@ function TeamsContent() {
     <div className="w-full space-y-4">
       <PageHeader
         title="Times"
-        icon={<UsersIcon className="w-10 h-10 text-apple-blue" />}
+        icon={<UsersIcon className="w-10 h-10 text-brand" />}
         subtitle="Gerencie os times. Times possuem projetos vinculados."
         actions={
           <button
             onClick={() => setSelectedTeam({} as ITeam)}
-            className="flex items-center gap-2 bg-apple-blue hover:bg-apple-blue/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm"
+            className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
           >
             <CirclePlus className="w-4 h-4"/> Novo Time
           </button>

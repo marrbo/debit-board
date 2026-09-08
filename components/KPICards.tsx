@@ -19,14 +19,14 @@ export default function KPICards({ items }: KPICardsProps) {
       label: 'Total de Arquivos',
       value: totalFiles,
       icon: FileCode,
-      color: 'text-apple-blue',
-      bg: 'bg-apple-blue/10',
+      color: 'text-brand',
+      bg: 'bg-brand/10',
     },
     {
       label: 'Projetos',
       value: uniqueProjects,
       icon: FolderTree,
-      color: 'text-apple-green',
+      color: 'text-success',
       bg: 'bg-apple-green/10',
     },
     {
@@ -40,7 +40,7 @@ export default function KPICards({ items }: KPICardsProps) {
       label: 'Total Hits',
       value: totalHits,
       icon: Target,
-      color: 'text-apple-orange',
+      color: 'text-warning',
       bg: 'bg-apple-orange/10',
     },
   ];
@@ -50,13 +50,13 @@ export default function KPICards({ items }: KPICardsProps) {
       {cards.map((card) => (
         <div
           key={card.label}
-          className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors"
+          className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors"
         >
           <div>
-            <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light dark:text-apple-tertiary-dark tracking-wider">
+            <p className="text-[10px] uppercase font-semibold text-muted dark:text-muted tracking-wider">
               {card.label}
             </p>
-            <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{card.value}</p>
+            <p className="text-2xl font-bold text-heading dark:text-heading mt-1">{card.value}</p>
           </div>
           <div className={`p-3 rounded-xl ${card.bg}`}>
             <card.icon className={`w-6 h-6 ${card.color}`} />
