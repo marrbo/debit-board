@@ -217,6 +217,11 @@ export function DataTable<T extends { _id: string }>({
         ...(teamId && { teamId }),
       });
 
+      // 🔥 Inclui a busca server-side (DBQL) na exportação
+      if (searchQuery) {
+        params.set('q', searchQuery);
+      }
+
       const url = new URL(endpoint, window.location.origin);
       params.forEach((value, key) => {
         url.searchParams.append(key, value);
@@ -247,7 +252,7 @@ export function DataTable<T extends { _id: string }>({
       console.error('Erro ao buscar todos os dados para exportação:', error);
       return []; // fallback vazio
     }
-  }, [endpoint, sortField, sortOrder, projectId, teamId, filterValue, filterColumn]);
+  }, [endpoint, sortField, sortOrder, projectId, teamId, searchQuery, filterValue, filterColumn]);
 
   // ============================================================
   // Exportação nativa básica de PDF

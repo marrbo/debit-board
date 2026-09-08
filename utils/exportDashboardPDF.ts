@@ -1,3 +1,4 @@
+import { generateFooter, generateHeader } from "@/components/DataTable/pdfShared";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -27,31 +28,11 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
   const margin = 10;
 
   // ===================== CABEÇALHO =====================
-  doc.setFillColor(30, 41, 59);
-  doc.rect(0, 0, pageWidth, 20, "F");
-
-  doc.setFillColor(59, 130, 246);
-  doc.circle(15, 10, 6, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("D", 15, 13, { align: "center" });
-
-  doc.setFontSize(14);
-  doc.text("Debit Board", 25, 10);
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    `Relatório gerado em: ${data.generatedAt.toLocaleString("pt-BR")}`,
-    pageWidth - margin,
-    10,
-    { align: "right" }
-  );
-
-  doc.setTextColor(148, 163, 184);
-  doc.setFontSize(9);
-  doc.text(`Time: ${data.teamName || "Global"}`, 25, 15);
+  generateHeader(doc, {
+    title: "Debit Board",
+    subtitle: `Time: ${data.teamName || "Global"}`,
+    generatedAt: data.generatedAt,
+  });
 
   // ===================== RESUMO EXECUTIVO =====================
   let y = 30;
@@ -263,17 +244,7 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
   }
 
   // ===================== RODAPÉ =====================
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, pageHeight - 10, pageWidth, 10, "F");
-
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text("© 2026 Debit Board - Confidencial", margin, pageHeight - 5);
-    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: "right" });
-  }
+  generateFooter(doc);
 
   doc.save("DebitBoard_Dashboard_Report.pdf");
 }

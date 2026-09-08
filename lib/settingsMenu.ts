@@ -2,18 +2,18 @@ import {
   ShieldCheck,
   Puzzle,
   UserCog,
-  User,
   FolderGit2,
   GitBranchPlus,
   SquareAsterisk,
   DatabaseSearch,
-  GroupIcon
+  UserCog2,
+  UsersIcon
 } from 'lucide-react';
 
 // Itens comuns
 export const settingsMenuItems = [
-  { href: '/settings/profile/user', label: 'Profile', icon: User },
-  { href: '/settings/teams', label: 'Teams', icon: GroupIcon },
+  { href: '/settings/profile/user', label: 'Profile', icon: UserCog2 },
+  { href: '/settings/teams', label: 'Teams', icon: UsersIcon },
   { href: '/settings/projects', label: 'Projetos', icon: FolderGit2 },
   { href: '/settings/repositories', label: 'Repositórios', icon: GitBranchPlus },
   { href: '/settings/saved-queries', label: 'Queries', icon: DatabaseSearch },

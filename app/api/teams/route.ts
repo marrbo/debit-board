@@ -4,7 +4,7 @@ import { Project } from '@/models/Project';
 import { getServerSessionIds } from '@/lib/session-server';
 import { handleGenericGet } from '@/lib/api-handler';
 import type { PipelineStage } from 'mongoose';
-import mongoose, { Types } from 'mongoose';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

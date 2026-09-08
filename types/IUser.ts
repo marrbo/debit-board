@@ -8,6 +8,7 @@ export type IUser = Document & {
   sub: string;
   email: string;
   name?: string;
+  firstName?: string;
   avatar?: string;
   company?: string;
   jobTitle?: string;

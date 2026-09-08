@@ -3,9 +3,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, UserMinus } from 'lucide-react';
+import { DoorOpen, UserCog2, UserMinus } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
+import Image from 'next/image';
 
 // Importando a configuração centralizada
 import { topNavItems, bottomNavItems } from '@/lib/mainMenuItems';
@@ -16,6 +17,17 @@ export default function Sidebar() {
   const { data: session } = useSession();
   
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+
+  const getFirstName = () => {
+    if (session?.user?.firstName) return session?.user?.firstName;
+    return session?.user?.name.trim().split(' ')[0]
+  }
+
+  const getAvatarUrl = () => {
+      if (session?.user?.avatar) return session?.user?.avatar;
+      const name = session?.user?.name || 'U';
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&length=2&background=0D8ABC&color=fff&width=28&height=28`;
+    };
 
   // Verifica se o Admin está impersonando
   const isImpersonating = session?.user?.impersonating === true;
@@ -34,14 +46,6 @@ export default function Sidebar() {
     setIsAccountOpen(false);
     signOut({ callbackUrl: '/login' });
   };
-
-  // Cores dinâmicas para o avatar (baseadas no nome)
-  const getAvatarColor = (name: string) => {
-    const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500', 'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 'bg-pink-500'];
-    const hash = name.split('').reduce((acc, char) => char.charCodeAt(0) + acc, 0);
-    return colors[hash % colors.length];
-  };
-  const initial = (session?.user?.name || 'U').charAt(0).toUpperCase();
 
   return (
     <aside className="w-20 bg-[#1C1C1E] border-r border-[#38383A] h-screen fixed left-0 top-0 flex flex-col pt-6 pb-6 z-40 items-center overflow-y-auto transition-colors">
@@ -104,21 +108,31 @@ export default function Sidebar() {
             onClick={() => setIsAccountOpen(!isAccountOpen)}
             className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[9px] font-medium text-[#8E8E93] hover:text-[#F5F5F7] transition-colors w-full cursor-pointer hover:bg-[#2C2C2E]"
           >
-            <div className={`w-10 h-10 rounded-full ${getAvatarColor(session?.user?.name || 'U')} flex items-center justify-center text-sm text-white font-bold mb-1 shadow-md`}>
-              {initial}
-            </div>
-            <span className="text-center leading-tight">Account</span>
+            <Image 
+              src={getAvatarUrl()} 
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-full object-cover mb-2" 
+              alt={`${session?.user?.name || 'avatar'}`}
+            />
+            <span className="text-center leading-tight">{getFirstName()}</span>
           </button>
 
           {/* Popover Flutuante (Fora do fluxo da Sidebar) */}
           {isAccountOpen && (
             <div 
-              className="fixed bottom-4 left-20 z-[200] w-56 bg-[#1C1C1E] border border-[#38383A] rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-4 flex flex-col gap-2 transition-colors"
+              className="fixed bottom-4 left-20 z-[200] w-80 bg-[#1C1C1E] border border-[#38383A] rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-4 flex flex-col gap-2 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 pb-3 border-b border-[#38383A]">
-                <div className={`w-10 h-10 rounded-full ${getAvatarColor(session?.user?.name || 'U')} flex items-center justify-center text-base text-[#F5F5F7] font-bold`}>
-                  {initial}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base text-[#F5F5F7] font-bold`}>
+                  <Image 
+                    src={getAvatarUrl()} 
+                    width={32}
+                    height={32}
+                    className="w-8 h-8 rounded-full object-cover mb-2" 
+                    alt={`${session?.user?.name || 'avatar'}`}
+                  />
                 </div>
                 <div className="overflow-hidden">
                   <p className="text-sm font-semibold text-[#F5F5F7] truncate">{session?.user?.name || 'Usuário'}</p>
@@ -135,7 +149,7 @@ export default function Sidebar() {
                   onClick={() => setIsAccountOpen(false)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7] transition-colors"
                 >
-                  <span>User Settings</span>
+                  <UserCog2 className="w-4 h-4" /> User Settings
                 </Link>
                 
                 {isImpersonating ? (
@@ -150,7 +164,7 @@ export default function Sidebar() {
                     onClick={handleSignOut}
                     className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7] transition-colors text-left w-full"
                   >
-                    <LogOut className="w-4 h-4" /> Sign Out
+                    <DoorOpen className="w-4 h-4" /> Sign Out
                   </button>
                 )}
               </div>

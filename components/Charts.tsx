@@ -1,33 +1,19 @@
-// components/Charts.tsx
 'use client';
 
+import { useMemo, useState, useEffect } from 'react';
+import { ThemeProvider, createTheme } from '@mui/material/styles'; // Remove useColorScheme
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Bar, Line, Pie } from 'react-chartjs-2';
-import { useMemo } from 'react';
+  PieChart,
+  LineChart,
+  BarChart,
+  pieClasses,
+  rainbowSurgePalette,
+  type LineSeriesType,
+  type BarSeriesType,
+  type PieSeriesType,
+} from '@mui/x-charts';
+import { Box } from '@mui/material';
 import type { ChartDataPoint } from '@/lib/types';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
 type ChartType = 'bar' | 'line' | 'pie' | 'project' | 'project-detail' | 'stacked-bar';
 
@@ -40,143 +26,255 @@ interface ChartsProps {
   onSliceClick?: (label: string) => void;
 }
 
-export default function Charts({ data, datasets, labels, type, colors, onSliceClick }: ChartsProps) {
-  const processed = useMemo(() => {
-    // Caso múltiplos datasets (linha ou barra empilhada)
-    if (datasets && datasets.length > 0) {
-      return {
-        type: type === 'stacked-bar' ? 'bar' as const : 'line' as const,
-        labels: labels || datasets[0]?.labels || [],
-        datasets: datasets.map(ds => ({
-          ...ds,
-          spanGaps: true,
-          // Para barras empilhadas, garantir stack
-          stack: ds.stack || 'stack0',
-        })),
-        data: [],
-      };
-    }
+const STATUS_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+const SEVERITY_COLORS = ['#EF4444', '#F97316', '#EAB308', '#3B82F6'];
 
-    // Barras coloridas individuais (project-detail)
-    if (data && type === 'project-detail') {
+export default function Charts({ data, datasets, labels, type, colors, onSliceClick }: ChartsProps) {
+  // ✅ Inicializa o estado com uma função que lê localStorage e classe .dark
+  const [mode, setMode] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('wiki-theme');
+    if (stored === 'dark' || document.documentElement.classList.contains('dark')) {
+      return 'dark';
+    }
+    return 'light';
+  });
+
+  // ✅ useEffect apenas para escutar mudanças externas
+  useEffect(() => {
+    const getMode = (): 'light' | 'dark' => {
+      const stored = localStorage.getItem('wiki-theme');
+      if (stored === 'dark' || document.documentElement.classList.contains('dark')) {
+        return 'dark';
+      }
+      return 'light';
+    };
+
+    const handleChange = () => setMode(getMode());
+
+    window.addEventListener('storage', handleChange);
+    window.addEventListener('theme-change', handleChange);
+
+    return () => {
+      window.removeEventListener('storage', handleChange);
+      window.removeEventListener('theme-change', handleChange);
+    };
+  }, []); // ✅ array de dependências vazio, pois só queremos registrar uma vez
+
+  const theme = useMemo(() => createTheme({ palette: { mode } }), [mode]);
+
+  const processed = useMemo(() => {
+    // ================= MÚLTIPLOS DATASETS (LINHA OU BARRAS EMPILHADAS) =================
+    if (datasets && datasets.length > 0) {
+      const isLine = type === 'line';
+      const isStackedBar = type === 'stacked-bar';
+
+      const isStatusData = datasets.some((ds: any) =>
+        ['open', 'resolved', 'recurring', 'wont_fix', 'closed'].includes(String(ds.label).toLowerCase())
+      );
+      const isSeverityData = datasets.some((ds: any) =>
+        ['critical', 'high', 'medium', 'low'].includes(String(ds.label).toLowerCase())
+      );
+
+      const palette =
+        (isStatusData && STATUS_COLORS) ||
+        (isSeverityData && SEVERITY_COLORS) ||
+        colors ||
+        rainbowSurgePalette;
+
+      if (isLine) {
+        const lineSeries: LineSeriesType[] = datasets.map((ds, idx) => {
+          const baseColor = ds.borderColor || ds.backgroundColor || palette[idx % palette.length];
+          return {
+            type: 'line' as const,
+            label: ds.label,
+            data: ds.data,
+            color: baseColor,
+            showMark: true,
+            mark: 'circle',
+            curve: 'natural',
+            area: true,
+          };
+        });
+        return {
+          type: 'line' as const,
+          xLabels: labels || datasets[0]?.labels || [],
+          series: lineSeries,
+        };
+      }
+
+      const barSeries: BarSeriesType[] = datasets.map((ds, idx) => {
+        const baseColor = ds.borderColor || ds.backgroundColor || palette[idx % palette.length];
+        return {
+          type: 'bar' as const,
+          label: ds.label,
+          data: ds.data,
+          color: baseColor,
+          stack: isStackedBar ? (ds.stack || 'stack0') : undefined,
+          borderRadius: 10,
+        };
+      });
       return {
         type: 'bar' as const,
-        labels: data.map(d => d.label),
-        datasets: [{
-          label: 'Ocorrências',
-          data: data.map(d => d.value),
-          backgroundColor: data.map(d => (d as any).color || '#007AFF'),
-          borderColor: data.map(d => (d as any).color || '#007AFF'),
-          borderWidth: 2,
-        }],
-        data: [],
+        xLabels: labels || datasets[0]?.labels || [],
+        series: barSeries,
       };
     }
 
-    // Pie
+    // ================= BARRAS INDIVIDUAIS (PROJECT DETAIL) =================
+    if (data && type === 'project-detail') {
+      const barData = data.map((d: ChartDataPoint) => d.value);
+      const barSeries: BarSeriesType[] = [{
+        data: barData,
+        type: 'bar',
+        color: colors?.[0] ?? '#3B82F6',
+      }];
+      return {
+        type: 'bar' as const,
+        xLabels: data.map((d) => d.label),
+        series: barSeries,
+      };
+    }
+
+    // ================= PIZZA (Categoria) =================
     if (data && type === 'pie') {
+      const pieSeries: PieSeriesType[] = [{
+        type: 'pie',
+        data: data.map((d) => ({ label: d.label, value: d.value })),
+        innerRadius: '30%',
+        outerRadius: '90%',
+        paddingAngle: 5,
+        cornerRadius: 8,
+        highlightScope: { fade: 'global', highlight: 'item' },
+        faded: { innerRadius: 30, additionalRadius: -30, color: '#C0C0C0' },
+        arcLabel: (item: any) => `${item.value}`,
+        arcLabelMinAngle: 35,
+      }];
       return {
         type: 'pie' as const,
-        labels: data.map(d => d.label),
-        datasets: [{
-          data: data.map(d => d.value),
-          backgroundColor: colors || ['#007AFF', '#AF52DE', '#FF9500', '#34C759', '#FF3B30', '#FF2D55', '#64D2FF', '#FFCC00', '#5856D6', '#30B0C0'],
-          borderColor: '#1C1C1E',
-          borderWidth: 1,
-          hoverOffset: 20,
-          hoverBorderWidth: 0,
-        }],
-        data: [],
+        series: pieSeries,
+        colors: rainbowSurgePalette,
       };
     }
 
-    // Linha simples
+    // ================= LINHA SIMPLES =================
     if (data && type === 'line') {
+      const lineSeries: LineSeriesType[] = [{
+        type: 'line',
+        data: data.map((d) => d.value),
+        color: colors?.[0] ?? '#3B82F6',
+        curve: 'natural',
+        showMark: false,
+        area: true,
+      }];
       return {
         type: 'line' as const,
-        labels: data.map(d => d.label),
-        datasets: [{
-          label: 'Evolução',
-          data: data.map(d => d.value),
-          backgroundColor: colors?.[0] || '#007AFF',
-          borderColor: colors?.[0] || '#007AFF',
-          borderWidth: 2,
-          tension: 0.3,
-        }],
-        data: [],
+        xLabels: data.map((d) => d.label),
+        series: lineSeries,
       };
     }
 
-    // Fallback barra
+    // ================= BARRAS PADRÃO =================
+    const barSeries: BarSeriesType[] = [{
+      type: 'bar',
+      data: data?.map((d) => d.value) || [],
+      color: colors?.[0] ?? '#3B82F6',
+      minBarSize: 10,
+    }];
     return {
       type: 'bar' as const,
-      labels: data?.map(d => d.label) || [],
-      datasets: [{
-        label: 'Ocorrências',
-        data: data?.map(d => d.value) || [],
-        backgroundColor: '#007AFF',
-        borderColor: '#007AFF',
-        borderWidth: 2,
-      }],
-      data: [],
+      xLabels: data?.map((d) => d.label) || [],
+      series: barSeries,
     };
   }, [data, datasets, labels, type, colors]);
 
-  const options = useMemo(() => {
-    const base: any = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom' as const,
-          labels: { color: '#8E8E93', usePointStyle: true, boxWidth: 8 },
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-        },
-      },
-    };
 
-    if (processed.type !== 'pie') {
-      base.scales = {
-        y: {
-          beginAtZero: true,
-          grid: { color: '#D1D1D6' },
-          ticks: { color: '#8E8E93' },
-          stacked: type === 'stacked-bar',
-        },
-        x: {
-          grid: { display: false },
-          ticks: { color: '#8E8E93' },
-          stacked: type === 'stacked-bar',
-        },
-      };
-    }
+  // 🔹 CSS Variables nativas injetadas diretamente no escopo do gráfico.
+  // O navegador atualiza a cor do SVG de forma instantânea sem precisar recarregar o estado.
+  const commonSx = {
+    width: '100%',
+    height: '100%',
+    // Você pode manter os seletores com variáveis CSS para sobrescrever, se necessário
+    '& .MuiChartsLegend-series text': {
+      fill: 'var(--mui-palette-text-primary)',
+    },
+    '& .MuiChartsAxis-tickLabel': {
+      fill: 'var(--mui-palette-text-secondary)',
+      fontSize: 10,
+    },
+    '& .MuiChartsAxis-line': {
+      stroke: 'var(--mui-palette-divider)',
+    },
+    '& .MuiChartsAxis-tick': {
+      stroke: 'var(--mui-palette-divider)',
+    },
+    '& .MuiChartsAxis-label': {
+      fill: 'var(--mui-palette-text-secondary)',
+    },
+  };
 
-    if (processed.type === 'pie' && onSliceClick) {
-      base.onHover = (event: any, elements: any) => {
-        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
-      };
-      base.onClick = (elements: any) => {
-        if (elements.length > 0) {
-          const index = elements[0].index;
-          const label = processed.labels[index];
-          if (label) onSliceClick(label);
-        }
-      };
-    }
-
-    return base;
-  }, [processed, onSliceClick, type]);
-
-  if (processed.type === 'line') {
-    return <Line data={processed} options={options} />;
-  }
-
+  // ===== RENDER: PIZZA =====
   if (processed.type === 'pie') {
-    return <Pie data={processed} options={options} />;
+    const series = processed.series as PieSeriesType[];
+    return (
+      <ThemeProvider theme={theme}> {
+        <Box sx={commonSx}>
+          <PieChart
+            series={series}
+            colors={processed.colors}
+            onItemClick={(_event: any, item: any) => {
+              if (onSliceClick && item?.label) onSliceClick(String(item.label));
+            }}
+            sx={{
+              ...commonSx,
+              [`& .${pieClasses.arcLabel}`]: {
+                fontWeight: 'bold',
+                fill: 'var(--mui-palette-text-primary)',
+              },
+            }}
+          />
+        </Box> }
+      </ThemeProvider>
+    );
   }
 
-  return <Bar data={processed} options={options} />;
+  // ===== RENDER: LINHA =====
+  if (processed.type === 'line') {
+    const series = processed.series as LineSeriesType[];
+    return (
+      <ThemeProvider theme={theme}> {
+        <Box sx={{ width: '100%', height: '100%' }}>
+          <LineChart
+            series={series}
+            xAxis={[{
+              scaleType: 'band',
+              data: processed.xLabels,
+            }]}
+            sx={commonSx}
+          />
+        </Box>}
+      </ThemeProvider>
+    );
+  }
+
+  // ===== RENDER: BARRAS =====
+  const barSeries = processed.series as BarSeriesType[];
+  return (
+    <ThemeProvider theme={theme}> {
+      <Box sx={commonSx}>
+        <BarChart
+          series={barSeries}
+          xAxis={[{
+            scaleType: 'band',
+            data: processed.xLabels,
+            tickLabelStyle: {
+              angle: -35,
+              textAnchor: 'end',
+              fontSize: 10,
+            }
+          }]}
+          sx={commonSx}
+        />
+      </Box>}
+    </ThemeProvider>
+  );
 }

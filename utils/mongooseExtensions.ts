@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 // 1. Diz ao TypeScript que a interface existente agora tem esse novo método
 declare module 'mongoose' {
+  // Required to augment Mongoose's nested `Types.ObjectId` declaration.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Types {
     interface ObjectId {
       isValidAndNotNull(): boolean;

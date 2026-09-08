@@ -1,47 +1,81 @@
-// components/ThemeToggle.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+import { useColorScheme } from '@mui/material/styles';
 import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const { setMode } = useColorScheme();
+  
+  const isDark = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener('storage', onStoreChange);
+      window.addEventListener('theme-change', onStoreChange);
 
+      return () => {
+        window.removeEventListener('storage', onStoreChange);
+        window.removeEventListener('theme-change', onStoreChange);
+      };
+    },
+    () =>
+      document.documentElement.classList.contains('dark') ||
+      localStorage.getItem('wiki-theme') === 'dark',
+    () => false,
+  );
+
+  const activeDark = isDark;
+
+  // 🔹 CORREÇÃO DO LOAD: Quando a página carrega, sincroniza o Tailwind 
+  // imediatamente com o estado lido do storage/DOM
   useEffect(() => {
-    const storedTheme = localStorage.getItem('wiki-theme');
-    if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    if (activeDark) {
       document.documentElement.classList.add('dark');
-      setTheme('dark');
     } else {
       document.documentElement.classList.remove('dark');
-      setTheme('light');
     }
-  }, []);
+  }, [activeDark]);
 
   const toggleTheme = () => {
-    if (theme === 'light') {
+    const nextTheme = activeDark ? 'light' : 'dark';
+    
+    // 1. Atualiza o Material UI
+    setMode(nextTheme);
+    
+    // 2. Atualiza o Tailwind CSS
+    if (nextTheme === 'dark') {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('wiki-theme', 'dark');
-      setTheme('dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('wiki-theme', 'light');
-      setTheme('light');
     }
+
+    localStorage.setItem('wiki-theme', nextTheme);
+    window.dispatchEvent(new Event('theme-change'));
   };
 
   return (
     <button
       onClick={toggleTheme}
-      className="flex flex-col items-center justify-center py-2 px-1 rounded-lg text-[9px] font-medium transition-colors w-full text-apple-tertiary-light dark:text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E]"
+      className="relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-300 focus:outline-none"
       aria-label="Alternar tema"
+      role="switch"
+      aria-checked={activeDark}
     >
-      {theme === 'light' ? (
-        <Moon className="w-5 h-5 mb-1 text-apple-tertiary-light dark:text-apple-tertiary-light" />
-      ) : (
-        <Sun className="w-5 h-5 mb-1 text-[#FFD60A]" />
-      )}
-      <span className="text-center leading-tight">Theme</span>
+      <span 
+        className={`absolute inset-0 rounded-full transition-colors duration-300 ${
+          activeDark ? 'bg-gray-700' : 'bg-gray-500'
+        }`} 
+      />
+      <span 
+        className={`absolute flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
+          activeDark ? 'translate-x-4' : '-translate-x-0.5'
+        }`}
+      >
+        {activeDark ? (
+          <Moon className="w-4 h-4 text-white" />
+        ) : (
+          <Sun className="w-4 h-4 text-orange-500" />
+        )}
+      </span>
     </button>
   );
 }

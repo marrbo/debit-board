@@ -9,7 +9,7 @@ import { DataTable } from "@/components/DataTable";
 import TeamDrawer from "@/components/TeamDrawer";
 import type { Column } from '@/components/DataTable';
 import type { ITeam } from "@/types/ITeam";
-import { CirclePlus } from "lucide-react";
+import { CirclePlus, UsersIcon } from "lucide-react";
 
 const columns: Column<ITeam>[] = [
   { key: "name", label: "Nome do Time", sortable: true },
@@ -67,6 +67,7 @@ function TeamsContent() {
     <div className="w-full space-y-4">
       <PageHeader
         title="Times"
+        icon={<UsersIcon className="w-10 h-10 text-apple-blue" />}
         subtitle="Gerencie os times. Times possuem projetos vinculados."
         actions={
           <button

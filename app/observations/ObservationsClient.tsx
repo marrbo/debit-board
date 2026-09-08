@@ -12,8 +12,6 @@ import type { IUser } from "@/types/IUser";
 import type { IAzureSettings } from "@/types/IAzureSettings";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import ExcelJS from "exceljs";
-import { useReactToPrint } from "react-to-print";
 import { ObservationsReport } from "./components";
 
 // Funções auxiliares de cor (fora do componente)

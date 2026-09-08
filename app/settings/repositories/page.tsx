@@ -8,7 +8,6 @@ import { RefreshCw, ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable, type Column } from "@/components/DataTable";
 import type { IRepository } from "@/types/IRepository";
-import DBQLAdvancedSearch from "@/components/dbql/DBQLAdvancedSearch";
 
 // ============================================================================
 // Configuração das Colunas

@@ -16,37 +16,56 @@ const columns: Column<any>[] = [
     key: "observationSeverityCounts",
     label: "Severidade",
     sortable: false,
-    width: '250px',
+    width: '260px',
+    className: "hover:scale-150 hover:translate-x-6",
     render: (item: any, extraData?: Record<string, any>) => {
       const stats = extraData?.[item.name] || {};
       const sev = stats.severity || {};
 
+      const severityItems = [
+        { letter: 'C', count: sev.critical || 0, color: '#ef4444', label: 'Critical' },
+        { letter: 'H', count: sev.high || 0, color: '#f97316', label: 'High' },
+        { letter: 'M', count: sev.medium || 0, color: '#eab308', label: 'Medium' },
+        { letter: 'L', count: sev.low || 0, color: '#22c55e', label: 'Low' },
+      ];
+
       return (
-        <div className="flex flex-col gap-1">
-          <div className="grid grid-cols-4 gap-2 hover:scale-150">
-            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 border border-red-600/50 text-xs font-bold">
-              {sev.critical || 0}
-              <span className="text-[7px] text-red-600/50 align-center uppercase">critical</span>
+        <div className="flex items-center gap-2">
+          {severityItems.map((sevItem) => (
+            <div
+              key={sevItem.letter}
+              className="flex flex-col items-center gap-0.5"
+              title={`${sevItem.label}: ${sevItem.count}`}
+            >
+              {/* Escudo SVG com a letra */}
+              <div className="relative w-7 h-8">
+                <svg viewBox="0 0 24 24" className="w-full h-full">
+                  <path
+                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
+                    fill={sevItem.color}
+                  />
+                  <path
+                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
+                    fill="none"
+                    stroke="rgba(0,0,0,0.15)"
+                    strokeWidth="0.8"
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[11px]">
+                  {sevItem.letter}
+                </span>
+              </div>
+              {/* Contagem abaixo do escudo */}
+              <span className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">
+                {sevItem.count}
+              </span>
             </div>
-            
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 border border-orange-600/50 text-xs font-bold">
-              {sev.high || 0}
-              <span className="text-[7px] text-orange-600/50 uppercase">high</span>
-            </div>
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 border border-yellow-600/50 text-xs font-bold">
-              {sev.medium || 0}
-              <span className="text-[7px] text-yellow-600/50 uppercase">medium</span>
-            </div>
-            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 border border-green-600/50 text-green-600 text-xs font-bold">
-              {sev.low || 0}
-              <span className="text-[7px] text-green-600/50 uppercase">low</span>
-            </div>
-          </div>
+          ))}
         </div>
       );
     },
   },
-  { key: "description", label: "Descrição", sortable: true, className: 'text-ellipsis text-apple-tertiary-light italic font-mono text-xs line-clamp-1 text-wrap ' },
+  { key: "description", label: "Descrição", sortable: true, exportable: false, className: 'text-ellipsis text-apple-tertiary-light italic font-mono text-xs line-clamp-1 text-wrap ' },
   {
     key: "lastScan",
     label: "Last scan",
@@ -184,12 +203,32 @@ function DashboardContent() {
   }, [effectiveTeamId, searchTerm]);
 
   const handleExportPDF = useCallback(async () => {
-    const projectsForPDF = projects.map((p: any) => {
+    // 🔥 Busca todos os projetos com filtros atuais
+    const params = new URLSearchParams({
+      teamId: effectiveTeamId,
+      all: 'true', // Força a API a retornar todos
+      sort: 'name',
+      order: 'asc',
+    });
+
+    if (searchTerm) params.set('q', searchTerm);
+
+    const res = await fetch(`/api/dashboard?${params.toString()}`);
+    if (!res.ok) {
+      alert('Erro ao buscar dados para exportação');
+      return;
+    }
+
+    const json = await res.json();
+    const allProjects = json.data || [];
+
+    // 🔥 Enriquecer com stats por projeto
+    const projectsForPDF = allProjects.map((p: any) => {
       const projectStat = stats.projectStats?.[p.name] || {};
       return {
         name: p.name,
         description: p.description,
-        lastScan: p.syncDate ? new Date(p.syncDate).toLocaleDateString("pt-BR") : "—",
+        lastScan: p.syncDate ? new Date(p.syncDate).toLocaleDateString('pt-BR') : '—',
         severity: projectStat.severity || {},
       };
     });
@@ -202,7 +241,7 @@ function DashboardContent() {
       projects: projectsForPDF,
       categoryDetails: stats.categoryDetails,
     });
-  }, [projects, stats, teamName]);
+  }, [effectiveTeamId, searchTerm, stats, teamName]);
 
   if (status === "loading") return <div className="py-10 text-center">Carregando...</div>;
   if (!session) {
@@ -300,20 +339,16 @@ function DashboardContent() {
           {/* Projects Table (usando a rota /api/dashboard e projectStats para extraData) */}
           <div className="pt-4 border-t border-apple-border-light dark:border-apple-border-dark">
             <h3 className="text-lg font-semibold mb-4">
-              Projetos {teamName === 'Global' ? '' : teamName }
+              Projetos - {effectiveTeamId == 'all' ? 'Global' : teamName}
             </h3>
             <DataTable
               endpoint="/api/dashboard"
               columns={columns}
               defaultSort={{ field: "name", order: "asc" }}
               defaultLimit={10}
-              // searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
-              // searchContext="projects"
-              // searchVisible={false}
-              // userId={session?.user?._id?.toString()}
+              pdfTitle={`Projetos: Severidades - ${effectiveTeamId == 'all' ? 'Global' : teamName}`}
               teamId={effectiveTeamId}
-              extraData={stats.projectStats} // 🔥 Usa o map de stats dedicado
-              // onSearchChange={(value) => setSearchTerm(value)}
+              extraData={stats.projectStats}
               onRowClick={() => {}}
             />
           </div>

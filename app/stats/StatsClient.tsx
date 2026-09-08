@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Charts from '@/components/Charts';
-import PageHeader from '@/components/PageHeader';
-import { BarChart3, X, Maximize2, XCircle } from 'lucide-react';
+import { X, Maximize2, XCircle, BarChart3, FilterIcon } from 'lucide-react';
 import type { StatsData, DailyStats } from './services/statsService';
+import PageHeader from '@/components/PageHeader';
+import TeamStatsCard from '@/components/TeamStatsCard'; // 🔹 Importado
 
 function ChartCard({ title, children, chartKey, onExpand }: {
   title: string;
@@ -51,7 +52,10 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   const originalQueryRef = useRef<string>('');
   const lastSearchValueRef = useRef<string>('');
 
-  // Helper: resolve ID para string
+  const handleSearch = useCallback((newQuery: string) => {
+    setSearchQuery(newQuery);
+  }, []);
+
   const resolveQuery = useCallback(async (queryOrId: string): Promise<string> => {
     if (!queryOrId) return '';
     const isObjectId = /^[a-fA-F0-9]{24}$/.test(queryOrId);
@@ -70,7 +74,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     }
   }, []);
 
-  // Fetch stats
   const fetchStats = useCallback(async (query: string): Promise<StatsData> => {
     const params = new URLSearchParams();
     if (query) params.set('search', query);
@@ -79,8 +82,38 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return await res.json() as StatsData;
   }, []);
 
-  
-  // Carregar dados
+  const clearCategoryFilter = useCallback(() => {
+    if (!lastCategory) return;
+    const original = originalQueryRef.current;
+    lastSearchValueRef.current = original;
+    setSearchQuery(original);
+    setLastCategory(null);
+    originalQueryRef.current = '';
+    lastSearchQueryRef.current = original;
+  }, [lastCategory]);
+
+  const handleSliceClick = useCallback(async (label: string) => {
+    const cleanLabel = label.replace(/"/g, '');
+    if (lastCategory) clearCategoryFilter();
+
+    originalQueryRef.current = searchQuery;
+    const resolved = await resolveQuery(searchQuery);
+    const currentQuery = resolved;
+
+    let newQuery: string;
+    if (currentQuery.trim()) {
+      newQuery = `(${currentQuery}) AND category:"${cleanLabel}"`;
+    } else {
+      newQuery = `category:"${cleanLabel}"`;
+    }
+
+    lastSearchValueRef.current = newQuery;
+    setLastCategory(cleanLabel);
+    lastSearchQueryRef.current = newQuery;
+
+    handleSearch(newQuery);
+  }, [lastCategory, searchQuery, resolveQuery, clearCategoryFilter, handleSearch]);
+
   useEffect(() => {
     if (status !== 'authenticated' || !session) return;
     let cancelled = false;
@@ -111,10 +144,17 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return () => { cancelled = true; };
   }, [searchQuery, fetchStats, resolveQuery, status, session]);
 
-  // ================= DADOS DERIVADOS =================
   const severityTotals = stats?.severityTotals || {};
   const categoryTotals = stats?.categoryTotals || [];
   const projectTotals = useMemo(() => stats?.projectTotals || [], [stats?.projectTotals]);
+
+  // 🔹 Construção do objeto de status a partir do kpi
+  const statusTotals = useMemo(() => ({
+    open: stats?.kpi?.accepted || 0,
+    resolved: stats?.kpi?.resolved || 0,
+    recurring: stats?.kpi?.recurring || 0,
+    wont_fix: stats?.kpi?.wontFix || 0
+  }), [stats]);
 
   const chartData = useMemo(
     () => stats?.chartData?.filter((d: DailyStats) => d.total > 0) || [],
@@ -188,12 +228,12 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       label: 'Mediana (Total)',
       data: medianTotal,
       borderColor: '#8E8E93',
-      backgroundColor: 'transparent',
-      borderWidth: 2,
+      backgroundColor: '#RRGGBB00',
+      borderWidth: 1,
       borderDash: [6, 4],
       pointRadius: 0,
       tension: 0.3,
-      fill: false,
+      fill: true,
     });
 
     return { labels, datasets };
@@ -247,7 +287,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     }
   }, [projectTotals, projectViewMode]);
 
-  // ================= RENDERIZAÇÃO =================
   if (status === 'loading') {
     return <div className="text-apple-tertiary-light py-10 text-center">Carregando...</div>;
   }
@@ -267,36 +306,34 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
   return (
     <div className="w-full space-y-6 p-8">
-      {/* KPIs de Status */}
-      <div className="grid grid-cols-2 md:grid-cols-5 text-center gap-4">
-        {[
-          { key: 'total', label: 'Ocorrências', value: stats!.kpi.total, color: 'text-apple-label-light' },
-          { key: 'open', label: 'Abertas', value: stats!.kpi.accepted, color: 'text-apple-blue' },
-          { key: 'recurring', label: 'Recorrentes', value: stats!.kpi.recurring, color: 'text-apple-orange' },
-          { key: 'resolved', label: 'Resolvidas', value: stats!.kpi.resolved, color: 'text-apple-green' },
-          { key: 'wontFix', label: 'Não Corrigir', value: stats!.kpi.wontFix, color: 'text-apple-tertiary-light' },
-        ].map((card) => (
-          <div key={card.key} className="bg-apple-card-light dark:bg-apple-card-dark border rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all border-apple-border-light dark:border-apple-border-dark">
-            <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
-            <p className="text-[10px] uppercase font-semibold text-apple-tertiary-light tracking-wider">{card.label}</p>
-          </div>
-        ))}
-      </div>
+      <PageHeader
+        title="Stats & Usage"
+        icon={<BarChart3 className="w-10 h-10 text-apple-blue" />}
+        subtitle="Visão geral das observations de segurança do seu Tenant."
+        search={{
+          type: 'advanced',
+          onSearch: handleSearch,
+          userId: session.user.id,
+          placeholder: "Search stats, e.g. severity:critical OR project:my-api",
+          context: "observations",
+        }}
+        actions={
+          lastCategory && (
+            <button onClick={clearCategoryFilter} className="px-4 py-2 bg-red-600 border border-apple-border-light dark:border-apple-border-dark rounded-full p-1 shadow-md text-apple-tertiary-light hover:text-apple-red transition-colors" title="Limpar filtro de categoria">
+              <FilterIcon className="w-4 h-4" />
+            </button>
+        )}
+      />
 
-      {/* Cards de Severidade */}
-      <div className="grid grid-cols-2 md:grid-cols-4 text-center gap-4">
-        {[
-          { key: 'critical', label: 'Crítico', value: severityTotals.critical || 0, color: 'border-apple-red' },
-          { key: 'high', label: 'Alto', value: severityTotals.high || 0, color: 'border-apple-orange' },
-          { key: 'medium', label: 'Médio', value: severityTotals.medium || 0, color: 'border-apple-yellow' },
-          { key: 'low', label: 'Baixo', value: severityTotals.low || 0, color: 'border-apple-blue' },
-        ].map((card) => (
-          <div key={card.key} className="bg-apple-card-light dark:bg-apple-card-dark border border-l-4 ${card.color} rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-all">
-            <p className="text-2xl font-bold text-apple-label-light dark:text-apple-label-dark mt-1">{card.value}</p>
-            <p className="text-[10px] uppercase font-bold text-apple-tertiary-light">{card.label}</p>
-          </div>
-        ))}
-      </div>
+      {/* 🔹 Card compartilhado de Severidade e Status */}
+      <TeamStatsCard
+        type="status"
+        variant='compact'
+        title="Severidade e Status"
+        total={stats!.kpi.total}
+        severity={severityTotals}
+        status={statusTotals}
+      />
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -311,7 +348,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
           <div className="flex items-center justify-end mb-3">
             <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
               <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm transition-all duration-300" style={{ left: evolutionViewMode === 'severity' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
-              <button onClick={() => setEvolutionViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'severity' ? 'text-apple-blue' : 'text-apple-tertiary-light'}`}>Severidade</button>
+              <button onClick={() => setEvolutionViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'severity' ? 'text-apple-green' : 'text-apple-tertiary-light'}`}>Severidade</button>
               <button onClick={() => setEvolutionViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${evolutionViewMode === 'status' ? 'text-apple-orange' : 'text-apple-tertiary-light'}`}>Status</button>
             </div>
           </div>
@@ -344,7 +381,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
           <div className="flex items-center justify-end mb-3">
             <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
               <div className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm transition-all duration-300" style={{ left: projectViewMode === 'status' ? '0.25rem' : 'calc(50% + 0.25rem)' }} />
-              <button onClick={() => setProjectViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'status' ? 'text-apple-blue' : 'text-apple-tertiary-light'}`}>Status</button>
+              <button onClick={() => setProjectViewMode('status')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'status' ? 'text-apple-green' : 'text-apple-tertiary-light'}`}>Status</button>
               <button onClick={() => setProjectViewMode('severity')} className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${projectViewMode === 'severity' ? 'text-apple-orange' : 'text-apple-tertiary-light'}`}>Severidade</button>
             </div>
           </div>

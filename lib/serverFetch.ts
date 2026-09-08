@@ -1,6 +1,7 @@
 // lib/serverFetch.ts
 import { headers } from 'next/headers';
 import type { RequestInit } from 'next/dist/server/web/spec-extension/request';
+import { Agent } from 'https';
 
 export async function serverFetch<T = unknown>(
   path: string,
@@ -34,7 +35,7 @@ export async function serverFetch<T = unknown>(
 
   if (process.env.NODE_ENV === 'development') {
     // Ignorar verificação TLS (necessário para `next dev --experimental-https`)
-    (fetchOptions as any).agent = new (require('https').Agent)({ rejectUnauthorized: false });
+    (fetchOptions as any).agent = new Agent({ rejectUnauthorized: false });
   }
 
   try {

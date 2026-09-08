@@ -13,6 +13,10 @@
     "test:coverage": "npx vitest run --coverage --reporter=junit,html --outputFile=./coverage/test-report.junit.xml && open coverage/index.html"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.4.0",
+    "@mui/x-charts": "^9.13.0",
     "@sentry/nextjs": "^10.72.0",
     "@tailwindcss/typography": "^0.5.20",
     "azure-devops-node-api": "^15.1.2",
@@ -26,11 +30,13 @@
     "lucide-react": "^1.33.0",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.2",
-    "next": "^16.3.3",
+    "next": "^16.3.4",
     "next-auth": "^4.24.15",
+    "rasterizehtml": "^1.4.1",
     "react": "19.2",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "19.2",
+    "react-icons": "^5.7.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
     "react-to-print": "^3.3.0",
@@ -39,6 +45,7 @@
   },
   "devDependencies": {
     "@codecov/webpack-plugin": "^2.0.1",
+    "@mui/material-nextjs": "^9.4.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

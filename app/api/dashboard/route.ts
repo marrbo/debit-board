@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
   const sortOrder = searchParams.get('order') === 'asc' ? 1 : -1;
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
+  const isAll = searchParams.get('all') === 'true';
 
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
@@ -106,14 +107,16 @@ export async function GET(req: NextRequest) {
     filter._id = { $in: allowedProjectIds };
   }
 
-  const skip = (page - 1) * limit;
-
   try {
+    // 🔥 Se all=true, ignora paginação e retorna todos
+    const skip = isAll ? 0 : (page - 1) * limit;
+    const effectiveLimit = isAll ? 100000 : limit; // Use um número alto para garantir todos
+
     const [projects, total] = await Promise.all([
       Project.find(filter)
         .sort({ [sortField]: sortOrder })
         .skip(skip)
-        .limit(limit)
+        .limit(effectiveLimit)
         .lean(),
       Project.countDocuments(filter)
     ]);

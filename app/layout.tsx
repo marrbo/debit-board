@@ -15,8 +15,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR">
-      <body className="min-h-screen space-y-0 flex flex-col bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors duration-200">
+    // 🔹 suppressHydrationWarning evita flashes de luz brancos ao carregar o modo escuro salvo
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="min-h-screen flex flex-col">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>
