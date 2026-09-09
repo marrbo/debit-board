@@ -108,9 +108,11 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
           type: 'bar' as const,
           label: ds.label,
           data: ds.data,
+          barLabel: 'value',
+          barLabelPlacement: 'outside',
           color: baseColor,
-          stack: isStackedBar ? (ds.stack || 'stack0') : undefined,
-          borderRadius: 10,
+          stack: isStackedBar ? (ds.stack || 'stack0') : 'total',
+          borderRadius: 5,
         };
       });
       return {
@@ -210,6 +212,18 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
     '& .MuiChartsAxis-label': {
       fill: 'var(--mui-palette-text-secondary)',
     },
+    '& .MuiChartsLegend-root': {
+      // maxHeight: 100,
+      // overflow: 'auto',
+      // flexWrap: 'wrap',
+      justifyContent: 'center',
+      // gap: '4px 16px',
+    },
+    '& .MuiChartsLegend-series': {
+      display: 'flex',
+      // alignItems: 'start'
+      tickFrequencies: 10
+    },
   };
 
   // ===== RENDER: PIZZA =====
@@ -217,7 +231,6 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
     const series = processed.series as PieSeriesType[];
     return (
       <ThemeProvider theme={theme}> {
-        <Box sx={commonSx}>
           <PieChart
             series={series}
             colors={processed.colors}
@@ -231,8 +244,7 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
                 fill: 'var(--mui-palette-text-primary)',
               },
             }}
-          />
-        </Box> }
+          />}
       </ThemeProvider>
     );
   }
@@ -258,23 +270,47 @@ export default function Charts({ data, datasets, labels, type, colors, onSliceCl
 
   // ===== RENDER: BARRAS =====
   const barSeries = processed.series as BarSeriesType[];
+
   return (
-    <ThemeProvider theme={theme}> {
+    <ThemeProvider theme={theme}>
       <Box sx={commonSx}>
         <BarChart
           series={barSeries}
-          xAxis={[{
-            scaleType: 'band',
-            data: processed.xLabels,
-            tickLabelStyle: {
-              angle: -35,
-              textAnchor: 'end',
-              fontSize: 10,
-            }
-          }]}
-          sx={commonSx}
+          xAxis={[
+            {
+              scaleType: 'band',
+              data: processed.xLabels,
+              tickLabelStyle: {
+                angle: -35,
+                textAnchor: 'end',
+                fontSize: 10,
+              },
+              tickInterval: 'auto',
+            },
+          ]}
+          margin={{ left: 20, right: 20, top: 20, bottom: 80 }}
+          slotProps={{
+            legend: {
+              direction: 'horizontal',
+              position: { vertical: 'top', horizontal: 'center' },
+            },
+          }}
+          sx={{
+            ...commonSx,
+            '& .MuiChartsLegend-root': {
+              maxHeight: 48,
+              overflow: 'auto',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: '4px 16px',
+            },
+            '& .MuiChartsLegend-series': {
+              display: 'flex',
+              alignItems: 'center',
+            },
+          }}
         />
-      </Box>}
+      </Box>
     </ThemeProvider>
   );
 }

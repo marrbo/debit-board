@@ -7,8 +7,8 @@
    ============================================================== */
 :root {
   /* ── BRAND ── */
-  --brand-default: #68163a;
-  --brand: #68163a;
+  --brand-default: #68163a;       /* Adicionado - usado pelo config */
+  --brand: #68163a;               /* Mantido para compatibilidade */
   --brand-dark: #c42d76;
   --brand-light: #a53b61;
   --brand-subtle: #b625381a;
@@ -27,7 +27,8 @@
   --brand-950: #3e0000;
 
   /* ── ACCENT ── */
-  --accent: #25b65a;
+  --accent-default: #25b65a;      /* Adicionado - usado pelo config */
+  --accent: #25b65a;              /* Mantido para compatibilidade */
   --accent-dark: #009d44;
   --accent-light: #65e989;
   --accent-subtle: #25b65a1a;
@@ -77,8 +78,17 @@
   --border-subtle: #d5d2d3;
   --border-focus: #b62538;
 
-  /* ── STATUS ── */
-  --success: #20974c;
+  /* ── RING (usado em focus) ── */
+  --ring: var(--border-focus);    /* Adicionado */
+
+  /* ── STATUS - Variáveis -default (adicionadas) ── */
+  --success-default: #20974c;
+  --warning-default: #f29e0d;
+  --error-default: #ef4343;
+  --info-default: #3d84f5;
+
+  /* ── STATUS - Escalas claras ── */
+  --success: #20974c;             /* Mantido para compatibilidade */
   --success-light: #75e390;
   --success-50: #d2ffdb;
   --success-100: #c5f7ce;
@@ -92,7 +102,7 @@
   --success-900: #003002;
   --success-950: #002100;
 
-  --warning: #f29e0d;
+  --warning: #f29e0d;             /* Mantido */
   --warning-light: #ffe965;
   --warning-50: #ffecba;
   --warning-100: #ffdfad;
@@ -106,7 +116,7 @@
   --warning-900: #441200;
   --warning-950: #330100;
 
-  --error: #ef4343;
+  --error: #ef4343;               /* Mantido */
   --error-light: #ff9286;
   --error-50: #ffdad1;
   --error-100: #ffcdc4;
@@ -120,7 +130,7 @@
   --error-900: #570000;
   --error-950: #430000;
 
-  --info: #3d84f5;
+  --info: #3d84f5;                /* Mantido */
   --info-light: #9acbff;
   --info-50: #cef8ff;
   --info-100: #c1ebff;
@@ -134,7 +144,7 @@
   --info-900: #001d60;
   --info-950: #00094e;
 
-  /* ── CORES VARIANTES DARK (usadas no modo escuro) ── */
+  /* ── VARIANTES DARK (usadas no modo escuro, mantidas) ── */
   --brand-dark-variant: #c42d76;
   --accent-dark-variant: #009d44;
   --text-heading-dark: #f2eff0;
@@ -176,7 +186,7 @@
 .dark {
   /* Brand */
   --brand: var(--brand-dark-variant);
-  --brand-light: var(--brand-dark-variant); /* opcional */
+  --brand-light: var(--brand-dark-variant);
   --brand-foreground: #0e0c0c;
 
   /* Accent */
@@ -202,7 +212,10 @@
   --border-subtle: var(--border-subtle-dark);
   --border-focus: var(--border-focus-dark);
 
-  /* Status */
+  /* Ring */
+  --ring: var(--border-focus-dark);
+
+  /* Status - redefinindo as variáveis base para o modo escuro */
   --success: var(--success-dark);
   --success-light: var(--success-dark);
   --warning: var(--warning-dark);
@@ -281,7 +294,7 @@
 }
 
 /* ==============================================================
-   ESTILOS ESPECÍFICOS PARA TABELAS DE OBSERVAÇÕES (mantidos)
+   ESTILOS ESPECÍFICOS PARA TABELAS DE OBSERVAÇÕES (corrigido)
    ============================================================== */
 .observation-row {
   position: relative;
@@ -293,7 +306,7 @@
 }
 
 .observation-row:hover {
-  background-color: background-color;
+  background-color: rgba(182, 37, 56, 0.08); /* Corrigido - tom de brand */
 }
 
 .observation-row td {
@@ -301,9 +314,9 @@
 }
 
 .dark .observation-row:nth-child(even) {
-  background-color: background-color;
+  background-color: rgba(255, 255, 255, 0.05); /* Corrigido */
 }
 
 .dark .observation-row:hover {
-  background-color: background-color;
+  background-color: rgba(196, 45, 118, 0.15); /* Corrigido - tom mais claro para dark */
 }

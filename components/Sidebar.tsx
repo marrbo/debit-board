@@ -26,7 +26,7 @@ export default function Sidebar() {
   const getAvatarUrl = () => {
       if (session?.user?.avatar) return session?.user?.avatar;
       const name = session?.user?.name || 'U';
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&length=2&background=b62539&color=fff&width=32&height=32`;
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&rounded=false&length=2&background=68163a&color=fff&bold=true&uppercase=true&width=48&height=48`;
     };
 
   // Verifica se o Admin está impersonando
@@ -60,14 +60,14 @@ export default function Sidebar() {
       <span className="divide-x-2 border-b border-sunken w-full mb-4"/>
 
       {/* Menu Principal (Topo) */}
-      <nav className="flex-1 w-full px-1.5 space-y-1 flex flex-col items-center">
+      <nav className="flex-1 w-full px-1.5 space-y-1 flex flex-col items-center transition-all">
         {topNavItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-brand font-bold'   : ''}`}
+              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-dotted shadow-sm drop-shadow-sm border-brand/5 font-bold' : ''}`}
             >
               <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand w-8 h-8' : 'text-muted'}`} />
               <span className={`text-center leading-tight group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`}>{item.label}</span>
@@ -106,13 +106,13 @@ export default function Sidebar() {
         <div className="w-full">
           <button
             onClick={() => setIsAccountOpen(!isAccountOpen)}
-            className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[9px] font-medium text-muted hover:text-link transition-colors w-full cursor-pointer hover:bg-brand"
+            className="flex flex-col items-center group justify-center text-[9px] font-medium text-muted hover:text-link hover:opacity-50 transition-colors w-full cursor-pointer"
           >
             <Image 
               src={getAvatarUrl()} 
-              width={32}
-              height={32}
-              className="w-8 h-8 rounded-full object-cover mb-2" 
+              width={48}
+              height={48}
+              className="w-10 h-10 rounded-sm object-cover mb-2" 
               alt={`${session?.user?.name || 'avatar'}`}
             />
             <span className="text-center leading-tight">{getFirstName()}</span>
@@ -121,7 +121,7 @@ export default function Sidebar() {
           {/* Popover Flutuante (Fora do fluxo da Sidebar) */}
           {isAccountOpen && (
             <div 
-              className="fixed bottom-4 left-20 z-[200] w-80 bg-elevated border border-subtle rounded-2xl shadow-sm hover:drop-shadow-lg drop-shadow-sm hover:drop-shadow-lg p-4 flex flex-col gap-2 transition-colors"
+              className="fixed bottom-4 left-20 z-[200] w-80 bg-elevated border border-subtle rounded-2xl p-4 flex flex-col gap-2 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 pb-3 border-b border-subtle">

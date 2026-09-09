@@ -18,7 +18,7 @@ function ChartCard({ title, children, chartKey, onExpand }: {
   onExpand: (chartKey: string) => void;
 }) {
   return (
-    <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
+    <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-body dark:text-body">{title}</h3>
         <button onClick={() => onExpand(chartKey)} className="p-1.5 text-muted hover:text-brand transition-colors" title="Expandir gráfico">

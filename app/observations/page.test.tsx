@@ -287,7 +287,7 @@ describe("ObservationsReport", () => {
     expect(container).toMatchSnapshot();
   });
 
-  it("deve renderizar todas as variações de status e severidade", () => {
+  it("deve renderizar todas as variações de status e ", () => {
     const observations = [
         { _id: "o1", project: "P", repository: "R", branch: "b", fileName: "f1", filePath: "p", category: "c", status: "open", severity: "critical", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: "2024-01-02", assignedTo: "" },
         { _id: "o2", project: "P", repository: "R", branch: "b", fileName: "f2", filePath: "p", category: "c", status: "recurring", severity: "high", slaHours: 1, hitCount: 1, firstSeen: "2024-01-01", lastSeen: "2024-01-01", slaDueAt: "2024-01-02", assignedTo: "" },

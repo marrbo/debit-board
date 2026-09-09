@@ -7,11 +7,10 @@ import {
   X,
   ShieldX,
   CalendarSync,
-  UsersIcon,
-  Group,
   FileStack,
   FileCode
 } from 'lucide-react';
+import SlideToggle from './SlideToggle';
 
 interface TeamStatsCardProps {
   type: 'status' | 'category';
@@ -59,13 +58,12 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
 };
 
 export default function TeamStatsCard({ type, title, total, severity, status, category, categoryGroup, categoryDetails, variant = 'default' }: TeamStatsCardProps) {
-  const [viewMode, setViewMode] = useState<'grouped' | 'single'>('grouped');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const itemRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<'center' | 'right' | 'left'>('center');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalViewMode, setModalViewMode] = useState<'grouped' | 'single'>('grouped');
+  const [viewMode, setViewMode] = useState<'grouped' | 'single'>('grouped');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -95,9 +93,9 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
   // ===================== FUNÇÕES AUXILIARES =====================
   const severityBar = () => {
     const severityEntries = Object.entries(severity || {});
-    if (severityEntries.length === 0) return <div className="h-3 w-full bg-surface dark:bg-surface rounded-full" />;
+    if (severityEntries.length === 0) return <div className="h-3 w-full bg-page dark:bg-surface rounded-full" />;
     return (
-      <div className="flex h-3 w-full rounded-full overflow-hidden bg-surface dark:bg-surface gap-1">
+      <div className="flex h-3 w-full rounded-full overflow-hidden bg-page dark:bg-surface gap-1">
         {severityEntries.map(([key, value]) => {
           const color = SEVERITY_COLORS[key] || '#e5e7eb';
           return <div key={key} style={{ flexGrow: value, backgroundColor: color }} />;
@@ -150,42 +148,11 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
     const hasMoreItems = entries.length > MAX_VISIBLE_ITEMS;
     const visibleEntries = hasMoreItems ? entries.slice(0, MAX_VISIBLE_ITEMS) : entries;
 
-    // 🔥 Toggle com efeito slide
-    const renderToggle = (mode: 'grouped' | 'single', setter: (mode: 'grouped' | 'single') => void) => {
-      const isGrouped = mode === 'grouped';
-      return (
-        <div className="relative flex justify-between bg-page rounded-full p-2 w-[200px] h-10">
-          {/* Knob deslizante */}
-          <span
-            className={`absolute top-1 bottom-1 left-1 w-1/2 rounded-full bg-elevated shadow-sm hover:drop-shadow-lg transition-all duration-300 ${
-              isGrouped ? 'translate-x-0' : 'translate-x-[92px]'
-            }`}
-          />
-          <button
-            onClick={() => setter('grouped')}
-            className={`relative z-10 flex items-center gap-1 pl-4 p-0 text-[11px] font-semibold rounded-full transition-colors ${
-              isGrouped ? 'text-success-400 dark:text-success' : 'text-muted'
-            }`}
-          >
-            <FileStack className="w-4 h-4"/> Grupo
-          </button>
-          <button
-            onClick={() => setter('single')}
-            className={`relative z-10 flex items-center gap-1 -pl-2 p-3 text-[10px] font-semibold rounded-full transition-colors ${
-              !isGrouped ? 'text-warning-400 dark:text-warning' : 'text-muted'
-            }`}
-          >
-            <FileCode className="w-4 h-4"/> Individual
-          </button>
-        </div>
-      );
-    };
-
     const renderStackedBar = (map: Record<string, number>) => {
       const totalBar = Object.values(map).reduce((sum, val) => sum + val, 0);
-      if (totalBar === 0) return <div className="h-3 w-full bg-surface dark:bg-surface rounded-full" />;
+      if (totalBar === 0) return <div className="h-3 w-full bg-page dark:bg-surface rounded-full" />;
       return (
-        <div className="flex h-3 w-full rounded-full overflow-hidden bg-surface dark:bg-surface gap-1">
+        <div className="flex h-3 w-full rounded-full overflow-hidden bg-page dark:bg-surface gap-1">
           {Object.entries(map).map(([key, value], index) => {
             const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
             return (
@@ -196,7 +163,7 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
       );
     };
 
-    const modalMap = modalViewMode === 'grouped' ? (categoryGroup || {}) : (category || {});
+    const modalMap = viewMode === 'grouped' ? (categoryGroup || {}) : (category || {});
     const modalEntries = Object.entries(modalMap).sort();
 
     return (
@@ -205,11 +172,28 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
           ref={cardRef}
           className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg relative flex flex-col h-[280px] transition-all duration-300"
         >
-          {/* Cabeçalho */}
+          {/* Cabeçalho - Distribuição por Categoria*/}
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-heading dark:text-heading truncate">{title}</h3>
             <div className="flex items-center gap-2 shrink-0">
-              {renderToggle(viewMode, setViewMode)}
+              <SlideToggle
+                options={[
+                  { 
+                    key: 'grouped', 
+                    label: 'Grupo', 
+                    icon: FileStack, 
+                    activeClassName: 'text-warning-400 dark:text-warning-300'
+                  },
+                  { 
+                    key: 'single', 
+                    label: 'Individual', 
+                    icon: FileCode, 
+                    activeClassName: 'text-success-400 dark:text-success-300'
+                  },
+                ]}
+                value={viewMode}
+                onChange={(value) => setViewMode(value)}
+              />
               <button
                 onClick={() => setIsModalOpen(true)}
                 className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -236,12 +220,12 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
             {visibleEntries.length === 0 ? (
               <div className="text-sm text-muted">Sem dados para exibir</div>
             ) : (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-1.5">
                 {visibleEntries.map(([key, value], index) => (
                   <div
                     key={key}
                     ref={itemRef}
-                    className={`flex items-center gap-2 cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 py-1 cursor-pointer transition-colors ${
                       activeCategory === key ? 'text-brand underline' : 'hover:text-brand hover:underline'
                     }`}
                     onClick={(e) => handleClick(key, e)}
@@ -281,10 +265,10 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
                 {hasMoreItems && (
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 cursor-pointer transition-colors text-brand hover:text-brand/80 hover:underline"
+                    className="flex items-center gap-3 cursor-pointer transition-colors text-brand dark:text-white hover:text-brand/80 hover:underline"
                     title="Ver todas as categorias"
                   >
-                    <Maximize2 className="w-3.5 h-3.5" />
+                    <Maximize2 className="w-3 h-3 -ml-0.5" />
                     <span className="text-xs font-semibold">Ver todas ({entries.length})</span>
                   </button>
                 )}
@@ -301,15 +285,24 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className={`bg-white dark:bg-surface border border-default dark:border-strong rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transition-all duration-300 ${
+            className={`bg-surface border border-default dark:border-strong rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transition-all duration-300 ${
               isModalOpen ? 'scale-100' : 'scale-95'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-default dark:border-strong">
+            <div className="flex items-center justify-between p-4 bg-sunken border-b border-default dark:border-strong">
               <h3 className="text-lg font-bold text-heading dark:text-heading">Distribuição por Categoria</h3>
               <div className="flex items-center gap-3">
-                {renderToggle(modalViewMode, setModalViewMode)}
+                <SlideToggle
+                  options={[
+                    { key: 'grouped', label: 'Grupo', icon: FileStack, activeClassName: 'text-warning-400 dark:text-warning' },
+                    { key: 'single', label: 'Individual', icon: FileCode, activeClassName: 'text-success-400 dark:text-success' },
+                  ]}
+                  value={viewMode}
+                  onChange={(value) => setViewMode(value)}
+                  width={200}
+                  height={40}
+                />
                 <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><X className="w-5 h-5 text-muted dark:text-muted" /></button>
               </div>
             </div>
@@ -353,7 +346,7 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
   if (type === 'status' && variant === 'compact') {
     return (
       <div className="bg-elevated border border-default dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg">
-        <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-x-16 gap-6 items-center">
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-heading dark:text-heading uppercase tracking-wide">
               {title}
@@ -368,13 +361,13 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-4 gap-x-6">
             {['open', 'resolved', 'recurring', 'wont_fix'].map((key) => {
               const config = STATUS_CONFIG[key] || { label: key, icon: Eye, color: '#9ca3af', bg: '#f3f4f6' };
               const Icon = config.icon;
               const count = status?.[key] || 0;
               return (
-                <div key={key} className="flex flex-col items-center justify-center p-4 rounded-xl bg-surface text-center">
+                <div key={key} className="flex flex-col items-center justify-center p-4 py-6 rounded-xl bg-elevated dark:bg-surface text-center">
                   <span className="w-9 h-9 flex items-center justify-center rounded-lg mb-2" style={{ backgroundColor: config.bg }}>
                     <Icon className="w-4 h-4" style={{ color: config.color }} />
                   </span>
@@ -394,7 +387,7 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
   // ===================== CARD DE SEVERIDADE (variante padrão) =====================
   return (
     <div className="bg-white dark:bg-surface border border-default dark:border-strong rounded-2xl overflow-hidden shadow-sm hover:drop-shadow-lg h-full flex flex-col">
-      <div className="p-6 pb-4 bg-white dark:bg-surface">
+      <div className="p-6 pb-4 bg-elevated drop-shadow-sm shadow-sm">
         <h3 className="text-lg font-semibold text-heading dark:text-heading">{title}</h3>
         <div className="mt-4">{severityBar()}</div>
         <div className="mt-4 flex items-end justify-between">
@@ -405,7 +398,7 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
           <div className="flex items-center gap-4">{severityLegend()}</div>
         </div>
       </div>
-      <div className="flex-1 grid grid-cols-4 border-t border-gray-200 dark:border-strong bg-gray-100 dark:bg-[#131315]">
+      <div className="flex-1 grid grid-cols-4 border-t-4 border-page-600 bg-surface">
         {renderStatusItem('open')}
         {renderStatusItem('resolved')}
         {renderStatusItem('recurring')}
