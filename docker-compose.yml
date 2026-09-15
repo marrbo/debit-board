@@ -1,62 +1,139 @@
 services:
-  # Banco de dados da aplicação (MongoDB)
-  debitboard-mongo-db:
-    image: mongo:8.0
-    container_name: debitboard-mongo
+  # ============================================================
+  # Aplicação Next.js
+  # ============================================================
+  debitboard-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL}
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    container_name: debitboard-app
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "3001:3000"
+    env_file:
+      - .env.production.local
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root123
-      MONGO_INITDB_DATABASE: sast_platform
+      RUNNING_IN_CONTAINER: true
+      MONGODB_URI: "mongodb://debitboard-mongo-db:27017/debit-board?replicaSet=rs0"
+      KEYCLOAK_ISSUER: "http://debitboard-keycloak:8080/realms/debit-board"
+      NEXTAUTH_URL: "http://localhost:3001"
+      DB_DUMPS_DIR: "/var/lib/debit-board/dumps"
     volumes:
-      - mongo_data:/data/db
-      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - dumps_data:/var/lib/debit-board/dumps
+    depends_on:
+      debitboard-mongo-db:
+        condition: service_healthy
+      debitboard-keycloak:
+        condition: service_started
     networks:
       - debitboard-network
 
-  # Banco de dados do Keycloak (Postgres é mais robusto que H2)
+  # ============================================================
+  # MongoDB — replica set (transações + change streams)
+  # ============================================================
+  debitboard-mongo-db:
+    image: mongo:8.0
+    container_name: debitboard-mongo-db
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: debit-board
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/27017' || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 1
+      start_period: 15s
+    networks:
+      - debitboard-network
+
+  # ============================================================
+  # Postgres para Keycloak
+  # ============================================================
   debitboard-keycloak-db:
     image: postgres:16
     container_name: debitboard-keycloak-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME:-keycloak}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:-keycloak}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:-keycloak} -d ${KEYCLOAK_DB_NAME:-keycloak}"]
+      interval: 60s
+      timeout: 3s
+      retries: 3
     networks:
       - debitboard-network
 
-  # Serviço de Identidade (Keycloak)
+  # ============================================================
+  # Keycloak — import de realm + tema Keycloakify
+  # ============================================================
   debitboard-keycloak:
     image: quay.io/keycloak/keycloak:26.7.2
     container_name: debitboard-keycloak
-    command: start-dev
     restart: unless-stopped
+    command:
+      - "start-dev"
+      - "--http-port=8080"
+      - "--http-management-port=9000"
+      - "--hostname=http://debitboard-keycloak:8080"
+      - "--import-realm"
+      - "--spi-theme-static-max-age=-1"
+      - "--spi-theme-cache-themes=false"
+      - "--spi-theme-cache-templates=false"
     ports:
       - "8080:8080"
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://debitboard-keycloak-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: localhost
-      KEYCLOAKIFY_SPA_DEV_SERVER_PORT: 5173
+      KC_DB_URL: jdbc:postgresql://debitboard-keycloak-db:5432/${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
     volumes:
-      - ./.docker/providers:/opt/keycloak/providers
+      - ./.docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./.docker/keycloak/providers:/opt/keycloak/providers:ro
     depends_on:
-      - debitboard-keycloak-db
+      debitboard-keycloak-db:
+        condition: service_healthy
+    networks:
+      - debitboard-network
+
+  # ============================================================
+  # Backup scheduler — chama /api/cron/backup a cada minuto
+  # ============================================================
+  backup-cron:
+    image: alpine:3.20
+    container_name: debitboard-backup-cron
+    restart: unless-stopped
+    environment:
+      CRON_TOKEN: ${CRON_TOKEN}
+      TZ: "UTC"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo '*/1 * * * * wget -qO- --header="Authorization: Bearer ${CRON_TOKEN}" http://debitboard-app:3000/api/cron/backup > /dev/null 2>&1' > /etc/crontabs/root
+        crond -f -l 2
+    depends_on:
+      - debitboard-app
     networks:
       - debitboard-network
 
 volumes:
   mongo_data:
   postgres_data:
+  dumps_data:
 
 networks:
   debitboard-network:

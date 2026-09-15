@@ -1,3 +1,4 @@
+//app/settings/layout.tsx
 import { getServerAuthSession } from "@/lib/auth-server";
 import SettingsNav from "./SettingsNav";
 

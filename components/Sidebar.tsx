@@ -48,11 +48,11 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-20 bg-surface dark:bg-sunken border-r border-subtle h-screen fixed left-0 top-0 flex flex-col pt-2 pb-2 z-40 items-center overflow-y-auto transition-colors">
+    <aside className="w-20 bg-sunken border-r border-subtle h-screen fixed left-0 top-0 flex flex-col pt-2 pb-2 z-40 items-center overflow-y-auto transition-colors">
       {/* Logo */}
       <div className="align-center flex-col space-y-0 h-[85px]">
         <div className="bg-brand rounded-lg p-2 text-page items-center flex justify-center">
-          <ShieldKeyhole className='w-10 h-10'/>
+          <ShieldKeyhole className='w-10 h-10 text-white'/>
         </div>
         <span className='text-[9px] text-brand font-mono'>debit-board</span>
       </div>
@@ -67,9 +67,9 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-dotted shadow-sm drop-shadow-sm border-brand/5 font-bold' : ''}`}
+              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-dotted shadow-md drop-shadow-md border-brand font-bold' : ''}`}
             >
-              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand w-8 h-8' : 'text-muted'}`} />
+              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`} />
               <span className={`text-center leading-tight group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`}>{item.label}</span>
             </Link>
           );
@@ -86,9 +86,9 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-brand bg-page font-bold'   : ''}`}
+              className={`flex flex-col items-center justify-center py-3 px-1 group hover:bg-sunken m-2 rounded-xl text-[9px] font-medium transition-colors w-full ${isActive ? 'border border-dotted shadow-md drop-shadow-md border-brand font-bold' : ''}`}
             >
-              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand w-8 h-8' : 'text-muted'}`} />
+              <item.icon className={`w-6 h-6 mb-1 group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`} />
               <span className={`text-center leading-tight group-hover:text-link ${isActive ? 'text-brand' : 'text-muted'}`}>{item.label}</span>
             </Link>
           );
@@ -106,7 +106,7 @@ export default function Sidebar() {
         <div className="w-full">
           <button
             onClick={() => setIsAccountOpen(!isAccountOpen)}
-            className="flex flex-col items-center group justify-center text-[9px] font-medium text-muted hover:text-link hover:opacity-50 transition-colors w-full cursor-pointer"
+            className="flex flex-col items-center group justify-center text-[9px] font-medium transition-colors w-full"
           >
             <Image 
               src={getAvatarUrl()} 
@@ -147,7 +147,7 @@ export default function Sidebar() {
                 <Link
                   href="/settings/profile/user"
                   onClick={() => setIsAccountOpen(false)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7] transition-colors"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors"
                 >
                   <UserCog2 className="w-4 h-4" /> User Settings
                 </Link>
@@ -155,14 +155,14 @@ export default function Sidebar() {
                 {isImpersonating ? (
                   <button
                     onClick={handleUnimpersonate}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[#FF453A] hover:bg-[#2C2C2E] hover:text-[#FF453A] transition-colors text-left w-full"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-error hover:text-error transition-colors text-left w-full"
                   >
                     <UserMinus className="w-4 h-4" /> Stop Impersonating
                   </button>
                 ) : (
                   <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[#8E8E93] hover:bg-[#2C2C2E] hover:text-[#F5F5F7] transition-colors text-left w-full"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted transition-colors text-left w-full"
                   >
                     <DoorOpen className="w-4 h-4" /> Sign Out
                   </button>

@@ -1,36 +1,36 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { settingsMenuGroups } from '@/lib/settingsMenu';
+import { useLocalSetting } from "@/hooks/useLocalSettings";
 
 export default function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-
+  const [settingsNav, setSettingsNav] = useLocalSetting("settingsNav");
+  
   return (
     <div
       className={`relative flex flex-col h-full transition-all duration-300 ease-in-out bg-sunken dark:bg-black/20 text-heading border-r border-strong ${
-        collapsed ? 'w-4' : 'w-76'
+        settingsNav ? 'w-4' : 'w-76'
       }`}
     >
       {/* 🔥 Botão estilo DeepSeek no topo direito */}
-      <div className={`absolute top-5 z-20 bg-sunken p-1 rounded-sm transition-all ${collapsed ? '-right-3.5' : 'right-3'}`}>
+      <div className={`absolute top-5 z-20 bg-sunken p-1 rounded-sm transition-all ${settingsNav ? '-right-3.5' : 'right-3'}`}>
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => setSettingsNav(!settingsNav)}
           className={`flex items-center justify-center w-5 h-5 rounded-lg  text-apple-card-dark hover:text-brand transition-all ${
-            collapsed ? 'bg-sunken' : ''
+            settingsNav ? 'bg-sunken' : ''
           }`}
-          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          title={settingsNav ? 'Expandir menu' : 'Recolher menu'}
         >
-          {collapsed ? <PanelLeftOpen className="w-6 h-6" /> : <PanelLeftClose className="w-6 h-6" />}
+          {settingsNav ? <PanelLeftOpen className="w-6 h-6" /> : <PanelLeftClose className="w-6 h-6" />}
         </button>
       </div>
 
       {/* Conteúdo do menu */}
-      {!collapsed ? (
+      {!settingsNav ? (
         <div className="flex-1 overflow-y-auto py-6 pr-10 pl-4">
           <div className="space-y-4">
             {settingsMenuGroups.map((group) => {

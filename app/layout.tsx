@@ -1,12 +1,13 @@
 // app/layout.tsx
-import type { Metadata } from 'next';
-import './globals.css';
-import { Providers } from './providers';
-import AppShell from '@/components/AppShell';
+import type { Metadata } from "next";
+import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
+import "./globals.css";
+import { Providers } from "./providers";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: 'DebitBoard',
-  description: 'SAST & Observabilidade',
+  title: "DebitBoard",
+  description: "SAST & Observabilidade",
 };
 
 export default function RootLayout({
@@ -15,9 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // 🔹 suppressHydrationWarning evita flashes de luz brancos ao carregar o modo escuro salvo
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="min-h-screen bg-surface/80 dark:bg-surface flex flex-col">
+      <body className="min-h-screen bg-surface/80 dark:bg-surface flex flex-col transition-all">
+        {/* Aplica a classe .dark/.light ANTES da hidratação, sem flicker */}
+        <InitColorSchemeScript attribute="class" />
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

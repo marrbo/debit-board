@@ -19,9 +19,12 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get('teamId');
+  
   const range = searchParams.get('range') || '30d';
   const dbqlId = searchParams.get('q');
   const searchQueryRaw = searchParams.get('search') || '';
+
+  searchParams.keys().toArray().join('&')
 
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
@@ -98,6 +101,7 @@ export async function GET(req: NextRequest) {
   ];
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
+
 
   // 4.1 - Agrupamento por categoria e patternId (somente com patternId válido)
   const categoryPipeline = [

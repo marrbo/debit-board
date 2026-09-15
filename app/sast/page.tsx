@@ -21,6 +21,7 @@ const columns: Column<SASTScanRow>[] = [
   {
     key: 'scanDate',
     label: 'Data',
+    align: 'center',
     sortable: true,
     render: (item) => (item.scanDate ? new Date(item.scanDate).toLocaleString('pt-BR') : '—'),
   },
@@ -28,6 +29,9 @@ const columns: Column<SASTScanRow>[] = [
     key: 'status',
     label: 'Status',
     sortable: true,
+    align: 'center',
+    minWidth: '200px',
+    headerClassName: 'text-center align-center!',
     render: (item) => {
       const config = {
         completed: { label: 'Concluído', className: 'text-emerald-400' },
@@ -44,7 +48,9 @@ const columns: Column<SASTScanRow>[] = [
     key: 'totalOccurrences',
     label: 'Ocorrências',
     sortable: true,
-    align: 'right',
+    align: 'center',
+    minWidth: '200px',
+    headerClassName: 'text-center align-center',
     render: (item) => item.totalOccurrences || 0,
   },
   {
@@ -52,6 +58,8 @@ const columns: Column<SASTScanRow>[] = [
     label: 'Padrões',
     sortable: true,
     align: 'center',
+    minWidth: '200px',
+    headerClassName: 'text-center align-center',
     render: (item) => item.patternCount || 0,
   },
   {
@@ -59,6 +67,8 @@ const columns: Column<SASTScanRow>[] = [
     label: 'Falhas',
     sortable: true,
     align: 'center',
+    minWidth: '200px',
+    headerClassName: 'text-center align-center text-center',
     render: (item) => item.failedPatterns || 0,
   },
 ];
@@ -165,9 +175,6 @@ function SASTScansContent() {
         columns={columns}
         defaultSort={{ field: 'scanDate', order: 'desc' }}
         defaultLimit={10}
-        searchPlaceholder="Buscar scans..."
-        searchContext="sast-scans"
-        userId={session.user.id}
         selectable={false}
         onRowClick={() => {}}
       />

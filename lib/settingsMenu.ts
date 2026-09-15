@@ -7,7 +7,8 @@ import {
   SquareAsterisk,
   DatabaseSearch,
   UserCog2,
-  UsersIcon
+  UsersIcon,
+  Database
 } from 'lucide-react';
 
 // Itens comuns
@@ -25,6 +26,11 @@ export const adminMenuItems = [
   { href: '#', label: 'Integrations (Azure)', icon: Puzzle },
   { href: '#', label: 'Auth (OpenID)', icon: ShieldCheck },
   { href: '/settings/admin', label: 'Admin', icon: UserCog },
+  {
+      label: "Backup & Restore",
+      href: "/settings/admin/db-tools",
+      icon: Database,
+    },
 ];
 
 // Grupos (exportação obrigatória)

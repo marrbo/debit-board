@@ -1,0 +1,55 @@
+# ============================================================
+# Extends do docker-compose.yml para desenvolvimento
+# ============================================================
+# REGRA DE PATH: todos os paths relativos neste arquivo são
+# resolvidos a partir do PROJECT DIRECTORY (a pasta do primeiro
+# `-f docker-compose.yml`), que é a raiz do projeto.
+# NÃO usar `..` — ele sobe para o diretório-pai, não para `.devcontainer/`.
+# ============================================================
+
+services:
+  debitboard-app:
+    build:
+      # Sem `context:` — herda o `context: .` do docker-compose.yml base
+      dockerfile: .devcontainer/Dockerfile.dev
+    container_name: debitboard-app-dev
+    restart: unless-stopped
+    env_file:
+      - .env.production.local
+    environment:
+      MONGODB_URI: mongodb://debitboard-mongo-db:27017/debit-board?replicaSet=rs0&directConnection=true
+      KEYCLOAK_ISSUER: "http://debitboard-keycloak:8080/realms/debit-board"
+      NEXTAUTH_URL: "http://localhost:3001"
+      DB_DUMPS_DIR: "/var/lib/debit-board/dumps"
+      WATCHPACK_POLLING: "true"
+      # 🔥 NÃO definir NODE_OPTIONS aqui.
+      #    O VS Code Server herda essa env e tenta abrir o inspector na 9229,
+      #    colidindo com o `next dev`. O `dev:docker` já passa `--inspect` só
+      #    para o processo do Next.
+    ports: !override
+      - "3001:3001"
+      - "9229:9229"
+    volumes:
+      # 🔥 `.` e não `..` — resolvido a partir do project dir (raiz do projeto)
+      - .:/src:cached
+      - ./.devcontainer/env.development.local:/src/.env.development.local:ro
+      # node_modules e .next ficam em volumes nomeados (isolados do host)
+      - dev_node_modules:/src/node_modules
+      - dev_next_cache:/src/.next
+      - dumps_data:/var/lib/debit-board/dumps
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      debitboard-mongo-db:
+        condition: service_healthy
+      debitboard-keycloak:
+        condition: service_started
+    networks:
+      - debitboard-network
+    command: sleep infinity
+
+volumes:
+  dev_node_modules:
+  dev_next_cache:

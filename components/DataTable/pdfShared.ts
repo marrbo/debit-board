@@ -1,6 +1,7 @@
 // lib/pdf/shared.ts
-import { jsPDF } from "jspdf";
+import type { jsPDF } from "jspdf";
 import React from "react";
+import { DEBIT_BOARD_LOGO_BASE64 } from "../../components/DataTable/logo";
 
 // ============================================================
 // Extração de texto de elementos React ou valores primitivos
@@ -29,7 +30,7 @@ export function extractText(value: any): string {
 }
 
 // ============================================================
-// Desenho do ícone ShieldKeyhole (usado no cabeçalho)
+// Desenho do ícone ShieldKeyhole em vetor (Fallback visual)
 // ============================================================
 export function drawShieldKeyhole(
   doc: jsPDF,
@@ -66,47 +67,53 @@ export function drawShieldKeyhole(
 }
 
 // ============================================================
-// Cabeçalho padrão para todos os relatórios
+// Cabeçalho padrão para todos os relatórios PDF
 // ============================================================
 export interface PDFHeaderOptions {
   title: string;
   subtitle?: string;
   generatedAt?: Date;
   showLogo?: boolean;
+  logoBase64?: string;
   logoColor?: string;
 }
 
 export function generateHeader(doc: jsPDF, options: PDFHeaderOptions) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 8;
-  const headerHeight = 20;
+  const headerHeight = 22;
 
-  doc.setFillColor(30, 41, 59);
+  // Banner superior azul --brand-default: #0056b3 -> RGB (0, 86, 179)
+  doc.setFillColor(0, 86, 179);
   doc.rect(0, 0, pageWidth, headerHeight, "F");
 
+  // Renderização da Logo (Base64 PNG ou Vetor ShieldKeyhole)
+  const activeLogo = options.logoBase64 || DEBIT_BOARD_LOGO_BASE64;
+
   if (options.showLogo !== false) {
-    drawShieldKeyhole(doc, 9, 4, 12, options.logoColor || "#FFFFFF");
+    if (activeLogo) {
+      const cleanBase64 = activeLogo.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+      doc.addImage(cleanBase64, "PNG", 0, 0, 18, 22);
+    } else {
+      drawShieldKeyhole(doc, 0, 0, 20, options.logoColor || "#FFFFFF");
+    }
   }
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  const textX = options.showLogo !== false ? 40 : 8;
+
+  // Título principal (--text-body dark: #f1f5f9 -> RGB 241, 245, 249)
+  doc.setTextColor(241, 245, 249);
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text(options.title, 25, 10);
+  doc.text(options.title, textX, 10);
 
+  // Subtítulo e timestamp (--text-muted: #e2e8f0 -> RGB 226, 232, 240)
+  const timestamp = (options.generatedAt || new Date()).toLocaleString("pt-BR");
+  const subtitleText = `${options.subtitle || "Debit Board - Relatório de Dados"} | Gerado em: ${timestamp}`;
+
+  doc.setTextColor(226, 232, 240);
   doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    `Gerado em: ${(options.generatedAt || new Date()).toLocaleString("pt-BR")}`,
-    pageWidth - margin,
-    10,
-    { align: "right" }
-  );
-
-  if (options.subtitle) {
-    doc.setTextColor(148, 163, 184);
-    doc.setFontSize(9);
-    doc.text(options.subtitle, 25, 15);
-  }
+  doc.setFont("helvetica", "italic");
+  doc.text(subtitleText, textX, 16);
 }
 
 // ============================================================

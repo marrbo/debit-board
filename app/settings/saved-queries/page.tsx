@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useMemo, useCallback } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable, type Column } from "@/components/DataTable";
+import { useFeedback } from "@/hooks/useFeedback";
 import type { ISavedQuery } from "@/types/ISavedQuery";
 
-// ----------------------------------------------------------------------------
-// Tipos auxiliares para o formulário
-// ----------------------------------------------------------------------------
+// ============================================================
+// Tipos
+// ============================================================
 type SavedQueryForm = {
   name: string;
   queryString: string;
@@ -26,34 +27,59 @@ type SavedQueryForm = {
   visibility: ISavedQuery["visibility"];
 };
 
-const emptyForm: SavedQueryForm = {
+const EMPTY_FORM: SavedQueryForm = {
   name: "",
   queryString: "",
   context: "repositories",
   visibility: "private",
 };
 
+const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
+  temporary: <TimerReset size={20} className="text-muted" />,
+  private: <FolderLock size={20} className="text-muted" />,
+  public: <Globe size={20} className="text-muted" />,
+  shared: <Share2 size={20} className="text-muted" />,
+};
+
+// ============================================================
+// Conteúdo
+// ============================================================
 function SavedQueriesContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast, confirm } = useFeedback();
 
-  // Estado do modal
+  // Busca client-side (padrão SimpleColumnSearch)
+  const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [filterValue, setFilterValue] = useState("");
+
+  // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<SavedQueryForm>(emptyForm);
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<SavedQueryForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Handlers memoizados
+  // ============================================================
+  // Handlers
+  // ============================================================
+  const handleSimpleSearch = useCallback(
+    (column: string | null, value: string) => {
+      setFilterColumn(column);
+      setFilterValue(value);
+    },
+    [],
+  );
+
   const handleOpenCreate = useCallback(() => {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm(EMPTY_FORM);
     setIsModalOpen(true);
   }, []);
 
   const handleOpenEdit = useCallback((item: ISavedQuery) => {
-    setEditingId(item._id as unknown as string);
+    setEditingId(String(item._id));
     setForm({
       name: item.name,
       queryString: item.queryString,
@@ -63,72 +89,82 @@ function SavedQueriesContent() {
     setIsModalOpen(true);
   }, []);
 
-  const handleDelete = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) return;
-    
-    const message =
-      ids.length === 1
-        ? "Tem certeza que deseja excluir esta consulta salva?"
-        : `Tem certeza que deseja excluir ${ids.length} consultas salvas?`;
+  const handleDelete = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
 
-    if (!confirm(message)) return;
-
-    try {
-      const res = await fetch(`/api/saved-query?ids=${ids.join(',')}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        alert(
+      const ok = await confirm({
+        title:
           ids.length === 1
-            ? "Consulta excluída com sucesso!"
-            : `${ids.length} consultas excluídas com sucesso!`
-        );
-        // ✅ Incrementa refreshKey para forçar o DataTable a recarregar
-        setRefreshKey((prev) => prev + 1);
-      } else {
-        const err = await res.json();
-        alert("Erro ao excluir: " + (err.error || "Erro desconhecido"));
-      }
-    } catch {
-      alert("Erro de rede ao excluir.");
-    }
-  }, []);
+            ? "Excluir consulta salva?"
+            : `Excluir ${ids.length} consultas salvas?`,
+        message:
+          ids.length === 1
+            ? "Esta ação não pode ser desfeita."
+            : `As ${ids.length} consultas selecionadas serão removidas permanentemente.`,
+        confirmLabel: "Excluir",
+        variant: "danger",
+      });
+      if (!ok) return;
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
       try {
-        const url = editingId ? `/api/saved-query` : `/api/saved-query`;
-        const method = editingId ? "PUT" : "POST";
-        const body = editingId ? { id: editingId, ...form } : form;
-
-        const res = await fetch(url, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+        const res = await fetch(`/api/saved-query?ids=${ids.join(",")}`, {
+          method: "DELETE",
         });
 
         if (res.ok) {
-          alert(editingId ? "Consulta atualizada!" : "Consulta criada!");
-          setIsModalOpen(false);
-          // ✅ Incrementa refreshKey para recarregar a tabela
+          const data = await res.json();
+          toast.success(
+            ids.length === 1
+              ? "Consulta excluída."
+              : `${data.deleted ?? ids.length} consultas excluídas.`,
+          );
           setRefreshKey((prev) => prev + 1);
         } else {
-          const err = await res.json();
-          alert("Erro: " + (err.error || "Erro desconhecido"));
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || "Erro ao excluir consultas.");
         }
-      } catch (error) {
-        alert("Erro de rede ao salvar.");
-      } finally {
-        setLoading(false);
+      } catch {
+        toast.error("Erro de rede ao excluir.");
       }
     },
-    [editingId, form],
+    [confirm, toast],
   );
 
-  // Colunas geradas dentro do componente (acesso aos handlers)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const url = "/api/saved-query";
+      const method = editingId ? "PUT" : "POST";
+      const body = editingId ? { id: editingId, ...form } : form;
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        toast.success(
+          editingId ? "Consulta atualizada." : "Consulta criada.",
+        );
+        setIsModalOpen(false);
+        setRefreshKey((prev) => prev + 1);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Erro ao salvar consulta.");
+      }
+    } catch {
+      toast.error("Erro de rede ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // Colunas
+  // ============================================================
   const columns = useMemo<Column<ISavedQuery>[]>(
     () => [
       { key: "name", label: "Nome", sortable: true },
@@ -136,7 +172,8 @@ function SavedQueriesContent() {
         key: "queryString",
         label: "Query",
         sortable: false,
-        render: (item: ISavedQuery) => (
+        exportable: true,
+        render: (item) => (
           <span className="block max-w-[300px] truncate text-xs font-mono">
             {item.queryString}
           </span>
@@ -148,7 +185,7 @@ function SavedQueriesContent() {
         sortable: true,
         align: "center",
         width: "120px",
-        render: (item: ISavedQuery) => (
+        render: (item) => (
           <span className="px-2 py-1 rounded-full bg-apple-tertiary-light/10 text-xs font-medium font-mono">
             {item.context}
           </span>
@@ -160,17 +197,9 @@ function SavedQueriesContent() {
         width: "100px",
         sortable: true,
         align: "center",
-        render: (item: ISavedQuery) => (
+        render: (item) => (
           <div className="flex justify-center items-center">
-            {item.visibility === "temporary" ? (
-              <TimerReset size={20} className="text-muted" />
-            ) : item.visibility === "private" ? (
-              <FolderLock size={20} className="text-muted" />
-            ) : item.visibility === "public" ? (
-              <Globe size={20} className="text-muted" />
-            ) : (
-              <Share2 size={20} className="text-muted" />
-            )}
+            {VISIBILITY_ICONS[item.visibility] ?? null}
           </div>
         ),
       },
@@ -179,21 +208,24 @@ function SavedQueriesContent() {
         label: "Criado em",
         sortable: true,
         width: "120px",
-        className:
-          "text-sm text-center text-heading dark:text-heading",
-        render: (item: ISavedQuery) =>
-          new Date(item.createdAt).toLocaleDateString(),
+        className: "text-sm text-center text-heading dark:text-heading",
+        render: (item) => new Date(item.createdAt).toLocaleDateString("pt-BR"),
       },
       {
         key: "actions",
         label: "Ações",
         sortable: false,
         width: "80px",
-        render: (item: ISavedQuery) => (
+        exportable: false,
+        render: (item) => (
           <div className="flex justify-center">
             <button
-              onClick={() => handleOpenEdit(item)}
-              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-brand"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenEdit(item);
+              }}
+              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-brand transition-colors"
               title="Editar"
             >
               <Pencil className="w-4 h-4" />
@@ -205,19 +237,32 @@ function SavedQueriesContent() {
     [handleOpenEdit],
   );
 
-  if (status === "loading")
-    return <div className="py-10 text-center">Carregando...</div>;
-
+  // ============================================================
+  // Guards
+  // ============================================================
+  if (status === "loading") {
+    return <div className="py-10 text-center text-muted">Carregando...</div>;
+  }
   if (!session) {
     router.push("/login");
     return null;
   }
 
+  // ============================================================
+  // Render
+  // ============================================================
   return (
     <div className="w-full space-y-4">
       <PageHeader
         title="Consultas Salvas"
         subtitle="Gerencie suas consultas DBQL reutilizáveis."
+        search={{
+          type: "simple",
+          onSearch: handleSimpleSearch,
+          userId: session?.user?._id?.toString() || session?.user?.id,
+          columns: columns.map((c) => ({ key: c.key, label: c.label })),
+          placeholder: "Buscar por nome, contexto, query...",
+        }}
         actions={
           <button
             onClick={handleOpenCreate}
@@ -228,45 +273,32 @@ function SavedQueriesContent() {
         }
       />
 
-      <DataTable
+      <DataTable<ISavedQuery>
         endpoint="/api/saved-query"
         columns={columns}
         defaultSort={{ field: "createdAt", order: "desc" }}
         defaultLimit={10}
-        searchPlaceholder="Buscar consultas (ex: name:minha-query OR context:repositories)"
-        searchContext="none"
         pdfTitle="Consultas Salvas"
-        userId={session.user.id}
         refreshKey={refreshKey}
-        selectable={true}
-        canDelete={session.user.email === 'ayslanjohnson@debitboard.com'}
-        onDelete={(ids) => handleDelete(ids)}
-        // actions={[
-        //   {
-        //     label: 'Atribuir',
-        //     icon: <UserPlus className="w-4 h-4" />,
-        //     onClick: (ids, items) => handleAssign(ids, items),
-        //     requiresSelection: true,
-        //   },
-        //   {
-        //     label: 'Mudar Status',
-        //     icon: <RefreshCw className="w-4 h-4" />,
-        //     onClick: (ids, items) => handleStatusChange(ids, items),
-        //   },
-        // ]}
+        selectable
+        canDelete={!!session.user.isAdmin}
+        onDelete={handleDelete}
+        onRowClick={handleOpenEdit}
+        filterColumn={filterColumn}
+        filterValue={filterValue}
       />
 
-      {/* Modal de Criação/Edição */}
+      {/* Modal Criar/Editar */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-surface rounded-2xl p-6 w-full max-w-lg shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-surface border border-default dark:border-strong rounded-2xl p-6 w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
+              <h2 className="text-lg font-semibold text-heading dark:text-heading">
                 {editingId ? "Editar Consulta" : "Nova Consulta"}
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-apple-tertiary-light/10"
+                className="p-1 rounded-lg hover:bg-apple-tertiary-light/10 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -274,18 +306,21 @@ function SavedQueriesContent() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Nome</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
+                  Nome
+                </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand"
+                  className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   required
+                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
                   Query String
                 </label>
                 <textarea
@@ -293,7 +328,7 @@ function SavedQueriesContent() {
                   onChange={(e) =>
                     setForm({ ...form, queryString: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                  className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 font-mono text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   rows={4}
                   required
                 />
@@ -301,7 +336,7 @@ function SavedQueriesContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
                     Contexto
                   </label>
                   <select
@@ -312,7 +347,7 @@ function SavedQueriesContent() {
                         context: e.target.value as ISavedQuery["context"],
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading"
                   >
                     <option value="observations">Observations</option>
                     <option value="projects">Projects</option>
@@ -322,7 +357,7 @@ function SavedQueriesContent() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
                     Visibilidade
                   </label>
                   <select
@@ -333,7 +368,7 @@ function SavedQueriesContent() {
                         visibility: e.target.value as ISavedQuery["visibility"],
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading"
                   >
                     <option value="private">Private</option>
                     <option value="shared">Shared</option>
@@ -343,20 +378,20 @@ function SavedQueriesContent() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-6">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-apple-tertiary-light/10 hover:bg-gray-200"
+                  className="px-4 py-2 text-sm rounded-xl text-muted hover:text-heading transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:bg-brand/80 disabled:opacity-50"
+                  disabled={saving}
+                  className="px-4 py-2 text-sm rounded-xl bg-brand text-white hover:bg-brand/80 disabled:opacity-50 transition-colors"
                 >
-                  {loading ? "Salvando..." : "Salvar"}
+                  {saving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
@@ -371,7 +406,7 @@ export default function SavedQueriesPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-muted dark:text-muted">
+        <div className="py-12 text-center text-muted">
           Carregando página de consultas salvas...
         </div>
       }

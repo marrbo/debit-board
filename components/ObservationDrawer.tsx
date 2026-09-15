@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { X, ExternalLink, Database, Shield, Link as LinkIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { X, ExternalLink, Database, Shield, LinkIcon } from 'lucide-react';
+// import { format } from 'date-fns';
+// import { ptBR } from 'date-fns/locale';
 import AssigneeSelect from './AssigneeSelect';
 import MarkdownRenderer from './MarkdownRenderer';
 import ScoreGauge from './ScoreGauge';
@@ -19,10 +19,10 @@ export interface ObservationDrawerProps {
   onUpdateAssignee: (issueId: string, assignedTo: string | null) => void;
 }
 
-function formatDate(date?: string | Date): string {
-  if (!date) return '—';
-  return format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: ptBR });
-}
+// function formatDate(date?: string | Date): string {
+//   if (!date) return '—';
+//   return format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+// }
 
 export default function ObservationDrawer({
   observation,
@@ -49,14 +49,14 @@ export default function ObservationDrawer({
     assignedTo,
     _id,
     pattern,
-    firstSeen,
-    lastSeen,
+    // firstSeen,
+    // lastSeen,
   } = observation;
 
   const affectedBy = pattern?.name || '—';
-  const detectedAt = firstSeen ? formatDate(firstSeen) : '—';
-  const lastSeenAt = lastSeen ? formatDate(lastSeen) : null;
-  const showLastSeen = lastSeen && firstSeen && new Date(lastSeen).getTime() !== new Date(firstSeen).getTime();
+  // const detectedAt = firstSeen ? formatDate(firstSeen) : '—';
+  // const lastSeenAt = lastSeen ? formatDate(lastSeen) : null;
+  // const showLastSeen = lastSeen && firstSeen && new Date(lastSeen).getTime() !== new Date(firstSeen).getTime();
 
   const score = pattern?.score ?? 95;
   const description = pattern?.description || 'Sem descrição fornecida.';
@@ -64,7 +64,7 @@ export default function ObservationDrawer({
 
   // IDs e links externos
   const externalId = `DB-${_id.toString().slice(-6).toUpperCase()}`;
-  const patternExternalId = pattern?._id ? `DB-PAT-${pattern._id.toString().slice(-8).toUpperCase()}` : '';
+  // const patternExternalId = pattern?._id ? `DB-PAT-${pattern._id.toString().slice(-8).toUpperCase()}` : '';
   const externalOWASPId = pattern?.externalId || '';
   const externalOWASPLink = pattern?.externalLink || '';
   const externalCWEId = pattern?.externalIdCWE || '';
@@ -90,7 +90,7 @@ export default function ObservationDrawer({
         }`}
       >
         {/* Header com gauge à direita */}
-        <div className="p-10 pb-8 border-b border-gray-800">
+        <div className="p-10 pb-4 border-b border-gray-800">
           <div className="flex items-start">
 
             <div className="flex-1 min-w-0 gap-5">
@@ -105,8 +105,8 @@ export default function ObservationDrawer({
 
               <div className="flex items-start justify-between pb-3">
                 <div className="min-w-0">
-                  <h3 className="text-xl font-bold text-white truncate pb-2">{fileName}</h3>
-                  <p className="text-xs text-gray-400 mt-0.5 font-mono italic truncate">{filePath}</p>
+                  <h3 className="text-xl font-bold text-white truncate pb-0.5">{fileName}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono max-w-sm italic">{filePath}</p>
                 </div>
               </div>
 
@@ -135,10 +135,18 @@ export default function ObservationDrawer({
                     <Database className="w-3.5 h-3.5" /> Azure DevOps Search Code
                   </span>
                 </div>
+                <div className="grid grid-cols-4 gap-2 items-center">
+                  <span className="text-gray-500">Detalhes:</span>
+                  <span className="text-gray-200 col-span-3 flex items-center gap-1">
+                    <a href={`/observations/${_id}`} target="_self" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline">
+                      <ExternalLink className="w-3 h-3" /> Mais detalhes
+                    </a>
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className="shrink-0 pt-10 pr-5">
+            </div>
+            <div className="shrink-0 pt-28 pr-5">
               <ScoreGauge score={score * 10.0} size={90} />
             </div>
           </div>
@@ -229,21 +237,7 @@ export default function ObservationDrawer({
               {/* Dados do Problema */}
               <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800">
                 <h4 className="text-xs font-semibold uppercase text-gray-500 mb-3">Referência:</h4>
-                {/* <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-[10px] uppercase text-gray-500">ID</span>
-                    <p className="text-sm text-white font-mono">{patternExternalId || '—'}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase text-gray-500">Category</span>
-                    <p className="text-sm text-white">{pattern?.category || category || '—'}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-[10px] uppercase text-gray-500">Name</span>
-                    <p className="text-sm text-white font-medium">{pattern?.name || '—'}</p>
-                  </div>
-                </div> */}
-
+                
                 {/* Links OWASP / CWE */}
                 {(externalOWASPId || externalCWEId) && (
                   <div className="mt-4 space-y-2">

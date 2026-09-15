@@ -4,6 +4,16 @@ import type { SearchItem } from './types';
 import { useSession } from 'next-auth/react';
 import type mongoose from 'mongoose';
 
+export const isContainer = (process.env.RUNNING_IN_CONTAINER ?? false) === 'true' ;
+export const isLocalHost = process.env.NODE_ENV === 'development' && !isContainer;
+
+export function getMongoUri() {
+  return isLocalHost ? process.env.MONGODB_URI_LOCAL : process.env.MONGODB_URI
+}
+
+export function getNextAuthUrl() {
+  return isLocalHost ? process.env.NEXTAUTH_URL_LOCAL : process.env.NEXTAUTH_URL
+}
 
 export function useClientSessionIds(): {
   userId: string;

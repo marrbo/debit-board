@@ -22,7 +22,9 @@ interface GenericGetOptions<T> {
   customPipeline?: PipelineStage[];
   additionalMatch?: Record<string, unknown>;
   overrideSearchQuery?: string;
-  all?: boolean; // ✅ suporta exportação de todos os dados
+  all?: boolean;
+  /** 🔥 Recursos globais (ex.: VulnerabilityPattern) não possuem tenantId. */
+  skipTenantFilter?: boolean;
 }
 
 export async function handleGenericGet<T>(
@@ -37,6 +39,7 @@ export async function handleGenericGet<T>(
     additionalMatch = {},
     overrideSearchQuery,
     all = false,
+    skipTenantFilter = false, // 🔥 default: comportamento atual
   } = options;
 
   const sessionIds = await getServerSessionIds();
@@ -46,7 +49,6 @@ export async function handleGenericGet<T>(
 
   const { searchParams } = new URL(req.url);
 
-  // Prioridade: override (banco) -> URL param -> vazio
   const searchQuery = overrideSearchQuery || searchParams.get('search') || '';
 
   const page = parseInt(searchParams.get('page') || '1', 10);
@@ -54,9 +56,9 @@ export async function handleGenericGet<T>(
   const sortField = searchParams.get('sort') || defaultSort;
   const sortOrder = searchParams.get('order') === 'asc' ? 1 : -1;
 
-  // Monta o match base
+  // Match base
   const baseMatch: Record<string, unknown> = { ...additionalMatch };
-  if (tenantId) {
+  if (tenantId && !skipTenantFilter) {
     baseMatch.tenantId = tenantId;
   }
 
@@ -80,7 +82,7 @@ export async function handleGenericGet<T>(
     finalMatch = baseMatch;
   }
 
-  // Se all=true, ignora paginação e retorna todos os documentos
+  // all=true → ignora paginação
   if (all) {
     const pipeline: PipelineStage[] = [
       { $match: finalMatch },
@@ -99,7 +101,7 @@ export async function handleGenericGet<T>(
     });
   }
 
-  // Pipeline com paginação (facet)
+  // Pipeline com paginação
   const pipeline: PipelineStage[] = [
     { $match: finalMatch },
     ...customPipeline,

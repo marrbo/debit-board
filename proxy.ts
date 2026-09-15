@@ -3,20 +3,44 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as Sentry from "@sentry/nextjs";
+import { getNextAuthUrl } from "./lib/utils";
 
 export async function proxy(request: NextRequest) {
+  // if (process.env.NODE_ENV !== "production") {
+  //   console.log("[proxy]", {
+  //     hasSecret: !!process.env.NEXTAUTH_SECRET,
+  //     secretLen: process.env.NEXTAUTH_SECRET?.length ?? 0,
+  //     nextauthUrl: process.env.NEXTAUTH_URL,
+  //     host: request.headers.get("host"),
+  //     cookieNames: request.cookies.getAll().map((c) => c.name),
+  //   });
+
+  //   console.log("[proxy-headers]", {
+  //     host: request.headers.get("host"),
+  //     xForwardedProto: request.headers.get("x-forwarded-proto"),
+  //     xForwardedHost: request.headers.get("x-forwarded-host"),
+  //     xForwardedFor: request.headers.get("x-forwarded-for"),
+  //   });
+  // }
+
   const { pathname } = request.nextUrl;
 
   // --- INJEÇÃO DE INSTRUÇÕES (SENTRY E BASEURL) ---
-  const host = request.headers.get('host') || 'localhost:3000';
-  // const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+  const host = request.headers.get('host') || 'localhost:3001';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
   
   // Registra a métrica no Sentry para todas as requisições que passam pelo middleware
   Sentry.metrics.count(pathname, 1);
 
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  const NEXTAUTH_URL = getNextAuthUrl();
+  const useSecureCookie = (NEXTAUTH_URL ?? "").startsWith("https://");
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+    secureCookie: useSecureCookie,
+  });
   const isLoggedIn = !!token;
   const isAdmin = token?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   const tenantId = token?.tenantId;

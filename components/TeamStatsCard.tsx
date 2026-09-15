@@ -11,6 +11,9 @@ import {
   FileCode
 } from 'lucide-react';
 import SlideToggle from './SlideToggle';
+import { usePathname } from "next/navigation";
+import { useSlideToggle } from "@/hooks/useLocalSettings";
+import { createPortal } from 'react-dom';
 
 interface TeamStatsCardProps {
   type: 'status' | 'category';
@@ -57,37 +60,172 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   wont_fix:   { label: 'Não Corrigir', icon: ShieldX,      color: '#000000', bg: '#f3f4f6' },
 };
 
+interface CategoryPopupProps {
+  anchor: { top: number; left: number; right: number; bottom: number };
+  categoryKey: string;
+  value: number;
+  viewMode: 'grouped' | 'single';
+  details: Record<string, number>;
+  popupRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const POPUP_WIDTH = 384;
+const POPUP_MARGIN = 12;
+
+function CategoryPopup({
+  anchor,
+  categoryKey,
+  value,
+  viewMode,
+  details,
+  popupRef,
+}: CategoryPopupProps) {
+  const { top, left, right } = anchor;
+
+  // Decide a posição horizontal: preferir alinhar com a esquerda do item.
+  // Se estourar à direita, alinha à direita do item.
+  // Se estourar em ambos, centraliza na viewport.
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 768;
+
+  const spaceRight = viewportW - left;
+  const spaceLeft = right;
+
+  let horizontal: 'left' | 'right' | 'center';
+  if (spaceRight >= POPUP_WIDTH + POPUP_MARGIN) {
+    horizontal = 'left';
+  } else if (spaceLeft >= POPUP_WIDTH + POPUP_MARGIN) {
+    horizontal = 'right';
+  } else {
+    horizontal = 'center';
+  }
+
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    width: POPUP_WIDTH,
+    zIndex: 9999,
+  };
+
+  // Vertical: abre acima do item por padrão; se não couber, abre abaixo
+  const estimatedHeight = 320;
+  const openBelow = top < estimatedHeight + POPUP_MARGIN;
+
+  if (openBelow) {
+    style.top = anchor.bottom + POPUP_MARGIN;
+  } else {
+    style.bottom = viewportH - top + POPUP_MARGIN;
+  }
+
+  if (horizontal === 'left') {
+    style.left = Math.max(POPUP_MARGIN, left);
+  } else if (horizontal === 'right') {
+    style.right = Math.max(POPUP_MARGIN, viewportW - right);
+  } else {
+    style.left = '50%';
+    style.transform = 'translateX(-50%)';
+  }
+
+  const totalDetails = Object.values(details).reduce((a, b) => a + b, 0);
+
+  return createPortal(
+    <div
+      ref={popupRef}
+      style={style}
+      className="bg-page border border-default dark:border-strong rounded-lg shadow-lg overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-4 py-3 border-b border-default dark:border-strong">
+        <h4 className="text-sm font-bold text-heading dark:text-heading">
+          {categoryKey}
+        </h4>
+        <p className="text-xs text-muted">
+          {value} {viewMode === 'grouped' ? 'grupos' : 'observações'}
+        </p>
+      </div>
+
+      <div className="max-h-60 overflow-y-auto">
+        {Object.entries(details)
+          .sort((a, b) => b[1] - a[1])
+          .map(([pattern, count], i) => (
+            <div
+              key={pattern}
+              className={`flex items-center justify-between px-4 py-2 text-sm ${
+                i % 2 === 0 ? 'bg-page/80 dark:bg-surface/70' : ''
+              }`}
+            >
+              <span className="truncate pr-2 text-muted dark:text-body">
+                {pattern}
+              </span>
+              <span className="font-semibold text-heading dark:text-heading">
+                {count}
+              </span>
+            </div>
+          ))}
+      </div>
+
+      <div className="px-4 py-2 border-t border-default dark:border-strong flex justify-between items-center bg-page/30 dark:bg-surface/10">
+        <span className="text-xs font-bold uppercase text-muted">Total</span>
+        <span className="text-sm font-bold text-heading dark:text-heading">
+          {totalDetails}
+        </span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function TeamStatsCard({ type, title, total, severity, status, category, categoryGroup, categoryDetails, variant = 'default' }: TeamStatsCardProps) {
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<{
+    key: string;
+    anchor: { top: number; left: number; right: number; bottom: number };
+  } | null>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const itemRef = useRef<HTMLDivElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<'center' | 'right' | 'left'>('center');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'grouped' | 'single'>('grouped');
+  const pathname = usePathname();
+  const { value: viewMode, setValue: setViewMode } = useSlideToggle<
+    "grouped" | "single"
+  >(pathname, "teamStatsView", "grouped");
 
   useEffect(() => {
+    if (!activeCategory) return;
+
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
-        setActiveCategory(null);
-      }
+      const target = event.target as Node;
+      if (popupRef.current?.contains(target)) return;
+      if (cardRef.current?.contains(target)) return;
+      setActiveCategory(null);
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, []);
+  }, [activeCategory]);
 
-  const handleClick = (key: string, event: React.MouseEvent) => {
-    setActiveCategory(prev => (prev === key ? null : key));
+  const handleCategoryClick = (key: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+
+    // Toggle: se clicou no mesmo, fecha
+    if (activeCategory?.key === key) {
+      setActiveCategory(null);
+      return;
+    }
+
     const rect = event.currentTarget.getBoundingClientRect();
-    const popupWidth = 384;
-    const spaceRight = window.innerWidth - rect.right;
-    const spaceLeft = rect.left;
-    if (spaceRight < popupWidth) setDropdownPosition('right');
-    else if (spaceLeft < popupWidth) setDropdownPosition('left');
-    else setDropdownPosition('center');
+    setActiveCategory({
+      key,
+      anchor: {
+        top: rect.top,
+        left: rect.left,
+        right: rect.right,
+        bottom: rect.bottom,
+      },
+    });
   };
 
   // ===================== FUNÇÕES AUXILIARES =====================
@@ -182,13 +320,13 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
                     key: 'grouped', 
                     label: 'Grupo', 
                     icon: FileStack, 
-                    activeClassName: 'text-warning-400 dark:text-warning-300'
+                    activeClassName: 'text-warning-600 dark:text-warning-300'
                   },
                   { 
                     key: 'single', 
                     label: 'Individual', 
                     icon: FileCode, 
-                    activeClassName: 'text-success-400 dark:text-success-300'
+                    activeClassName: 'text-success-600 dark:text-success-300'
                   },
                 ]}
                 value={viewMode}
@@ -196,10 +334,10 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
               />
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="p-1.5 rounded-md transition-colors"
                 title="Ver todas as categorias"
               >
-                <Maximize2 className="w-4 h-4 text-muted dark:text-muted" />
+                <Maximize2 className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -221,45 +359,32 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
               <div className="text-sm text-muted">Sem dados para exibir</div>
             ) : (
               <div className="grid grid-cols-2 gap-x-16 gap-y-1.5">
-                {visibleEntries.map(([key, value], index) => (
-                  <div
-                    key={key}
-                    ref={itemRef}
-                    className={`flex items-center gap-3 py-1 cursor-pointer transition-colors ${
-                      activeCategory === key ? 'text-brand underline' : 'hover:text-brand hover:underline'
-                    }`}
-                    onClick={(e) => handleClick(key, e)}
-                  >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }} />
-                    <span className="flex-1 text-xs truncate" title={key}>{key}</span>
-                    <span className="font-semibold text-xs shrink-0">{value}</span>
+                {visibleEntries.map(([key, value], index) => {
+                  const details = categoryDetails?.[key];
+                  const hasDetails = details && Object.keys(details).length > 0;
+                  const isActive = activeCategory?.key === key;
 
-                    {activeCategory === key && categoryDetails?.[key] && Object.keys(categoryDetails[key]).length > 0 && (
-                      <div className={`absolute bottom-full mb-3 w-96 bg-page border border-default dark:border-strong rounded-lg shadow-sm hover:drop-shadow-lg z-50 overflow-hidden ${
-                        dropdownPosition === 'right' ? 'right-0' :
-                        dropdownPosition === 'left' ? 'left-0' :
-                        'left-1/2 -translate-x-1/2'
-                      }`}>
-                        <div className="px-4 py-3 border-b border-default dark:border-strong">
-                          <h4 className="text-sm font-bold text-heading dark:text-heading">{key}</h4>
-                          <p className="text-xs text-muted dark:text-muted">{value} {viewMode === 'grouped' ? 'grupos' : 'observações'}</p>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto">
-                          {Object.entries(categoryDetails[key]).sort((a, b) => b[1] - a[1]).map(([pattern, count], i) => (
-                            <div key={pattern} className={`flex items-center justify-between px-4 py-2 text-sm ${i % 2 === 0 ? 'bg-page/80 dark:bg-surface/70' : ''}`}>
-                              <span className="truncate pr-2 text-muted dark:text-body">{pattern}</span>
-                              <span className="font-semibold text-heading dark:text-heading">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="px-4 py-2 border-t border-default dark:border-strong flex justify-between items-center bg-page/30 dark:bg-surface/10">
-                          <span className="text-xs font-bold uppercase text-muted dark:text-muted">Total</span>
-                          <span className="text-sm font-bold text-heading dark:text-heading">{Object.values(categoryDetails[key]).reduce((a, b) => a + b, 0)}</span>
-                        </div>
+                  return (
+                    <div key={key}>
+                      <div
+                        ref={itemRef}
+                        className={`flex items-center gap-3 py-1 transition-colors ${
+                          hasDetails ? 'cursor-pointer' : 'cursor-default'
+                        } ${isActive ? 'text-brand underline' : 'hover:text-brand hover:underline'}`}
+                        onClick={hasDetails ? (e) => handleCategoryClick(key, e) : undefined}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}
+                        />
+                        <span className="flex-1 text-xs truncate" title={key}>
+                          {key}
+                        </span>
+                        <span className="font-semibold text-xs shrink-0">{value}</span>
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
 
                 {/* 🔥 6º slot: link "Ver todas" quando houver mais de 5 categorias */}
                 {hasMoreItems && (
@@ -277,6 +402,21 @@ export default function TeamStatsCard({ type, title, total, severity, status, ca
           </div>
         </div>
 
+        {activeCategory &&
+          categoryDetails?.[activeCategory.key] &&
+          Object.keys(categoryDetails[activeCategory.key]).length > 0 &&
+          (
+            <CategoryPopup
+              anchor={activeCategory.anchor}
+              categoryKey={activeCategory.key}
+              value={
+                (categoryMap[activeCategory.key] ?? 0) as number
+              }
+              viewMode={viewMode}
+              details={categoryDetails[activeCategory.key]}
+              popupRef={popupRef}
+            />
+        )}
         {/* 🔥 Modal de Detalhes com transição suave */}
         <div
           className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 transition-all duration-300 ${

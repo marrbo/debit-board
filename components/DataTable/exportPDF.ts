@@ -1,7 +1,7 @@
-// components/DataTable/exportPDF.ts
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { extractText, generateHeader, generateFooter } from "./pdfShared";
+import { DEBIT_BOARD_LOGO_BASE64 } from "./logo";
 
 export interface ExportColumn {
   key: string;
@@ -16,6 +16,7 @@ export interface ExportOptions {
   data: any[];
   filename?: string;
   orientation?: "portrait" | "landscape";
+  logoBase64?: string;
 }
 
 export function exportTableToPDF({
@@ -25,13 +26,14 @@ export function exportTableToPDF({
   data,
   filename,
   orientation = "portrait",
+  logoBase64 = DEBIT_BOARD_LOGO_BASE64, // Fallback automático para a logo padrão
 }: ExportOptions) {
   const doc = new jsPDF({ orientation, unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 8;
 
-  // Cabeçalho compartilhado
-  generateHeader(doc, { title, subtitle });
+  // Cabeçalho compartilhado com suporte à logo e cores padronizadas
+  generateHeader(doc, { title, subtitle, logoBase64 });
 
   // Tabela
   const head = columns.map((col) => col.label);
@@ -44,7 +46,7 @@ export function exportTableToPDF({
   const tableWidth = pageWidth - margin * 2;
 
   autoTable(doc, {
-    startY: 30,
+    startY: 28, // Ajustado para dar espaço ao banner superior
     margin: { left: margin, right: margin },
     head: [head],
     body,
@@ -53,7 +55,7 @@ export function exportTableToPDF({
     headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold" },
     bodyStyles: { textColor: [51, 65, 85], fontSize: 8 },
     alternateRowStyles: { fillColor: [241, 245, 249] },
-    styles: { overflow: 'linebreak' },
+    styles: { overflow: "linebreak" },
   });
 
   // Rodapé compartilhado

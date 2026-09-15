@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Folder, FileText, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useLocalSetting } from '@/hooks/useLocalSettings';
 
 export function WikiSidebar({ items }: { items: any[] }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useLocalSetting("wikiSidebar");
 
   return (
     <div

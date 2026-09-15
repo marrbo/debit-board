@@ -1,3 +1,4 @@
+// app/stats/services/statsService.ts
 import { serverFetch } from '@/lib/serverFetch';
 
 export interface DailyStats {

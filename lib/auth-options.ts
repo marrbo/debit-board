@@ -5,7 +5,7 @@ import { connectToDatabase } from "./mongodb";
 import { Tenant } from "@/models/Tenant";
 import type { IAzureSettings } from "@/types/IAzureSettings";
 import type { IUser } from "@/types/IUser";
-import type mongoose from "mongoose";
+import mongoose from "mongoose";
 
 declare module "next-auth" {
   interface Session {
@@ -19,7 +19,7 @@ declare module "next-auth/jwt" {
     tenantId?: mongoose.Types.ObjectId;
     organization?: string;        // nome da organização (ex: "MARRBO")
       organizationData?: {
-        tenantId?: string[];
+        tenantId?: mongoose.Types.ObjectId;
         id?: string;
         domain?: string;
       } | null;
@@ -32,85 +32,68 @@ declare module "next-auth/jwt" {
 }
 
 export const authOptions: NextAuthOptions = {
+  debug: true,
+  useSecureCookies: false,
   providers: [
     KeycloakProvider({
       clientId: process.env.KEYCLOAK_CLIENT_ID!,
       clientSecret: process.env.KEYCLOAK_CLIENT_SECRET!,
       issuer: process.env.KEYCLOAK_ISSUER!,
+      authorization: {
+        params: {
+          // 🔥 Sem estes scopes o Keycloak não coloca groups/organization no id_token
+          scope: "openid profile email groups organization",
+        },
+      },
+      client: {
+        // 🔥 Keycloak espera client_secret no body (post), não no header (basic)
+        token_endpoint_auth_method: "client_secret_post",
+      },
     }),
   ],
   callbacks: {
-    async jwt({ token, user, profile }) {
-      if (user) {
-        token.sub = user.id || user.email;
-        token.email = user.email;
-        token.name = user.name;
+    async jwt({ token, user, profile, account }) {
+      if (account?.provider === "keycloak" && profile) {
+        const kcProfile = profile as Record<string, any>;
 
-        // ✅ Interpretar profile.organization (objeto JSON)
-        const orgClaim = (profile as any)?.organization;
-        if (orgClaim) {
-          let orgData: {
-            tenantId?: string[];
-            id?: string;
-            domain?: string;
-          } | null = null;
-          let orgName: string | undefined;
+        token.sub = kcProfile.sub ?? token.sub;
+        token.email = kcProfile.email ?? token.email;
+        token.name = kcProfile.name ?? kcProfile.preferred_username ?? token.name;
 
-          // Se for string JSON, fazer parse
-          if (typeof orgClaim === 'string') {
-            try {
-              orgData = JSON.parse(orgClaim);
-            } catch {
-              orgData = null;
-            }
-          } else if (typeof orgClaim === 'object') {
-            orgData = orgClaim;
-          }
+        // Groups (array de nomes completos, ex: ["/Administrators"])
+        token.groups = Array.isArray(kcProfile.groups) ? kcProfile.groups : [];
 
-          if (orgData) {
-            // Pega a primeira chave como nome da organização
-            const keys = Object.keys(orgData);
-            if (keys.length > 0) {
-              orgName = keys[0];
-              const innerData = orgData[orgName];
-              if (innerData && typeof innerData === 'object') {
-                token.organization = orgName;
-                token.organizationData = innerData;
-                // Se tiver tenantId, usa como tenantId principal
-                if (innerData.tenantId && Array.isArray(innerData.tenantId) && innerData.tenantId.length > 0) {
-                  token.tenantId = innerData.tenantId[0];
-                }
-              }
+        // Organization (Keycloak 26: objeto { nomeDaOrg: { id, tenantId? } })
+        const orgClaim = kcProfile.organization;
+        if (orgClaim && typeof orgClaim === "object") {
+          const orgName = orgClaim[0];
+          if (orgName) {
+            token.organization = orgName;
+            //token.organizationData = orgClaim[orgName] ?? null;
+            if (mongoose.Types.ObjectId.isValid(orgName)){
+              token.organizationData.tenantId = new mongoose.Types.ObjectId(orgName)
+              token.tenantId = token.organizationData.tenantId;
             }
           }
         }
 
-        // ✅ Sempre tentar buscar dados do Tenant no banco
+        // Roles
+        const roles = (kcProfile.realm_access?.roles ?? []) as string[];
+        token.realmRoles = roles;
+        token.isAdmin = roles.includes("admin") || token.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+      }
+
+      // Só na primeira execução populamos o resto do tenant
+      if (user && token.tenantId && !token.azureSettings) {
         await connectToDatabase();
-        let tenant = null;
-
-        if (token.tenantId) {
-          // Busca pelo tenantId vindo do Keycloak
-          tenant = await Tenant.findById(token.tenantId).lean();
-        }
-
-        // Se não encontrou por tenantId, busca por email
-        if (!tenant) {
-          tenant = await Tenant.findOne({
-            $or: [{ adminEmail: { $eq: user.email } }, { users: { $eq: user.email } }],
-          }).lean();
-        }
-
+        const tenant = await Tenant.findById(token.tenantId).lean();
         if (tenant) {
-          // Preenche token.tenantId caso ainda não exista
-          token.tenantId = tenant._id.toString();
           token.azureSettings = tenant.azureSettings;
           token.isActive = tenant.isActive;
           token.onboardingCompleted = tenant.onboardingCompleted;
         }
-
-        token.isAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
       }
+
       return token;
     },
     async session({ session, token }) {

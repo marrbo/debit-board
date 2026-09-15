@@ -59,7 +59,7 @@ export default function SlideToggle<T extends string = string>({
       style={{ width: containerWidth, height: containerHeight }}
     >
       <span
-        className="absolute top-1 left-1 rounded-full bg-elevated drop-shadow-sm transition-all duration-300"
+        className="absolute top-1 left-1 rounded-full bg-sunken drop-shadow-sm transition-all duration-300"
         style={knobStyle}
       />
 
@@ -67,17 +67,17 @@ export default function SlideToggle<T extends string = string>({
         const Icon = opt.icon;
         const isActive = opt.key === value;
         const activeClass = opt.activeClassName || 'text-success';
-        const inactiveClass = opt.inactiveClassName || 'text-muted';
+        const inactiveClass = opt.inactiveClassName || '';
 
         return (
           <button
             key={opt.key}
             type="button"
             onClick={() => onChange(opt.key)}
-            className="flex-1 relative z-10 flex items-center justify-center gap-1 rounded-full text-[11px] font-semibold transition-colors"
+            className="flex-1 relative z-10 flex items-center justify-center gap-1 text-muted rounded-full text-[11px] transition-colors"
           >
             {Icon && <Icon className={`w-3 h-3 ${isActive ? activeClass : inactiveClass}`} />}
-            <span className={`${isActive ? activeClass : inactiveClass}`}>
+            <span className={`${isActive ? activeClass + ' font-semibold' : inactiveClass}`}>
               {opt.label}
             </span>
           </button>

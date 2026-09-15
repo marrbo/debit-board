@@ -7,6 +7,7 @@ import { Repository } from '@/models/Repository';
 import * as azdev from 'azure-devops-node-api';
 import { getPersonalAccessTokenHandler } from 'azure-devops-node-api';
 import { getServerSessionIds } from '@/lib/session-server';
+import { BuildStatus, BuildResult } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
 export async function POST(_: NextRequest) {
   const sessionIds = await getServerSessionIds();
@@ -57,10 +58,10 @@ export async function POST(_: NextRequest) {
       // Contagem de falhas/sucessos: vamos buscar os builds recentes e contar
       let pipelineFailedCount = 0;
       let pipelineSuccessCount = 0;
-      const recentBuilds = await buildApi.getBuilds(projectName, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 100);
+      const recentBuilds = await buildApi.getBuilds(projectName, undefined, undefined, undefined, undefined, undefined, undefined, undefined, BuildStatus.All);
       if (recentBuilds && recentBuilds.length > 0) {
-        pipelineFailedCount = recentBuilds.filter(b => b.result === 2 || b.result === 4).length; // 2=failed, 4=partiallySucceeded
-        pipelineSuccessCount = recentBuilds.filter(b => b.result === 0 || b.result === 1).length; // 0=succeeded, 1=partiallySucceeded? Na verdade 0=succeeded, 1=partiallySucceeded, 2=failed, 4=canceled. Vou usar 0 como succeeded.
+        pipelineFailedCount = recentBuilds.filter(b => b.result !== BuildResult.Canceled && b.result !== BuildResult.Succeeded).length; // 2=failed, 4=partiallySucceeded
+        pipelineSuccessCount = recentBuilds.filter(b => b.result === 0 || b.result === BuildResult.Succeeded).length; // 0=succeeded, 1=partiallySucceeded? Na verdade 0=succeeded, 1=partiallySucceeded, 2=failed, 4=canceled. Vou usar 0 como succeeded.
       }
 
       // Obter repositórios do projeto

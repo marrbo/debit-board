@@ -1,76 +1,49 @@
-'use client';
+// components/ThemeToggle.tsx
+"use client";
 
-import { useEffect, useSyncExternalStore } from 'react';
-import { useColorScheme } from '@mui/material/styles';
-import { Sun, Moon } from 'lucide-react';
+import { useSyncExternalStore } from "react";
+import { Sun, Moon } from "lucide-react";
+import { useLocalSetting } from "@/hooks/useLocalSettings";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
+
+// Detecta se estamos no cliente sem causar cascading render.
+// No SSR: false. Após hidratação: true. Nunca muda depois.
+const emptySubscribe = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 export default function ThemeToggle() {
-  const { setMode } = useColorScheme();
-  
-  const isDark = useSyncExternalStore(
-    (onStoreChange) => {
-      window.addEventListener('storage', onStoreChange);
-      window.addEventListener('theme-change', onStoreChange);
-
-      return () => {
-        window.removeEventListener('storage', onStoreChange);
-        window.removeEventListener('theme-change', onStoreChange);
-      };
-    },
-    () =>
-      document.documentElement.classList.contains('dark') ||
-      localStorage.getItem('wiki-theme') === 'dark',
-    () => false,
+  const [, setTheme] = useLocalSetting("theme");
+  const isDark = useResolvedTheme() === "dark";
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    getClientSnapshot,
+    getServerSnapshot,
   );
 
-  const activeDark = isDark;
+  const toggleTheme = () => setTheme(isDark ? "light" : "dark");
 
-  // 🔹 CORREÇÃO DO LOAD: Quando a página carrega, sincroniza o Tailwind 
-  // imediatamente com o estado lido do storage/DOM
-  useEffect(() => {
-    if (activeDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [activeDark]);
-
-  const toggleTheme = () => {
-    const nextTheme = activeDark ? 'light' : 'dark';
-    
-    // 1. Atualiza o Material UI
-    setMode(nextTheme);
-    
-    // 2. Atualiza o Tailwind CSS
-    if (nextTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-
-    localStorage.setItem('wiki-theme', nextTheme);
-    window.dispatchEvent(new Event('theme-change'));
-  };
+  const active = mounted && isDark;
 
   return (
     <button
       onClick={toggleTheme}
-      className="relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-300 focus:outline-none"
+      className="relative inline-flex items-center h-7 w-12 rounded-full transition-colors duration-300 focus:outline-none"
       aria-label="Alternar tema"
       role="switch"
-      aria-checked={activeDark}
+      aria-checked={active}
     >
-      <span 
-        className={`absolute inset-0 rounded-full transition-colors duration-300 ${
-          activeDark ? 'bg-gray-700' : 'bg-gray-500'
-        }`} 
+      <span
+        className={`absolute inset-0 rounded-full transition-colors duration-300 shadow-inner shadow-black/20 ${
+          active ? "bg-gray-700 !shadow-none" : "bg-gray-300"
+        }`}
       />
-      <span 
+      <span
         className={`absolute flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
-          activeDark ? 'translate-x-4' : '-translate-x-0.5'
+          active ? "translate-x-1.5" : "-translate-x-3.5"
         }`}
       >
-        {activeDark ? (
+        {active ? (
           <Moon className="w-4 h-4 text-white" />
         ) : (
           <Sun className="w-4 h-4 text-orange-500" />
