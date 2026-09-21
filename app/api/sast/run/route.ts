@@ -1,63 +1,110 @@
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { User } from '@/models/User';
-import { Tenant } from '@/models/Tenant';
-import { VulnerabilityPattern } from '@/models/VulnerabilityPattern';
-import { SASTScan } from '@/models/SASTScan';
-import { SASTScanResult } from '@/models/SASTScanResult';
-import { Observation } from '@/models/Observation';
-import { executeSearch } from '@/lib/azureSearch';
-import mongoose from 'mongoose';
-import type { SearchItem } from '@/lib/types';
-import { getServerAuthSession } from '@/lib/auth-server';
+import { NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { User } from "@/models/User";
+import { Tenant } from "@/models/Tenant";
+import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
+import { SASTScan } from "@/models/SASTScan";
+import { SASTScanResult } from "@/models/SASTScanResult";
+import { Observation } from "@/models/Observation";
+import { executeSearch } from "@/lib/azureSearch";
+import mongoose from "mongoose";
+import type { SearchItem } from "@/lib/types";
+import { requireSession } from "@/lib/api-auth";
 
 // ============================================================
 // CONSTANTES DE EXCLUSÃO
 // ============================================================
 const EXCLUDED_DIRS = [
-  'node_modules', 'bin', 'obj', 'dist', 'build', '.git', '__pycache__',
-  'venv', 'vendor', '.next', '.nuxt', 'coverage', '.gradle', '.idea',
-  '.vscode', 'target', 'tmp', 'temp', 'logs', 'log', 'packages', 'files',
-  'uploads', 'bower_components', '.cache', 'public/assets'
+  "node_modules",
+  "bin",
+  "obj",
+  "dist",
+  "build",
+  ".git",
+  "__pycache__",
+  "venv",
+  "vendor",
+  ".next",
+  ".nuxt",
+  "coverage",
+  ".gradle",
+  ".idea",
+  ".vscode",
+  "target",
+  "tmp",
+  "temp",
+  "logs",
+  "log",
+  "packages",
+  "files",
+  "uploads",
+  "bower_components",
+  ".cache",
+  "public/assets",
 ];
 
 const EXCLUDED_FILE_EXTENSIONS = [
-  '.min.js', '.min.css', '.map', '.lock', '.bundle.js', '.bundle.min.js',
-  '.minified.js', '.minified.css'
+  ".min.js",
+  ".min.css",
+  ".map",
+  ".lock",
+  ".bundle.js",
+  ".bundle.min.js",
+  ".minified.js",
+  ".minified.css",
 ];
 
 function isExcludedPath(filePath: string): boolean {
   if (!filePath) return false;
-  const normalized = filePath.replace(/\\/g, '/').toLowerCase();
-  const parts = normalized.split('/');
-  if (parts.some(part => EXCLUDED_DIRS.includes(part))) return true;
+  const normalized = filePath.replace(/\\/g, "/").toLowerCase();
+  const parts = normalized.split("/");
+  if (parts.some((part) => EXCLUDED_DIRS.includes(part))) return true;
   const lowerPath = normalized.toLowerCase();
-  if (EXCLUDED_FILE_EXTENSIONS.some(ext => lowerPath.endsWith(ext))) return true;
+  if (EXCLUDED_FILE_EXTENSIONS.some((ext) => lowerPath.endsWith(ext)))
+    return true;
   return false;
 }
 
 // ============================================================
 // ROTA PRINCIPAL
 // ============================================================
+/**
+ * Cria recurso do endpoint /api/sast/run.
+ *
+ * Este endpoint expõe a operação post em /api/sast/run.
+ *
+ * @summary Cria recurso do endpoint /api/sast/run
+ * @tags Sast, Run
+ * @route POST /api/sast/run
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST() {
   try {
-    const session = await getServerAuthSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireSession();
+    if (auth.ok === false) return auth.response;
 
     await connectToDatabase();
-    const dbUser = await User.findOne({ sub: session.user.id });
+    const dbUser = await User.findOne({ sub: auth.user.sub });
 
     let tenant = null;
     const tenantIdCandidate = dbUser?.tenantId;
-    
-    if (!tenant && tenantIdCandidate && mongoose.Types.ObjectId.isValid(tenantIdCandidate)) {
+
+    if (
+      !tenant &&
+      tenantIdCandidate &&
+      mongoose.Types.ObjectId.isValid(tenantIdCandidate)
+    ) {
       tenant = await Tenant.findById(tenantIdCandidate);
     }
 
     if (!tenant || !tenant.azureSettings) {
-      return NextResponse.json({ error: 'Azure settings not configured.' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Azure settings not configured." },
+        { status: 400 },
+      );
     }
 
     const settings = tenant.azureSettings;
@@ -66,13 +113,16 @@ export async function POST() {
 
     const patterns = await VulnerabilityPattern.find({ enabled: true }).lean();
     if (!patterns.length) {
-      return NextResponse.json({ error: 'Nenhum pattern SAST ativo.' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nenhum pattern SAST ativo." },
+        { status: 400 },
+      );
     }
 
     const newScan = new SASTScan({
       tenantId,
       scanDate: new Date(),
-      status: 'running',
+      status: "running",
       patternCount: 0,
       totalOccurrences: 0,
       failedPatterns: 0,
@@ -84,8 +134,8 @@ export async function POST() {
     try {
       const existingObservations = await Observation.find({ tenantId }).lean();
       const observationMap = new Map<string, any>();
-      existingObservations.forEach(observation => {
-        const key = `${observation.project || ''}|${observation.repository || ''}|${observation.filePath}|${observation.category}`;
+      existingObservations.forEach((observation) => {
+        const key = `${observation.project || ""}|${observation.repository || ""}|${observation.filePath}|${observation.category}`;
         observationMap.set(key, observation);
       });
 
@@ -98,7 +148,12 @@ export async function POST() {
 
       for (const pattern of patterns) {
         try {
-          const result = await executeSearch(pattern.queryPattern, settings, ignoreTls, tenantId);
+          const result = await executeSearch(
+            pattern.queryPattern,
+            settings,
+            ignoreTls,
+            tenantId,
+          );
 
           if (result.error) {
             patternResults.push({
@@ -118,8 +173,8 @@ export async function POST() {
           // 🔥 APLICA EXCLUSÕES ANTES DE PROCESSAR
           result.results = result.results.filter(
             (item: SearchItem) =>
-              ['main', 'master'].includes(item.branch) &&
-              !isExcludedPath(item.path)
+              ["main", "master"].includes(item.branch) &&
+              !isExcludedPath(item.path),
           );
 
           patternResults.push({
@@ -135,15 +190,15 @@ export async function POST() {
           totalOccurrences += result.results.length;
 
           for (const item of result.results) {
-            const key = `${item.project || ''}|${item.repository || ''}|${item.path}|${pattern.category}`;
+            const key = `${item.project || ""}|${item.repository || ""}|${item.path}|${pattern.category}`;
             if (foundKeys.has(key)) continue;
             foundKeys.add(key);
 
             const existingIssue = observationMap.get(key);
             if (existingIssue) {
               let nextStatus = existingIssue.status;
-              if (existingIssue.status === 'resolved') {
-                nextStatus = 'recurring';
+              if (existingIssue.status === "resolved") {
+                nextStatus = "recurring";
               }
 
               updates.push({
@@ -157,15 +212,17 @@ export async function POST() {
                       patternId: pattern._id.toString(),
                       hits: item.hits,
                       scanId: newScan._id,
-                      project: item.project || '',
-                      repository: item.repository || '',
-                    }
-                  }
-                }
+                      project: item.project || "",
+                      repository: item.repository || "",
+                    },
+                  },
+                },
               });
             } else {
               const now = new Date();
-              const slaDueAt = new Date(now.getTime() + (pattern.slaHours || 72) * 3600 * 1000);
+              const slaDueAt = new Date(
+                now.getTime() + (pattern.slaHours || 72) * 3600 * 1000,
+              );
 
               newObservations.push({
                 tenantId,
@@ -177,23 +234,26 @@ export async function POST() {
                 slaHours: pattern.slaHours,
                 fileName: item.fileName,
                 filePath: item.path,
-                project: item.project || '',
-                repository: item.repository || '',
-                branch: item.branch || 'main',
+                project: item.project || "",
+                repository: item.repository || "",
+                branch: item.branch || "main",
                 hitCount: item.hitCount || 0,
                 hits: item.hits,
-                status: 'open',
+                status: "open",
                 firstSeen: now,
                 lastSeen: now,
                 slaDueAt: slaDueAt,
                 snippet: null,
                 lineNumber: 0,
               });
-              observationMap.set(key, { _id: 'temp', status: 'open' });
+              observationMap.set(key, { _id: "temp", status: "open" });
             }
           }
         } catch (searchErr: any) {
-          console.error(`Erro ao buscar padrão ${pattern.name}:`, searchErr.message);
+          console.error(
+            `Erro ao buscar padrão ${pattern.name}:`,
+            searchErr.message,
+          );
           patternResults.push({
             patternId: pattern._id.toString(),
             query: pattern.queryPattern,
@@ -211,12 +271,12 @@ export async function POST() {
       // Marca resolved/exclusion para observations não encontradas
       const resolvedUpdates: any[] = [];
       observationMap.forEach((issue, key) => {
-        if (!foundKeys.has(key) && issue._id !== 'temp') {
-          let nextStatus = 'resolved';
-          if (isExcludedPath(issue.filePath) && issue.status !== 'exclusion') {
-            nextStatus = 'exclusion';
-          } else if (issue.status !== 'resolved') {
-            nextStatus = 'resolved';
+        if (!foundKeys.has(key) && issue._id !== "temp") {
+          let nextStatus = "resolved";
+          if (isExcludedPath(issue.filePath) && issue.status !== "exclusion") {
+            nextStatus = "exclusion";
+          } else if (issue.status !== "resolved") {
+            nextStatus = "resolved";
           }
 
           if (issue.status !== nextStatus) {
@@ -227,17 +287,19 @@ export async function POST() {
                   $set: {
                     status: nextStatus,
                     lastSeen: new Date(),
-                  }
-                }
-              }
+                  },
+                },
+              },
             });
           }
         }
       });
 
-      if (newObservations.length > 0) await Observation.insertMany(newObservations);
+      if (newObservations.length > 0)
+        await Observation.insertMany(newObservations);
       if (updates.length > 0) await Observation.bulkWrite(updates);
-      if (resolvedUpdates.length > 0) await Observation.bulkWrite(resolvedUpdates);
+      if (resolvedUpdates.length > 0)
+        await Observation.bulkWrite(resolvedUpdates);
 
       // Salva resultados detalhados
       await SASTScanResult.create({
@@ -251,12 +313,12 @@ export async function POST() {
       // Atualiza scan com metadados
       await SASTScan.findByIdAndUpdate(newScan._id, {
         $set: {
-          status: 'completed',
+          status: "completed",
           totalOccurrences,
           patternCount: patternResults.length,
           failedPatterns,
           completedAt: new Date(),
-        }
+        },
       });
 
       return NextResponse.json({
@@ -267,25 +329,27 @@ export async function POST() {
         failedPatterns,
       });
     } catch (scanError: any) {
-      console.error('Erro fatal no SAST:', scanError.message);
+      console.error("Erro fatal no SAST:", scanError.message);
       await SASTScan.findByIdAndUpdate(newScan._id, {
         $set: {
-          status: 'failed',
+          status: "failed",
           failedPatterns: 1,
           errorMessage: scanError.message,
           completedAt: new Date(),
-        }
+        },
       });
       return NextResponse.json(
-        { error: `Falha interna no servidor durante o SAST: ${scanError.message}` },
-        { status: 500 }
+        {
+          error: `Falha interna no servidor durante o SAST: ${scanError.message}`,
+        },
+        { status: 500 },
       );
     }
   } catch (error: any) {
-    console.error('Erro fatal no SAST:', error.message);
+    console.error("Erro fatal no SAST:", error.message);
     return NextResponse.json(
       { error: `Falha interna no servidor durante o SAST: ${error.message}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

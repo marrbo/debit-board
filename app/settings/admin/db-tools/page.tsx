@@ -251,13 +251,15 @@ export default function DbToolsPage() {
         subtitle="Exporte, restaure e agende backups entre Atlas e o servidor local."
       />
 
-      <div className="flex items-start gap-3 p-4 rounded-2xl bg-warning/10 border border-warning/30 text-sm">
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30 text-sm">
         <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold text-heading mb-1">Operações destrutivas</p>
+          <p className="font-semibold text-heading mb-1">
+            Operações destrutivas
+          </p>
           <p className="text-xs">
-            Restore <strong>substitui</strong> todas as coleções do destino. Um backup
-            de segurança é criado automaticamente antes.
+            Restore <strong>substitui</strong> todas as coleções do destino. Um
+            backup de segurança é criado automaticamente antes.
           </p>
         </div>
       </div>
@@ -271,20 +273,33 @@ export default function DbToolsPage() {
           {connections.map((c) => (
             <div
               key={c.id}
-              className={`p-4 rounded-2xl border ${
-                c.info ? "bg-surface border-default dark:border-strong" : "bg-error/5 border-error/30"
+              className={`p-4 rounded-lg border ${
+                c.info
+                  ? "bg-surface border-default dark:border-strong"
+                  : "bg-error/5 border-error/30"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-heading">{c.label}</span>
-                <span className="text-[10px] font-mono text-muted">{c.envVar}</span>
+                <span className="text-sm font-semibold text-heading">
+                  {c.label}
+                </span>
+                <span className="text-[10px] font-mono text-muted">
+                  {c.envVar}
+                </span>
               </div>
               {c.info ? (
                 <dl className="text-xs space-y-1">
                   <Row label="Host" value={c.info.host} mono />
                   <Row label="Database" value={c.info.dbName} mono />
-                  <Row label="Replica set" value={c.info.replicaSet ?? "standalone"} mono />
-                  <Row label="Primary" value={c.info.isPrimary ? "sim" : "não"} />
+                  <Row
+                    label="Replica set"
+                    value={c.info.replicaSet ?? "standalone"}
+                    mono
+                  />
+                  <Row
+                    label="Primary"
+                    value={c.info.isPrimary ? "sim" : "não"}
+                  />
                   <Row label="Databases" value={String(c.info.databases)} />
                   <Row label="Collections" value={String(c.info.collections)} />
                 </dl>
@@ -297,7 +312,7 @@ export default function DbToolsPage() {
       </section>
 
       {/* Dump */}
-      <section className="p-5 bg-surface border border-default dark:border-strong rounded-2xl">
+      <section className="p-5 bg-surface border border-default dark:border-strong rounded-lg">
         <h2 className="text-sm font-bold text-heading mb-3 flex items-center gap-2">
           <Download className="w-4 h-4 text-brand" /> Criar backup
         </h2>
@@ -307,21 +322,29 @@ export default function DbToolsPage() {
             <select
               value={dumpSource}
               onChange={(e) => setDumpSource(e.target.value)}
-              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
             >
               {connections.map((c) => (
                 <option key={c.id} value={c.id} disabled={!c.info}>
-                  {c.label}{c.info ? ` — ${c.info.dbName}` : " (indisponível)"}
+                  {c.label}
+                  {c.info ? ` — ${c.info.dbName}` : " (indisponível)"}
                 </option>
               ))}
             </select>
           </label>
           <button
             onClick={handleDump}
-            disabled={busy !== null || !connections.find((c) => c.id === dumpSource)?.info}
-            className="flex items-center justify-center gap-2 bg-brand hover:bg-brand/90 text-white px-5 py-2 rounded-2xl text-sm font-medium disabled:opacity-50"
+            disabled={
+              busy !== null ||
+              !connections.find((c) => c.id === dumpSource)?.info
+            }
+            className="flex items-center justify-center gap-2 bg-brand hover:bg-brand/90 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
           >
-            {busy === "dump" ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {busy === "dump" ? (
+              <LoaderCircle className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
             Criar backup
           </button>
         </div>
@@ -347,7 +370,7 @@ export default function DbToolsPage() {
             <select
               value={restoreTarget}
               onChange={(e) => setRestoreTarget(e.target.value)}
-              className="bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm"
+              className="bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm"
             >
               {connections.map((c) => (
                 <option key={c.id} value={c.id} disabled={!c.info}>
@@ -363,25 +386,33 @@ export default function DbToolsPage() {
             <LoaderCircle className="w-6 h-6 animate-spin mx-auto" />
           </div>
         ) : dumps.length === 0 ? (
-          <div className="p-8 text-center text-muted border border-dashed border-default rounded-2xl">
+          <div className="p-8 text-center text-muted border border-dashed border-default rounded-lg">
             Nenhum backup criado ainda.
           </div>
         ) : (
           <div className="space-y-2">
             {dumps.map((entry) => {
-              const total = entry.manifest?.collections.reduce((a, c) => a + c.count, 0) ?? 0;
+              const total =
+                entry.manifest?.collections.reduce((a, c) => a + c.count, 0) ??
+                0;
               return (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between gap-4 p-4 bg-surface border border-default dark:border-strong rounded-2xl"
+                  className="flex items-center justify-between gap-4 p-4 bg-surface border border-default dark:border-strong rounded-lg"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-heading font-mono truncate">{entry.id}</p>
+                      <p className="text-sm font-semibold text-heading font-mono truncate">
+                        {entry.id}
+                      </p>
                       <p className="text-xs text-muted">
                         {entry.manifest
-                          ? `${entry.manifest.collections.length} coleções · ${total} documentos · ${new Date(entry.manifest.createdAt).toLocaleString("pt-BR")}`
+                          ? `${
+                              entry.manifest.collections.length
+                            } coleções · ${total} documentos · ${new Date(
+                              entry.manifest.createdAt,
+                            ).toLocaleString("pt-BR")}`
                           : "Manifest ausente"}
                       </p>
                     </div>
@@ -389,9 +420,13 @@ export default function DbToolsPage() {
                   <button
                     onClick={() => openRestore(entry)}
                     disabled={busy !== null || !entry.manifest}
-                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-medium bg-error/10 text-error hover:bg-error/20 disabled:opacity-40 shrink-0"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-error/10 text-error hover:bg-error/20 disabled:opacity-40 shrink-0"
                   >
-                    {busy === "restore" ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {busy === "restore" ? (
+                      <LoaderCircle className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
                     Restaurar
                   </button>
                 </div>
@@ -407,7 +442,9 @@ export default function DbToolsPage() {
         title="Confirmação por senha"
         description={
           pendingRestore
-            ? `Restaurar "${pendingRestore.id}" em "${connections.find((c) => c.id === restoreTarget)?.label}". Isto substitui os dados atuais do destino.`
+            ? `Restaurar "${pendingRestore.id}" em "${connections.find(
+                (c) => c.id === restoreTarget,
+              )?.label}". Isto substitui os dados atuais do destino.`
             : ""
         }
         onCancel={() => setPendingRestore(null)}
@@ -420,7 +457,15 @@ export default function DbToolsPage() {
 // ============================================================
 // Sub-componentes
 // ============================================================
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex justify-between">
       <dt className="text-muted">{label}</dt>
@@ -439,7 +484,7 @@ function ScheduleForm({
   const [draft, setDraft] = useState(schedule);
 
   return (
-    <section className="p-5 bg-surface border border-default dark:border-strong rounded-2xl">
+    <section className="p-5 bg-surface border border-default dark:border-strong rounded-lg">
       <h2 className="text-sm font-bold text-heading mb-3 flex items-center gap-2">
         <Clock className="w-4 h-4 text-brand" /> Agendamento
       </h2>
@@ -459,8 +504,13 @@ function ScheduleForm({
           <span className="block text-xs text-muted mb-1">Frequência</span>
           <select
             value={draft.frequency}
-            onChange={(e) => setDraft({ ...draft, frequency: e.target.value as ScheduleConfig["frequency"] })}
-            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                frequency: e.target.value as ScheduleConfig["frequency"],
+              })
+            }
+            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
           >
             <option value="daily">Diário</option>
             <option value="weekly">Semanal</option>
@@ -472,16 +522,24 @@ function ScheduleForm({
           <span className="block text-xs text-muted mb-1">Horário (UTC)</span>
           <div className="flex gap-2">
             <input
-              type="number" min={0} max={23}
+              type="number"
+              min={0}
+              max={23}
               value={draft.hour}
-              onChange={(e) => setDraft({ ...draft, hour: Number(e.target.value) })}
-              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+              onChange={(e) =>
+                setDraft({ ...draft, hour: Number(e.target.value) })
+              }
+              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
             />
             <input
-              type="number" min={0} max={59}
+              type="number"
+              min={0}
+              max={59}
               value={draft.minute}
-              onChange={(e) => setDraft({ ...draft, minute: Number(e.target.value) })}
-              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+              onChange={(e) =>
+                setDraft({ ...draft, minute: Number(e.target.value) })
+              }
+              className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
             />
           </div>
         </label>
@@ -490,8 +548,13 @@ function ScheduleForm({
           <span className="block text-xs text-muted mb-1">Origem</span>
           <select
             value={draft.source}
-            onChange={(e) => setDraft({ ...draft, source: e.target.value as "primary" | "atlas" })}
-            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                source: e.target.value as "primary" | "atlas",
+              })
+            }
+            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
           >
             <option value="primary">Servidor atual</option>
             <option value="atlas">Atlas</option>
@@ -503,10 +566,14 @@ function ScheduleForm({
         <label>
           <span className="block text-xs text-muted mb-1">Retenção (dias)</span>
           <input
-            type="number" min={1} max={365}
+            type="number"
+            min={1}
+            max={365}
             value={draft.retentionDays}
-            onChange={(e) => setDraft({ ...draft, retentionDays: Number(e.target.value) })}
-            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm"
+            onChange={(e) =>
+              setDraft({ ...draft, retentionDays: Number(e.target.value) })
+            }
+            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm"
           />
         </label>
 
@@ -519,12 +586,15 @@ function ScheduleForm({
               </>
             )}
             {schedule.nextRunAt && (
-              <><br />Próximo: {new Date(schedule.nextRunAt).toLocaleString("pt-BR")}</>
+              <>
+                <br />
+                Próximo: {new Date(schedule.nextRunAt).toLocaleString("pt-BR")}
+              </>
             )}
           </p>
           <button
             onClick={() => onSave(draft)}
-            className="px-4 py-2 rounded-2xl bg-brand text-white text-sm font-medium hover:bg-brand/90"
+            className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90"
           >
             Salvar agendamento
           </button>

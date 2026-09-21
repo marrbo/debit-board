@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Suspense,
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-} from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
@@ -18,6 +12,7 @@ import TeamSelector from "@/components/TeamSelector";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useTeam } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
+import { drawSeverityShields } from "@/components/DataTable/pdfShared";
 
 // ============================================================
 // Colunas do grid
@@ -29,15 +24,41 @@ const columns: Column<any>[] = [
     label: "Severidade",
     sortable: false,
     width: "260px",
-    className: "hover:scale-150 hover:translate-x-6",
+    align: "center",
+    className: "hover:scale-150 hover:translate-x-16 translate-x-10",
+    /**
+     * No PDF: desenha os shields C/H/M/L com as contagens abaixo,
+     * lendo os dados do `extraData` (projectStats) — igual à tela.
+     */
+    pdfCellRenderer: (doc, cell, item, extraData) => {
+      const stats = extraData?.[item.name] || {};
+      const sev = stats.severity || {};
+      drawSeverityShields(
+        doc,
+        cell.cell.x,
+        cell.cell.y,
+        sev,
+        cell.cell.width,
+        cell.cell.height,
+      );
+    },
     render: (item: any, extraData?: Record<string, any>) => {
       const stats = extraData?.[item.name] || {};
       const sev = stats.severity || {};
-
       const severityItems = [
-        { letter: "C", count: sev.critical || 0, color: "#ef4444", label: "Critical" },
+        {
+          letter: "C",
+          count: sev.critical || 0,
+          color: "#ef4444",
+          label: "Critical",
+        },
         { letter: "H", count: sev.high || 0, color: "#f97316", label: "High" },
-        { letter: "M", count: sev.medium || 0, color: "#eab308", label: "Medium" },
+        {
+          letter: "M",
+          count: sev.medium || 0,
+          color: "#eab308",
+          label: "Medium",
+        },
         { letter: "L", count: sev.low || 0, color: "#22c55e", label: "Low" },
       ];
 
@@ -107,8 +128,6 @@ function DashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  // 🔥 Time persistido no localStorage (fonte única com Stats, etc.)
   const [teamId] = useTeam();
   const { teams, loaded: teamsLoaded } = useTeams();
 
@@ -144,7 +163,10 @@ function DashboardContent() {
   // ============================================================
   useEffect(() => {
     if (!teamsLoaded || !effectiveTeamId) return;
-    const params = new URLSearchParams({ teamId: effectiveTeamId, range: "30d" });
+    const params = new URLSearchParams({
+      teamId: effectiveTeamId,
+      range: "30d",
+    });
     if (searchTerm) params.set("q", searchTerm);
 
     fetch(`/api/dashboard/stats?${params.toString()}`)
@@ -271,6 +293,7 @@ function DashboardContent() {
 
   if (status === "loading")
     return <div className="py-10 text-center">Carregando...</div>;
+
   if (!session) {
     router.push("/login");
     return null;
@@ -285,8 +308,9 @@ function DashboardContent() {
         search={{
           type: "advanced",
           onSearch: handleSearch,
-          userId: session?.user?._id?.toString() || session?.user?.id,
-          placeholder: "Filtrar stats, e.g. severity:critical OR project:my-api",
+          userSub: session?.user?.sub || session?.user?.sub,
+          placeholder:
+            "Filtrar stats, e.g. severity:critical OR project:my-api",
           context: "observations",
         }}
         actions={
@@ -294,9 +318,11 @@ function DashboardContent() {
             <button
               onClick={handleExportPDF}
               disabled={projects.length === 0}
-              className="flex items-center group gap-2 px-4 py-2 rounded-2xl bg-red-600 text-white text-sm font-medium hover:!bg-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center group gap-2 px-4 py-2.5 hover:py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:!bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="hidden group-hover:block transition-transform">Relatório PDF</span>
+              <span className="hidden group-hover:block transition-transform">
+                Relatório PDF
+              </span>
               <FaFilePdf className="w-4 h-4" />
             </button>
 

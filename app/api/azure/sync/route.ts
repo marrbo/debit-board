@@ -9,6 +9,19 @@ import { getPersonalAccessTokenHandler } from 'azure-devops-node-api';
 import { getServerSessionIds } from '@/lib/session-server';
 import { BuildStatus, BuildResult } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
+/**
+ * Cria recurso do endpoint /api/azure/sync.
+ *
+ * Este endpoint expõe a operação post em /api/azure/sync.
+ *
+ * @summary Cria recurso do endpoint /api/azure/sync
+ * @tags Azure, Sync
+ * @route POST /api/azure/sync
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST(_: NextRequest) {
   const sessionIds = await getServerSessionIds();
   const tenantId = sessionIds.tenantId;

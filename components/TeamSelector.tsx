@@ -22,7 +22,8 @@ export default function TeamSelector({ teams, className }: TeamSelectorProps) {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -32,22 +33,25 @@ export default function TeamSelector({ teams, className }: TeamSelectorProps) {
 
   return (
     <div className={`relative ${className ?? ""}`} ref={ref}>
-      
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-between min-w-32 gap-2 bg-page border border-default dark:border-strong text-heading dark:text-heading px-4 py-2 rounded-2xl text-sm font-medium transition-all focus:outline-none"
+        className="flex items-center justify-between min-w-32 gap-2 bg-sunken border border-default dark:border-strong text-heading dark:text-heading px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none"
       >
         {selected?.isGlobal ? (
-          <Globe className="w-3 h-3"/>
+          <Globe className="w-3 h-3" />
         ) : (
-          <Users2Icon className="w-3 h-3"/>
+          <Users2Icon className="w-3 h-3" />
         )}
         <span className="font-bold">{selected?.name}</span>
-        <ChevronDown className={`w-4 h-4 justify-end transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`w-4 h-4 justify-end transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-surface border border-default dark:border-strong rounded-xl shadow-sm hover:drop-shadow-lg z-20 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-surface border border-default dark:border-strong rounded-lg shadow-sm hover:drop-shadow-lg z-20 overflow-hidden">
           {teams.map((team) => (
             <button
               key={team._id}

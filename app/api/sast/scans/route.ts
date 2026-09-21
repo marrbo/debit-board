@@ -1,26 +1,37 @@
 // app/api/sast/scans/route.ts
-import { type NextRequest, NextResponse } from 'next/server';
-import { SASTScan } from '@/models/SASTScan';
-import { handleGenericGet } from '@/lib/api-handler';
-import { getServerAuthSession } from '@/lib/auth-server';
-import { connectToDatabase } from '@/lib/mongodb';
+import { type NextRequest } from "next/server";
+import { SASTScan } from "@/models/SASTScan";
+import { handleGenericGet } from "@/lib/api-handler";
+import { connectToDatabase } from "@/lib/mongodb";
+import { requireSession } from "@/lib/api-auth";
 
+/**
+ * Lista recursos do endpoint /api/sast/scans.
+ *
+ * Este endpoint expõe a operação get em /api/sast/scans.
+ *
+ * @summary Lista recursos do endpoint /api/sast/scans
+ * @tags Sast, Scans
+ * @route GET /api/sast/scans
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
-  const session = await getServerAuthSession();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
 
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
-  const isAll = searchParams.get('all') === 'true';
+  const isAll = searchParams.get("all") === "true";
   const searchQueryRaw =
-    searchParams.get('search') || searchParams.get('q') || '';
+    searchParams.get("search") || searchParams.get("q") || "";
 
   return handleGenericGet(req, {
     model: SASTScan,
-    defaultSort: 'scanDate',
+    defaultSort: "scanDate",
     overrideSearchQuery: searchQueryRaw,
     all: isAll,
     projection: {

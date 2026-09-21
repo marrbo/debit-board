@@ -51,7 +51,10 @@ export async function exportTableToExcel({
   // 2. Renderização da Logo no Canto Superior Esquerdo
   if (logoBase64) {
     // Tratamento para garantir que o ExcelJS receba o base64 puro
-    const cleanBase64 = logoBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+    const cleanBase64 = logoBase64.replace(
+      /^data:image\/(png|jpeg|jpg);base64,/,
+      "",
+    );
 
     const imageId = workbook.addImage({
       base64: cleanBase64,
@@ -71,14 +74,24 @@ export async function exportTableToExcel({
   // 3. Título e Subtítulo em Branco (--text-body dark: #f1f5f9)
   const titleCell = worksheet.getRow(1).getCell(textCol);
   titleCell.value = title;
-  titleCell.font = { name: "Arial", size: 14, bold: true, color: { argb: "FFF1F5F9" } };
+  titleCell.font = {
+    name: "Arial",
+    size: 14,
+    bold: true,
+    color: { argb: "FFF1F5F9" },
+  };
   titleCell.alignment = { vertical: "bottom", horizontal: "left" };
 
   const timestamp = new Date().toLocaleString("pt-BR");
   const subtitleText = `${subtitle || "Debit Board - Relatório de Dados"} | Gerado em: ${timestamp}`;
   const subtitleCell = worksheet.getRow(2).getCell(textCol);
   subtitleCell.value = subtitleText;
-  subtitleCell.font = { name: "Arial", size: 9, italic: true, color: { argb: "FFE2E8F0" } };
+  subtitleCell.font = {
+    name: "Arial",
+    size: 9,
+    italic: true,
+    color: { argb: "FFE2E8F0" },
+  };
   subtitleCell.alignment = { vertical: "top", horizontal: "left" };
 
   // Espaçador (Linha 4)
@@ -95,9 +108,14 @@ export async function exportTableToExcel({
     cell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FF1E293B" }, // Fundo escuro das colunas [30, 41, 59]
+      fgColor: { argb: "FF0056B3" }, // Fundo escuro das colunas [30, 41, 59]
     };
-    cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    cell.font = {
+      name: "Arial",
+      size: 10,
+      bold: true,
+      color: { argb: "FFFFFFFF" },
+    };
     cell.alignment = { vertical: "middle", horizontal: "left" };
     cell.border = {
       top: { style: "thin", color: { argb: "FF334155" } },
@@ -170,7 +188,8 @@ export async function exportTableToExcel({
       if (!isNaN(parsedPx)) customWidth = Math.round(parsedPx / 8);
     }
 
-    worksheet.getColumn(colNum).width = customWidth || Math.min(Math.max(maxLen + 4, 14), 50);
+    worksheet.getColumn(colNum).width =
+      customWidth || Math.min(Math.max(maxLen + 4, 14), 50);
   });
 
   // Download no navegador

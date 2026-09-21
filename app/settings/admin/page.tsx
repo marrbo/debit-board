@@ -11,7 +11,9 @@ export default async function AdminPage() {
   const session = await getServerAuthSession();
 
   // Remova o comentário abaixo se quiser proteger a rota
-  if (!session || session.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) { redirect("/settings"); }
+  if (!session || session.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+    redirect("/settings");
+  }
 
   await connectToDatabase();
   const tenants = await Tenant.find({}).sort({ name: 1 }).lean();
@@ -22,16 +24,18 @@ export default async function AdminPage() {
 
   return (
     <div className="w-full mx-auto">
-     <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-heading dark:text-heading flex items-center gap-2">
-            <UserCog className="w-5 h-5" />
-            Admin
+          <UserCog className="w-10 h-10 text-brand" />
+          Admin
         </h1>
-    </div>
+      </div>
 
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl shadow-sm hover:drop-shadow-lg overflow-hidden transition-colors">
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg shadow-sm hover:drop-shadow-lg overflow-hidden transition-colors">
         <div className="px-6 py-4 border-b border-default dark:border-strong flex items-center gap-3 bg-surface dark:bg-surface/80">
-            <p className="text-xs text-muted dark:text-muted">Gerencie Tenants e Usuários</p>
+          <p className="text-xs text-muted dark:text-muted">
+            Gerencie Tenants e Usuários
+          </p>
         </div>
 
         <AdminTabs tenants={serializedTenants} users={serializedUsers} />

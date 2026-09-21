@@ -1,6 +1,5 @@
 // app/api/saved-query/route.ts
 import { handleGenericGet } from "@/lib/api-handler";
-import { getServerSessionIds } from "@/lib/session-server";
 import { SavedQuery } from "@/models/SavedQuery";
 import { NextResponse, type NextRequest } from "next/server";
 import { toObjectId, toObjectIds } from "@/lib/mongo-id";
@@ -9,12 +8,13 @@ import type {
   SavedQueryContext,
   SavedQueryVisibility,
 } from "@/types/ISavedQuery";
+import { requireSession } from "@/lib/api-auth";
+import type { Types } from "mongoose";
+import { User } from "@/models/User";
+import * as Sentry from "@sentry/node";
 
 export const dynamic = "force-dynamic";
 
-// ============================================================
-// Constantes — fonte única para validação
-// ============================================================
 const CONTEXTS = [
   "observations",
   "projects",
@@ -30,23 +30,71 @@ const VISIBILITIES = [
 ] as const satisfies readonly SavedQueryVisibility[];
 
 // ============================================================
+// Regras de visibilidade
+// ============================================================
+/**
+ * Constrói as condições `$or` que definem o que o usuário autenticado
+ * pode ver:
+ *
+ *  - `public`    → qualquer tenant
+ *  - `shared`    → mesmo tenant
+ *  - `private`   → mesmo tenant E mesmo `sub` (usuário)
+ *  - `temporary` → mesmo tenant E mesmo `sub` (usuário)
+ *
+ * Se o `tenantId` for inválido, só `public` é retornado. Se o `sub` for
+ * inválido, `private`/`temporary` são omitidos.
+ */
+function buildVisibilityConditions(
+  tenantObjectId: Types.ObjectId | undefined,
+  userSub: string | undefined,
+): Record<string, unknown>[] {
+  const conditions: Record<string, unknown>[] = [
+    { visibility: { $eq: "public" } },
+  ];
+
+  if (tenantObjectId) {
+    conditions.push({
+      visibility: { $eq: "shared" },
+      tenantId: { $eq: tenantObjectId },
+    });
+
+    if (userSub) {
+      conditions.push({
+        visibility: { $eq: "private" },
+        tenantId: { $eq: tenantObjectId },
+        sub: { $eq: userSub },
+      });
+      conditions.push({
+        visibility: { $eq: "temporary" },
+        tenantId: { $eq: tenantObjectId },
+        sub: { $eq: userSub },
+      });
+    }
+  }
+
+  return conditions;
+}
+
+// ============================================================
 // GET
 // ============================================================
 export async function GET(req: NextRequest) {
-  const sessionIds = await getServerSessionIds();
-  const tenantObjectId = toObjectId(sessionIds.tenantId);
-  if (!tenantObjectId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
 
+  const tenantObjectId = toObjectId(auth.user.tenantId);
+  const userSub = auth.user.sub;
   const { searchParams } = new URL(req.url);
 
-  // Busca por ID único — cast + $eq em ambas as chaves
+  // Todas as condições de visibilidade que o usuário pode acessar
+  const visibleConditions = buildVisibilityConditions(tenantObjectId, userSub);
+
+  // ------ Busca por ID único ------
   const idParam = toObjectId(searchParams.get("id"));
   if (idParam) {
     const savedQuery = await SavedQuery.findOne({
       _id: { $eq: idParam },
-      tenantId: { $eq: tenantObjectId },
+      $or: visibleConditions,
     }).lean();
 
     if (!savedQuery) {
@@ -58,42 +106,73 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(savedQuery);
   }
 
-  // Resolve DBQL (id de saved query referenciado em `?q=`)
+  // ------ Resolve DBQL (id de saved query referenciado em `?q=`) ------
   const searchQueryRaw = searchParams.get("search") ?? "";
   let finalSearchQuery = searchQueryRaw;
 
   const dbqlId = toObjectId(searchParams.get("q"));
   if (dbqlId) {
+    // Só permite referenciar saved-queries visíveis ao usuário atual
     const savedQuery = await SavedQuery.findOne({
       _id: { $eq: dbqlId },
-      tenantId: { $eq: tenantObjectId },
+      $or: visibleConditions,
     }).lean();
     if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
   }
 
-  // Filtros opcionais — strings validadas por enum
-  const additionalMatch: Record<string, unknown> = {};
+  // ------ Filtro opcional por visibility ------
+  // Se o usuário pedir visibility=X, restringimos o $or só às condições
+  // que permitem X. Se ele pedir algo que não pode ver (ex.: private de
+  // outro), retornamos vazio sem tocar o banco.
+  const visibilityParam = toStringEnum(
+    searchParams.get("visibility"),
+    VISIBILITIES,
+  );
+
+  const filteredConditions = visibilityParam
+    ? visibleConditions.filter((cond) => {
+        const v = cond.visibility as { $eq: SavedQueryVisibility };
+        return v.$eq === visibilityParam;
+      })
+    : visibleConditions;
+
+  if (filteredConditions.length === 0) {
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    return NextResponse.json({
+      data: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+    });
+  }
+
+  // ------ Monta additionalMatch ------
+  const additionalMatch: Record<string, unknown> = {
+    $or: filteredConditions,
+  };
 
   const context = toStringEnum(searchParams.get("context"), CONTEXTS);
   if (context) additionalMatch.context = { $eq: context };
 
-  const visibility = toStringEnum(
-    searchParams.get("visibility"),
-    VISIBILITIES,
-  );
-  if (visibility) additionalMatch.visibility = { $eq: visibility };
-
+  // ------ Delega ao handler genérico ------
+  // 🔑 skipTenantFilter: true → não adiciona `tenantId: <atual>` no $match,
+  //    porque a visibilidade cross-tenant já é tratada pelo $or acima.
   return handleGenericGet(req, {
     model: SavedQuery,
     defaultSort: "createdAt",
     additionalMatch,
     overrideSearchQuery: finalSearchQuery,
+    skipTenantFilter: true,
     projection: {
       _id: 1,
       name: 1,
       queryString: 1,
       context: 1,
       visibility: 1,
+      sub: 1,
+      userId: 1,
       createdAt: 1,
     },
   });
@@ -102,19 +181,28 @@ export async function GET(req: NextRequest) {
 // ============================================================
 // POST
 // ============================================================
+/**
+ * Cria recurso do endpoint /api/saved-query.
+ *
+ * Este endpoint expõe a operação post em /api/saved-query.
+ *
+ * @summary Cria recurso do endpoint /api/saved-query
+ * @tags Saved Query
+ * @route POST /api/saved-query
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const sessionIds = await getServerSessionIds();
-    const tenantObjectId = toObjectId(sessionIds.tenantId);
-    const userObjectId = toObjectId(sessionIds.userId);
+    const auth = await requireSession();
+    if (auth.ok === false) return auth.response;
 
-    if (!tenantObjectId || !userObjectId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const userSub = auth.user.sub;
+    const tenantObjectId = toObjectId(auth.user.tenantId);
     const body = (await req.json()) as Record<string, unknown>;
 
-    // Validação explícita — nada de spread de body cru
     const name = toNonEmptyString(body.name);
     const queryString = toNonEmptyString(body.queryString);
     if (!name || !queryString) {
@@ -127,17 +215,35 @@ export async function POST(req: NextRequest) {
     const context = toStringEnum(body.context, CONTEXTS) ?? "observations";
     const visibility = toStringEnum(body.visibility, VISIBILITIES) ?? "private";
 
-    // Reaproveita a temporária do usuário, se existir
-    const tempQuery = await SavedQuery.findOne({
-      tenantId: { $eq: tenantObjectId },
-      userId: { $eq: userObjectId },
-      visibility: { $eq: "temporary" },
-    });
+    // 🔑 Busca o usuário UMA vez, antes dos dois ramos (update/criação)
+    const user = await User.findBySub(userSub);
+    if (!user) throw new Error("[Saved-queries] ON Save: User Not Found");
 
-    if (tempQuery) {
-      tempQuery.queryString = queryString;
-      tempQuery.context = context;
-      const updated = await tempQuery.save();
+    // Reaproveita a temporária do usuário, se existir
+    const tempQuery = await SavedQuery.findTemporary(
+      tenantObjectId.toString(),
+      userSub,
+    );
+
+    if (tempQuery || body.visibility === "temporary") {
+      // findOneAndUpdate NÃO revalida o documento inteiro, só os campos
+      // que você tocar. Assim, dados legados sem `userId` não derrubam o save.
+      const updated = await SavedQuery.findOneAndUpdate(
+        { _id: tempQuery._id },
+        {
+          $set: {
+            name,
+            queryString,
+            context,
+            visibility,
+            // backfill defensivo — se o doc é legado, preenche agora
+            userId: user._id,
+            sub: userSub,
+          },
+        },
+        { new: true },
+      );
+
       return NextResponse.json(updated, { status: 201 });
     }
 
@@ -147,12 +253,13 @@ export async function POST(req: NextRequest) {
       context,
       visibility,
       tenantId: tenantObjectId,
-      userId: userObjectId,
+      sub: userSub,
+      userId: user._id,
     });
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
-    console.error("Erro ao salvar query:", error);
+    Sentry.captureException(error);
     return NextResponse.json(
       { error: "Erro ao salvar query" },
       { status: 500 },
@@ -163,22 +270,31 @@ export async function POST(req: NextRequest) {
 // ============================================================
 // PUT
 // ============================================================
+/**
+ * Atualiza recurso do endpoint /api/saved-query.
+ *
+ * Este endpoint expõe a operação put em /api/saved-query.
+ *
+ * @summary Atualiza recurso do endpoint /api/saved-query
+ * @tags Saved Query
+ * @route PUT /api/saved-query
+ * @async
+ * @function PUT
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function PUT(req: NextRequest) {
   try {
-    const sessionIds = await getServerSessionIds();
-    const tenantObjectId = toObjectId(sessionIds.tenantId);
-    if (!tenantObjectId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireSession();
+    if (auth.ok === false) return auth.response;
+
+    const tenantObjectId = toObjectId(auth.user.tenantId);
+    const userSub = auth.user.sub;
 
     const body = (await req.json()) as Record<string, unknown>;
-
     const id = toObjectId(body.id);
     if (!id) {
-      return NextResponse.json(
-        { error: "ID inválido" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
 
     // $set construído explicitamente — só campos permitidos
@@ -203,16 +319,20 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    // 🔒 tenantId + sub: só o dono pode editar.
+    // Admin que quiser editar outra query precisa impersonar o dono.
     const updatedQuery = await SavedQuery.findOneAndUpdate(
       {
         _id: { $eq: id },
         tenantId: { $eq: tenantObjectId },
+        sub: { $eq: userSub },
       },
       { $set: updateData },
       { new: true },
     );
 
     if (!updatedQuery) {
+      // 404 para não vazar a existência de recursos de outros usuários
       return NextResponse.json(
         { error: "Consulta não encontrada" },
         { status: 404 },
@@ -231,26 +351,40 @@ export async function PUT(req: NextRequest) {
 // ============================================================
 // DELETE
 // ============================================================
+/**
+ * Remove recurso do endpoint /api/saved-query.
+ *
+ * Este endpoint expõe a operação delete em /api/saved-query.
+ *
+ * @summary Remove recurso do endpoint /api/saved-query
+ * @tags Saved Query
+ * @route DELETE /api/saved-query
+ * @async
+ * @function DELETE
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function DELETE(req: NextRequest) {
-  const sessionIds = await getServerSessionIds();
-  const tenantObjectId = toObjectId(sessionIds.tenantId);
-  if (!tenantObjectId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantObjectId = toObjectId(auth.user.tenantId);
+  const userSub = auth.user.sub;
 
   const { searchParams } = new URL(req.url);
   const singleId = searchParams.get("id");
   const idsParam = searchParams.get("ids");
 
   const ids = toObjectIds(singleId ?? idsParam);
-
   if (ids.length === 0) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
 
+  // 🔒 Só apaga as que pertencem ao próprio usuário
   const result = await SavedQuery.deleteMany({
     _id: { $in: ids },
     tenantId: { $eq: tenantObjectId },
+    sub: { $eq: userSub },
   });
 
   return NextResponse.json({

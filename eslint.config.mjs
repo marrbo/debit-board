@@ -14,6 +14,11 @@ const eslintConfig = defineConfig([
       // 1. O problema do 'any': alertar em vez de travar o build.
       "@typescript-eslint/no-explicit-any": "warn",
 
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+
       // 2. Controle total de imports e variáveis não utilizadas via plugin.
 
       // 3. Melhora a legibilidade: exige que type/interface seja importado explicitamente como type.

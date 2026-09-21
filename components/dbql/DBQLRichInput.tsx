@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from "react";
 
 interface DBQLRichInputProps {
   value: string;
@@ -9,13 +9,23 @@ interface DBQLRichInputProps {
   rows?: number;
 }
 
-export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder, className = '', rows = 3 }: DBQLRichInputProps) {
+export default function DBQLRichInput({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  className = "",
+  rows = 3,
+}: DBQLRichInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, 48)}px`;
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.max(
+        textareaRef.current.scrollHeight,
+        48,
+      )}px`;
     }
   }, [value]);
 
@@ -24,30 +34,51 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
 
     // 🔥 Regex atualizada: permite ponto em campos (ex: pattern.name) e
     // captura valores entre aspas mesmo contendo espaços e parênteses
-    const regex = /("[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)"[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)[^\s\(\)]+|\b(?:and|or|not)\b|[\(\)]|\s+|[^\s]+)/gi;
+    const regex =
+      /("[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)"[^"]*"|!?\b[a-zA-Z0-9_.]+(?:>=|<=|>|<|!=|:|=)[^\s\(\)]+|\b(?:and|or|not)\b|[\(\)]|\s+|[^\s]+)/gi;
     const parts = text.match(regex) || [text];
 
     return parts.map((part, i) => {
       const lower = part.toLowerCase();
 
       // Operadores lógicos
-      if (['and', 'or', 'not'].includes(lower)) {
-        return <span key={i} className="text-purple-600 dark:text-purple-400 font-bold">{part}</span>;
+      if (["and", "or", "not"].includes(lower)) {
+        return (
+          <span
+            key={i}
+            className="text-purple-600 dark:text-purple-400 font-bold"
+          >
+            {part}
+          </span>
+        );
       }
 
       // Parênteses
-      if (part === '(' || part === ')') {
-        return <span key={i} className="text-pink-600 dark:text-pink-400 font-bold">{part}</span>;
+      if (part === "(" || part === ")") {
+        return (
+          <span key={i} className="text-pink-600 dark:text-pink-400 font-bold">
+            {part}
+          </span>
+        );
       }
 
       // 🔥 Campo com operador (aceita ponto no nome)
-      const matchField = part.match(/^(!?)([a-zA-Z0-9_.]+)(>=|<=|>|<|!=|:|=)(.*)$/);
+      const matchField = part.match(
+        /^(!?)([a-zA-Z0-9_.]+)(>=|<=|>|<|!=|:|=)(.*)$/,
+      );
       if (matchField) {
         const [, excl, field, op, val] = matchField;
         return (
           <span key={i}>
-            {excl && <span className="text-pink-600 dark:text-pink-400 font-bold">{excl}</span>}
-            <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{field}{op}</span>
+            {excl && (
+              <span className="text-pink-600 dark:text-pink-400 font-bold">
+                {excl}
+              </span>
+            )}
+            <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
+              {field}
+              {op}
+            </span>
             <span className="text-amber-600 dark:text-amber-400">{val}</span>
           </span>
         );
@@ -55,7 +86,11 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
 
       // Strings entre aspas (valores)
       if (/^".*"$/.test(part)) {
-        return <span key={i} className="text-amber-600 dark:text-amber-400">{part}</span>;
+        return (
+          <span key={i} className="text-amber-600 dark:text-amber-400">
+            {part}
+          </span>
+        );
       }
 
       // Espaços em branco
@@ -64,12 +99,18 @@ export default function DBQLRichInput({ value, onChange, onKeyDown, placeholder,
       }
 
       // Qualquer outra coisa (texto solto)
-      return <span key={i} className="text-heading dark:text-heading">{part}</span>;
+      return (
+        <span key={i} className="text-heading dark:text-heading">
+          {part}
+        </span>
+      );
     });
   };
 
   return (
-    <div className={`relative grid grid-cols-1 items-stretch w-full bg-bg-sunken  border border-default dark:border-strong rounded-xl overflow-hidden ${className}`}>
+    <div
+      className={`relative grid grid-cols-1 items-stretch w-full bg-elevated border dark:border-strong rounded-lg overflow-hidden ${className}`}
+    >
       <div className="col-start-1 row-start-1 text-[13px] font-mono pointer-events-none whitespace-pre-wrap break-words leading-relaxed p-3 select-none w-full h-full">
         {renderDBQLColoredQuery(value)}
       </div>

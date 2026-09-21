@@ -1,37 +1,92 @@
-// proxy.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as Sentry from "@sentry/nextjs";
 import { getNextAuthUrl } from "./lib/utils";
 
+// ---------------------------------------------------------------------------
+// Rotas públicas — sempre acessíveis, sem sessão
+// ---------------------------------------------------------------------------
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth",
+  "/api/cron",
+  "/api/webhooks",
+  "/api/openapi.json",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/manifest.json",
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function matchesPrefix(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => matchesPrefix(pathname, p));
+}
+
+function isApiPath(pathname: string): boolean {
+  return pathname.startsWith("/api/");
+}
+
+/**
+ * Injeta cabeçalhos de segurança, remediação de RateLimit e remove cabeçalhos que vazam topologia de rede
+ */
+function applySecurityHeaders(
+  response: NextResponse,
+  pathname?: string,
+): NextResponse {
+  // 1. Remove o cabeçalho de vazamento de informações do ngrok reportado anteriormente
+  response.headers.delete("ngrok-agent-ips");
+
+  // 2. Aplica a remediação do cabeçalho HTTP Strict-Transport-Security (HSTS)
+  response.headers.set(
+    "Strict-Transport-Security",
+    "max-age=63072000; includeSubDomains; preload",
+  );
+
+  // 3. Aplica a remediação de Rate Limit se for uma rota de API (/api/*)
+  if (pathname && isApiPath(pathname)) {
+    response.headers.set("RateLimit-Limit", "100;w=60");
+  }
+
+  return response;
+}
+
+function unauthorizedResponse(
+  request: NextRequest,
+  pathname: string,
+  search: string,
+): NextResponse {
+  if (isApiPath(pathname)) {
+    return applySecurityHeaders(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      pathname,
+    );
+  }
+
+  const signInUrl = new URL("/login", request.url);
+  signInUrl.searchParams.set("callbackUrl", `${pathname}${search}`);
+  return applySecurityHeaders(
+    NextResponse.redirect(signInUrl, { status: 302 }),
+    pathname,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
 export async function proxy(request: NextRequest) {
-  // if (process.env.NODE_ENV !== "production") {
-  //   console.log("[proxy]", {
-  //     hasSecret: !!process.env.NEXTAUTH_SECRET,
-  //     secretLen: process.env.NEXTAUTH_SECRET?.length ?? 0,
-  //     nextauthUrl: process.env.NEXTAUTH_URL,
-  //     host: request.headers.get("host"),
-  //     cookieNames: request.cookies.getAll().map((c) => c.name),
-  //   });
+  const { pathname, search } = request.nextUrl;
 
-  //   console.log("[proxy-headers]", {
-  //     host: request.headers.get("host"),
-  //     xForwardedProto: request.headers.get("x-forwarded-proto"),
-  //     xForwardedHost: request.headers.get("x-forwarded-host"),
-  //     xForwardedFor: request.headers.get("x-forwarded-for"),
-  //   });
-  // }
-
-  const { pathname } = request.nextUrl;
-
-  // --- INJEÇÃO DE INSTRUÇÕES (SENTRY E BASEURL) ---
-  const host = request.headers.get('host') || 'localhost:3001';
-  const protocol = 'https';
-  const baseUrl = `${protocol}://${host}`;
-  
-  // Registra a métrica no Sentry para todas as requisições que passam pelo middleware
   Sentry.metrics.count(pathname, 1);
+
+  const host = request.headers.get("host") ?? "localhost:3001";
+  const baseUrl = `https://${host}`;
 
   const NEXTAUTH_URL = getNextAuthUrl();
   const useSecureCookie = (NEXTAUTH_URL ?? "").startsWith("https://");
@@ -41,70 +96,97 @@ export async function proxy(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
     secureCookie: useSecureCookie,
   });
+
   const isLoggedIn = !!token;
-  const isAdmin = token?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const tenantId = token?.tenantId;
-  const userId = token?.sub || '';
 
-  // Injeta a baseUrl nos cabeçalhos para que as páginas e APIs consumam
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-base-url', baseUrl);
-  requestHeaders.set('x-sentry-trace', request.headers.get('x-sentry-trace') || '');
-  requestHeaders.set('x-tenant-id', tenantId?.toString());
-  requestHeaders.set('x-user-id', userId);
-
-  // ------------------------------------------------
-
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth')) {
-    // Retorna a resposta permitindo os novos cabeçalhos criados
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+  requestHeaders.set("x-base-url", baseUrl);
+  requestHeaders.set(
+    "x-sentry-trace",
+    request.headers.get("x-sentry-trace") ?? "",
+  );
+  if (token?.tenantId) {
+    requestHeaders.set("x-tenant-id", String(token.tenantId));
+  }
+  if (token?.sub) {
+    requestHeaders.set("x-user-id", token.sub);
   }
 
+  // --- Rotas públicas ---
+  if (isPublicPath(pathname)) {
+    return applySecurityHeaders(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      pathname,
+    );
+  }
+
+  // --- Sem sessão → 401 (API) ou /login (página) ---
   if (!isLoggedIn) {
-    const signInUrl = new URL('/login', request.url);
-    signInUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(signInUrl, { status: 302});
+    return unauthorizedResponse(request, pathname, search);
   }
 
-  // FLUXO DO ADMIN
+  // --- Fluxo do admin ---
+  const isAdmin = token?.isAdmin === true;
   if (isAdmin) {
-    if (pathname === '/') {
-      return NextResponse.next({ request: { headers: requestHeaders } });
+    if (pathname.startsWith("/settings/profile/user")) {
+      return applySecurityHeaders(
+        NextResponse.redirect(new URL("/settings/admin", request.url)),
+        pathname,
+      );
     }
-
-    if (pathname.startsWith('/settings/profile/user')) {
-      return NextResponse.redirect(new URL('/settings/admin', request.url));
-    }
-    
-    return NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      pathname,
+    );
   }
 
-  // FLUXO DO USUÁRIO COMUM
+  // --- Não-admin: bloqueia /settings/admin/* ---
+  if (pathname.startsWith("/settings/admin")) {
+    if (isApiPath(pathname)) {
+      return applySecurityHeaders(
+        NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+        pathname,
+      );
+    }
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/settings", request.url)),
+      pathname,
+    );
+  }
+
+  // --- Fluxo do usuário comum (onboarding) ---
   const isOnboardingCompleted = token?.onboardingCompleted === true;
   const isOnSetupPage = pathname.startsWith("/settings/profile/user");
 
-  if (!isOnboardingCompleted) {
-    if (!isOnSetupPage) return NextResponse.redirect(new URL('/settings/profile/user', request.url));
-    return NextResponse.next({ request: { headers: requestHeaders } });
+  if (!isOnboardingCompleted && !isOnSetupPage) {
+    if (isApiPath(pathname)) {
+      return applySecurityHeaders(
+        NextResponse.json({ error: "Onboarding required" }, { status: 403 }),
+        pathname,
+      );
+    }
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/settings/profile/user", request.url)),
+      pathname,
+    );
   }
 
   if (isOnboardingCompleted && isOnSetupPage) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/", request.url)),
+      pathname,
+    );
   }
 
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  return applySecurityHeaders(
+    NextResponse.next({ request: { headers: requestHeaders } }),
+    pathname,
+  );
 }
 
+// ---------------------------------------------------------------------------
+// Matcher — o middleware não roda em assets estáticos
+// ---------------------------------------------------------------------------
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };

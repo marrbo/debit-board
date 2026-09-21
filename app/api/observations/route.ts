@@ -45,6 +45,19 @@ async function resolvePatternNameQuery(
   return { cleanedQuery, patternIds };
 }
 
+/**
+ * Lista recursos do endpoint /api/observations.
+ *
+ * Este endpoint expõe a operação get em /api/observations.
+ *
+ * @summary Lista recursos do endpoint /api/observations
+ * @tags Observations
+ * @route GET /api/observations
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const dbqlId = searchParams.get("q");

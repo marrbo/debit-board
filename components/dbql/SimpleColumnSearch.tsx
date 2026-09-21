@@ -63,7 +63,7 @@ export function SimpleColumnSearch({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+          className="w-full pl-9 pr-8 py-2 rounded-lg bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         {inputValue && (
           <button
@@ -86,7 +86,7 @@ export function SimpleColumnSearch({
       <select
         value={selectedColumn}
         onChange={(e) => setSelectedColumn(e.target.value)}
-        className="px-3 py-2 rounded-xl bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+        className="px-3 py-2.5 rounded-lg bg-white dark:bg-surface border border-default dark:border-strong text-sm focus:outline-none focus:ring-2 focus:ring-brand"
       >
         <option value="all">Todas as colunas</option>
         {columns

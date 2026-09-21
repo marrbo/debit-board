@@ -28,7 +28,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="relative inline-flex items-center h-7 w-12 rounded-full transition-colors duration-300 focus:outline-none"
+      className="relative inline-flex items-center h-6 w-10 rounded-full transition-colors duration-300 focus:outline-none"
       aria-label="Alternar tema"
       role="switch"
       aria-checked={active}
@@ -39,8 +39,8 @@ export default function ThemeToggle() {
         }`}
       />
       <span
-        className={`absolute flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
-          active ? "translate-x-1.5" : "-translate-x-3.5"
+        className={`absolute flex items-center justify-center w-5 h-5 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
+          active ? "translate-x-0" : "-translate-x-3.5"
         }`}
       >
         {active ? (

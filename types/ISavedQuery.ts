@@ -1,9 +1,11 @@
+//types/ISavedQuery.ts
 import type { Document, Types } from "mongoose";
 
 export type SavedQueryContext =
   | "observations"
   | "projects"
   | "repositories"
+  | "none"
   | "stats";
 
 export type SavedQueryVisibility =
@@ -19,5 +21,6 @@ export interface ISavedQuery extends Document {
   visibility: SavedQueryVisibility;
   tenantId: Types.ObjectId;
   userId: Types.ObjectId;
+  sub: string;
   createdAt: Date;
 }

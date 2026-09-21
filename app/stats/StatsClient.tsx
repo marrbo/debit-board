@@ -13,19 +13,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Charts from "@/components/Charts";
-import {
-  X,
-  Maximize2,
-  XCircle,
-  BarChart3,
-  FilterIcon,
-} from "lucide-react";
+import { X, Maximize2, XCircle, BarChart3, FilterIcon } from "lucide-react";
 import type { StatsData, DailyStats } from "./services/statsService";
 import PageHeader from "@/components/PageHeader";
 import TeamStatsCard from "@/components/TeamStatsCard";
 import TeamSelector from "@/components/TeamSelector";
 import { useTeam, useSlideToggle } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
+import SlideToggle from "@/components/SlideToggle";
 
 // ============================================================
 // ChartCard
@@ -42,9 +37,9 @@ function ChartCard({
   onExpand: (chartKey: string) => void;
 }) {
   return (
-    <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-body dark:text-body">
+    <div className="bg-elevated border border-subtle dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors flex flex-col">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-body dark:text-body shrink-0">
           {title}
         </h3>
         <button
@@ -55,7 +50,8 @@ function ChartCard({
           <Maximize2 className="w-4 h-4" />
         </button>
       </div>
-      <div className="h-64">{children}</div>
+      {/* 🔑 Sem h-64: o Charts define a própria altura via prop `height` */}
+      <div className="flex-1">{children}</div>
     </div>
   );
 }
@@ -86,9 +82,19 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   const [lastCategory, setLastCategory] = useState<string | null>(null);
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
 
+  const effectiveTeamId = useMemo(() => {
+    if (!teamId) return "all";
+    const selected = teams.find((t) => t._id === teamId);
+    return selected?.isGlobal ? "all" : teamId;
+  }, [teamId, teams]);
+
   // 🔥 Modos de visualização persistidos por página
   const { value: projectViewMode, setValue: setProjectViewMode } =
-    useSlideToggle<"status" | "severity">(pathname, "projectViewMode", "status");
+    useSlideToggle<"severity" | "status">(
+      pathname,
+      "projectViewMode",
+      "status",
+    );
 
   const { value: evolutionViewMode, setValue: setEvolutionViewMode } =
     useSlideToggle<"severity" | "status">(
@@ -133,12 +139,16 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   );
 
   const fetchStats = useCallback(
-    async (query: string, teamIdParam: string | null): Promise<StatsData> => {
+    async (q: string, teamIdParam: string | null): Promise<StatsData> => {
       const params = new URLSearchParams();
-      if (query) params.set("search", query);
-      if (teamIdParam) params.set("teamId", teamIdParam);
+      if (q) params.set("q", q); // 🔥 q em vez de search
+      if (teamIdParam && teamIdParam !== "all") {
+        params.set("teamId", teamIdParam);
+      }
 
-      const res = await fetch(`/api/stats?${params.toString()}`);
+      const res = await fetch(`/api/stats?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Erro ao carregar estatísticas");
       return (await res.json()) as StatsData;
     },
@@ -174,7 +184,13 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
       handleSearch(newQuery);
     },
-    [lastCategory, searchQuery, resolveQuery, clearCategoryFilter, handleSearch],
+    [
+      lastCategory,
+      searchQuery,
+      resolveQuery,
+      clearCategoryFilter,
+      handleSearch,
+    ],
   );
 
   // ============================================================
@@ -189,10 +205,8 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     const loadAll = async () => {
       setLoading(true);
       try {
-        const resolvedQuery = await resolveQuery(searchQuery);
-        if (cancelled) return;
-
-        const statsData = await fetchStats(resolvedQuery, teamId);
+        // 🔥 Manda o `searchQuery` cru — o servidor resolve ID → string
+        const statsData = await fetchStats(searchQuery, effectiveTeamId);
         if (!cancelled) {
           setStats(statsData);
           setError(null);
@@ -212,15 +226,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [
-    searchQuery,
-    teamId,
-    teamsLoaded,
-    fetchStats,
-    resolveQuery,
-    status,
-    session,
-  ]);
+  }, [searchQuery, effectiveTeamId, teamsLoaded, fetchStats, status, session]);
 
   // ============================================================
   // Derivados
@@ -330,70 +336,65 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   const projectStackedData = useMemo(() => {
     if (!projectTotals.length) return { labels: [], datasets: [] };
 
-    const labels = projectTotals.map((p) => p.label);
+    // 🔥 Ordena por total decrescente e limita a 7 itens (menos é mais)
+    const sorted = [...projectTotals]
+      .sort((a, b) => (b.value || 0) - (a.value || 0))
+      .slice(0, 7);
+
+    const labels = sorted.map((p) =>
+      p.label.length > 18 ? `${p.label.slice(0, 17)}…` : p.label,
+    );
 
     if (projectViewMode === "status") {
       const statuses = [
-        "open",
-        "resolved",
-        "recurring",
-        "wont_fix",
-        "unknown",
+        { key: "open", label: "Aberta", color: "#3B82F6" },
+        { key: "recurring", label: "Recorrente", color: "#F59E0B" },
+        { key: "resolved", label: "Resolvida", color: "#10B981" },
+        { key: "wont_fix", label: "Não corrigir", color: "#EF4444" },
+        { key: "unknown", label: "Outros", color: "#94A3B8" },
       ] as const;
-      const colors: Record<string, string> = {
-        open: "#007AFF",
-        resolved: "#34C759",
-        recurring: "#FF9500",
-        wont_fix: "#FF3B30",
-        unknown: "#8E8E93",
-      };
 
       const datasets = statuses
-        .filter((s) => projectTotals.some((p) => (p.status?.[s] || 0) > 0))
+        .filter((s) => sorted.some((p) => (p.status?.[s.key] || 0) > 0))
         .map((status) => ({
-          label: status.replace("_", " "),
-          data: projectTotals.map((p) => p.status?.[status] || 0),
-          backgroundColor: colors[status],
+          label: status.label,
+          data: sorted.map((p) => p.status?.[status.key] || 0),
+          backgroundColor: status.color,
           stack: "stack0",
-        }));
-
-      return { labels, datasets };
-    } else {
-      const severities = [
-        "critical",
-        "high",
-        "medium",
-        "low",
-        "unknown",
-      ] as const;
-      const colors: Record<string, string> = {
-        critical: "#FF3B30",
-        high: "#FF9500",
-        medium: "#FFCC00",
-        low: "#007AFF",
-        unknown: "#8E8E93",
-      };
-
-      const datasets = severities
-        .filter((s) => projectTotals.some((p) => (p.severity?.[s] || 0) > 0))
-        .map((sev) => ({
-          label: sev,
-          data: projectTotals.map((p) => p.severity?.[sev] || 0),
-          backgroundColor: colors[sev],
-          stack: "stack0",
+          borderRadius: 2,
+          borderSkipped: false as const,
         }));
 
       return { labels, datasets };
     }
+
+    const severities = [
+      { key: "critical", label: "Crítico", color: "#EF4444" },
+      { key: "high", label: "Alto", color: "#F97316" },
+      { key: "medium", label: "Médio", color: "#EAB308" },
+      { key: "low", label: "Baixo", color: "#3B82F6" },
+      { key: "unknown", label: "Outros", color: "#94A3B8" },
+    ] as const;
+
+    const datasets = severities
+      .filter((s) => sorted.some((p) => (p.severity?.[s.key] || 0) > 0))
+      .map((sev) => ({
+        label: sev.label,
+        data: sorted.map((p) => p.severity?.[sev.key] || 0),
+        backgroundColor: sev.color,
+        stack: "stack0",
+        borderRadius: 2,
+        borderSkipped: false as const,
+      }));
+
+    return { labels, datasets };
   }, [projectTotals, projectViewMode]);
 
   // ============================================================
   // Guards
   // ============================================================
   if (status === "loading") {
-    return (
-      <div className="text-muted py-10 text-center">Carregando...</div>
-    );
+    return <div className="text-muted py-10 text-center">Carregando...</div>;
   }
 
   if (!session) {
@@ -411,7 +412,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
   if (error) {
     return (
-      <div className="bg-[#FFD1D1] dark:bg-[#FF453A]/20 border border-[#FF453A]/40 rounded-xl p-6 text-[#FF453A]">
+      <div className="bg-[#FFD1D1] dark:bg-[#FF453A]/20 border border-[#FF453A]/40 rounded-lg p-6 text-[#FF453A]">
         {error}
       </div>
     );
@@ -420,6 +421,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   // ============================================================
   // Render
   // ============================================================
+
   return (
     <div className="w-full space-y-6 p-8">
       <PageHeader
@@ -429,7 +431,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         search={{
           type: "advanced",
           onSearch: handleSearch,
-          userId: session.user.id,
+          userSub: session.user.sub,
           placeholder: "Search stats, e.g. severity:critical OR project:my-api",
           context: "observations",
         }}
@@ -438,7 +440,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
             {lastCategory && (
               <button
                 onClick={clearCategoryFilter}
-                className="px-3 py-2 bg-red-600/10 text-error border border-error/20 rounded-2xl text-xs font-medium hover:bg-red-600/20 transition-colors"
+                className="px-3 py-2 bg-red-600/10 text-error border border-error/20 rounded-lg text-xs font-medium hover:bg-red-600/20 transition-colors"
                 title="Limpar filtro de categoria"
               >
                 <FilterIcon className="w-4 h-4" />
@@ -462,47 +464,38 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Evolução */}
-        <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-body dark:text-body">
-              Evolução: Novas ocorrências
+        <div className="bg-elevated border border-subtle dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-body dark:text-body shrink-0">
+              Novas ocorrências
             </h3>
-            <button
-              onClick={() => setExpandedChart("evolution")}
-              className="p-1.5 text-muted hover:text-brand transition-colors"
-              title="Expandir gráfico"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex items-center justify-end mb-3">
-            <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
-              <div
-                className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm hover:drop-shadow-lg transition-all duration-300"
-                style={{
-                  left:
-                    evolutionViewMode === "severity"
-                      ? "0.25rem"
-                      : "calc(50% + 0.25rem)",
-                }}
+
+            <div className="flex items-center gap-2 shrink-0">
+              <SlideToggle
+                options={[
+                  {
+                    key: "severity",
+                    label: "Severidade",
+                    activeClassName: "text-success",
+                  },
+                  {
+                    key: "status",
+                    label: "Status",
+                    activeClassName: "text-warning",
+                  },
+                ]}
+                value={evolutionViewMode}
+                onChange={setEvolutionViewMode}
+                width={170}
+                height={28}
+                className="font-mono"
               />
               <button
-                onClick={() => setEvolutionViewMode("severity")}
-                className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${
-                  evolutionViewMode === "severity"
-                    ? "text-success"
-                    : "text-muted"
-                }`}
+                onClick={() => setExpandedChart("evolution")}
+                className="p-1.5 text-muted hover:text-brand transition-colors"
+                title="Expandir gráfico"
               >
-                Severidade
-              </button>
-              <button
-                onClick={() => setEvolutionViewMode("status")}
-                className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${
-                  evolutionViewMode === "status" ? "text-warning" : "text-muted"
-                }`}
-              >
-                Status
+                <Maximize2 className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -551,47 +544,38 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         </ChartCard>
 
         {/* Projetos */}
-        <div className="bg-elevated border border-subtle dark:border-strong rounded-2xl p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-body dark:text-body">
-              Total por Projeto (TOP 10)
+        <div className="bg-elevated border border-subtle dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-body dark:text-body shrink-0">
+              Total por Projeto
             </h3>
-            <button
-              onClick={() => setExpandedChart("project")}
-              className="p-1.5 text-muted hover:text-brand transition-colors"
-              title="Expandir gráfico"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex items-center justify-end mb-3">
-            <div className="relative flex items-center bg-apple-border-light/30 dark:bg-[#2C2C2E] rounded-full p-1 w-40">
-              <div
-                className="absolute top-1 bottom-1 w-1/2 rounded-full bg-white dark:bg-[#48484A] shadow-sm hover:drop-shadow-lg transition-all duration-300"
-                style={{
-                  left:
-                    projectViewMode === "status"
-                      ? "0.25rem"
-                      : "calc(50% + 0.25rem)",
-                }}
+
+            <div className="flex items-center gap-2 shrink-0">
+              <SlideToggle
+                options={[
+                  {
+                    key: "severity",
+                    label: "Severidade",
+                    activeClassName: "text-success",
+                  },
+                  {
+                    key: "status",
+                    label: "Status",
+                    activeClassName: "text-warning",
+                  },
+                ]}
+                value={projectViewMode}
+                onChange={setProjectViewMode}
+                width={160}
+                height={28}
+                className="font-mono"
               />
               <button
-                onClick={() => setProjectViewMode("status")}
-                className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${
-                  projectViewMode === "status" ? "text-success" : "text-muted"
-                }`}
+                onClick={() => setExpandedChart("project")}
+                className="p-1.5 text-muted hover:text-brand transition-colors"
+                title="Expandir gráfico"
               >
-                Status
-              </button>
-              <button
-                onClick={() => setProjectViewMode("severity")}
-                className={`relative z-10 flex-1 text-[11px] font-medium py-1 rounded-full transition-colors ${
-                  projectViewMode === "severity"
-                    ? "text-warning"
-                    : "text-muted"
-                }`}
-              >
-                Severidade
+                <Maximize2 className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -614,7 +598,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       {/* Modal de expansão */}
       {expandedChart && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">
+          <div className="bg-white dark:bg-[#1C1C1E] rounded-lg shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-default dark:border-strong">
               <h3 className="text-base font-semibold text-heading dark:text-heading">
                 {expandedChart === "evolution"

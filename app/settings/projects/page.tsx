@@ -4,13 +4,13 @@ import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, FolderPlus } from "lucide-react";
+import { RefreshCw, FolderPlus, FolderGit2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import ProjectDrawer from "@/components/ProjectDrawer";
 import BulkAssignTeamModal from "@/components/BulkAssignTeamModal";
 import type { IProject } from "@/types/IProject";
-import type { Column } from '@/components/DataTable';
+import type { Column } from "@/components/DataTable";
 
 const columns: Column<IProject>[] = [
   { key: "name", label: "Nome do Projeto", sortable: true },
@@ -28,7 +28,7 @@ const columns: Column<IProject>[] = [
     render: (item: IProject) => (
       <Link
         href={`/settings/repositories?projectId=${item._id}`}
-        className="inline-flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors"
+        className="inline-flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
       >
         Ver Repositórios
       </Link>
@@ -51,7 +51,7 @@ function ProjectsContent() {
   const handleSimpleSearch = (column: string | null, value: string) => {
     setFilterColumn(column);
     setFilterValue(value);
-    // Reset para a primeira página é feito pelo DataTable via useEffect? Não, precisa controlar aqui? 
+    // Reset para a primeira página é feito pelo DataTable via useEffect? Não, precisa controlar aqui?
     // O DataTable já não renderiza busca, então resetamos a página manualmente? Vamos deixar o DataTable lidar com isso via filterValue (client-side).
   };
 
@@ -62,7 +62,7 @@ function ProjectsContent() {
       const res = await fetch("/api/azure/sync", { method: "POST" });
       if (res.ok) {
         alert("Sincronização concluída!");
-        setRefreshKey(prev => prev + 1);
+        setRefreshKey((prev) => prev + 1);
       } else {
         const err = await res.json();
         alert("Erro na sincronização: " + (err.error || "Erro desconhecido"));
@@ -85,12 +85,13 @@ function ProjectsContent() {
     <div className="w-full space-y-4">
       <PageHeader
         title="Projetos"
+        icon={<FolderGit2 className="w-10 h-10 text-brand" />}
         subtitle="Gerencie os projetos do Tenant. Projetos possuem repositórios vinculados."
         search={{
-          type: 'simple',
+          type: "simple",
           onSearch: handleSimpleSearch,
-          userId: session?.user?._id?.toString(),
-          columns: columns.map(c => ({ key: c.key, label: c.label })),
+          userSub: session?.user?.sub?.toString(),
+          columns: columns.map((c) => ({ key: c.key, label: c.label })),
           placeholder: "Buscar projetos (ex: name:MeuProjeto OR projectId:...)",
         }}
         actions={
@@ -98,14 +99,14 @@ function ProjectsContent() {
             <button
               onClick={() => setShowAssignModal(true)}
               disabled={selectedProjectIds.length === 0}
-              className="flex items-center gap-2 bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 disabled:opacity-50 text-heading dark:text-heading px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg border border-default dark:border-strong"
+              className="flex items-center gap-2 bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 disabled:opacity-50 text-heading dark:text-heading px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg border border-default dark:border-strong"
             >
               <FolderPlus className="w-4 h-4" /> Atribuir a Time
             </button>
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               {syncing ? (
                 <>
@@ -129,9 +130,10 @@ function ProjectsContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Projetos"
-        onRowClick={(project: unknown) => setSelectedProject(project as IProject)}
+        onRowClick={(project: unknown) =>
+          setSelectedProject(project as IProject)
+        }
         onSelectionChange={setSelectedProjectIds}
-        selectable={true}
         filterColumn={filterColumn}
         filterValue={filterValue}
       />
@@ -147,7 +149,7 @@ function ProjectsContent() {
           onClose={() => setShowAssignModal(false)}
           onSuccess={() => {
             setSelectedProjectIds([]);
-            setRefreshKey(prev => prev + 1);
+            setRefreshKey((prev) => prev + 1);
           }}
         />
       )}

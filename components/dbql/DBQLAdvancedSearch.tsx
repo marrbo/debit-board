@@ -16,6 +16,10 @@ import {
   PlayCircleIcon,
   TriangleAlert,
   TagIcon,
+  Share2,
+  Globe,
+  TimerReset,
+  HatGlasses,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
 import DBQLHelpModal from "./DBQLHelpModal";
@@ -36,7 +40,7 @@ interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
   placeholder?: string;
   context?: string;
-  userId: string;
+  userSub: string;
   onManageQueries?: () => void;
   value?: string;
 }
@@ -143,7 +147,8 @@ const validateDBQL = (query: string): ValidationError[] => {
       if (stack.length > 0) stack.pop();
       else
         errors.push({
-          error: "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
+          error:
+            "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
           highlightIndex: i,
           errorLength: 1,
         });
@@ -188,7 +193,9 @@ const validateDBQL = (query: string): ValidationError[] => {
   const chaoticMatch = chaoticRegex.exec(query);
   if (chaoticMatch) {
     errors.push({
-      error: `${MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)]} (Detectado: '${chaoticMatch[0]}')`,
+      error: `${
+        MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)]
+      } (Detectado: '${chaoticMatch[0]}')`,
       highlightIndex: chaoticMatch.index ?? 0,
       errorLength: chaoticMatch[0].length,
     });
@@ -226,7 +233,7 @@ export default function DBQLAdvancedSearch({
   onSearch,
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
   context: dbqlContext = "observations",
-  userId = "",
+  userSub = "",
   onManageQueries,
   value,
 }: AdvancedSearchProps) {
@@ -241,7 +248,9 @@ export default function DBQLAdvancedSearch({
   const [inputValue, setInputValue] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [activeQueryString, setActiveQueryString] = useState<string>("");
-  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(null);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(
+    null,
+  );
   const [originalQueryString, setOriginalQueryString] = useState<string>("");
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -257,7 +266,10 @@ export default function DBQLAdvancedSearch({
   const [savedQueries, setSavedQueries] = useState<ISavedQuery[]>([]);
   const [tempQuery, setTempQuery] = useState<ISavedQuery>();
   const [isLoading, setIsLoading] = useState(true);
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
 
   const savedButtonRef = useRef<HTMLButtonElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -268,7 +280,7 @@ export default function DBQLAdvancedSearch({
   const lastLoadedKeyRef = useRef<string | null>(null);
   const { data: session } = useSession();
 
-  userId = userId ?? session?.user?.id;
+  userSub = userSub ?? session?.user?.sub;
 
   // ============================================================
   // Derivados (o compilador memoiza automaticamente)
@@ -370,7 +382,7 @@ export default function DBQLAdvancedSearch({
           queryString: fullQuery,
           context: dbqlContext,
           visibility: "temporary",
-          userId: session?.user?.id,
+          userSub: session?.user?.sub,
         };
         const method = id ? "PUT" : "POST";
         const body = id ? { ...payload, id } : payload;
@@ -404,7 +416,7 @@ export default function DBQLAdvancedSearch({
             name: activeSavedQuery?.name,
             queryString: fullQuery,
             context: dbqlContext,
-            userId: session?.user?._id?.toString() || session?.user?.id,
+            userSub: session?.user?.sub?.toString() || session?.user?.sub,
           }),
         });
         if (res.ok) {
@@ -526,7 +538,7 @@ export default function DBQLAdvancedSearch({
           queryString: currentEditingQuery,
           context: dbqlContext,
           visibility: saveVisibility,
-          userId,
+          userSub,
         }),
       });
       if (res.ok) {
@@ -571,7 +583,7 @@ export default function DBQLAdvancedSearch({
           name: activeSavedQuery.name,
           queryString: currentEditingQuery,
           context: dbqlContext,
-          userId,
+          userSub,
         }),
       });
       if (res.ok) {
@@ -668,7 +680,9 @@ export default function DBQLAdvancedSearch({
         right: window.innerWidth - rect.right,
       };
       setDropdownPosition((prev) =>
-        prev && prev.top === newPos.top && prev.right === newPos.right ? prev : newPos,
+        prev && prev.top === newPos.top && prev.right === newPos.right
+          ? prev
+          : newPos,
       );
     };
     window.addEventListener("resize", handleResize);
@@ -688,7 +702,8 @@ export default function DBQLAdvancedSearch({
       }
     };
     document.addEventListener("pointerdown", handleClickOutside);
-    return () => document.removeEventListener("pointerdown", handleClickOutside);
+    return () =>
+      document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
   // Carregamento: URL > local-settings > vazio
@@ -764,14 +779,7 @@ export default function DBQLAdvancedSearch({
 
     loadFromUrl();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    rawUrlQueryId,
-    urlModeParam,
-    pathname,
-    router,
-    searchParams,
-    onSearch,
-  ]);
+  }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, onSearch]);
 
   // Lista de queries salvas
   useEffect(() => {
@@ -787,13 +795,13 @@ export default function DBQLAdvancedSearch({
 
         const existingTemp = queries.find(
           (q: ISavedQuery) =>
-            q.visibility === "temporary" && q.userId?.toString() === userId,
+            q.visibility === "temporary" && q.sub?.toString() === userSub,
         );
         if (existingTemp) {
           setTempQuery(existingTemp);
         } else {
           setTempQuery({
-            userId,
+            userSub,
             name: `Temporary (${session?.user?.name})`,
             context: dbqlContext,
             tenantId: session?.user?.tenantId,
@@ -807,7 +815,7 @@ export default function DBQLAdvancedSearch({
       }
     };
     fetchSavedQueries();
-  }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userId]);
+  }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userSub]);
 
   // Sugestões
   useEffect(() => {
@@ -850,7 +858,11 @@ export default function DBQLAdvancedSearch({
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/observation-filters?field=${encodeURIComponent(tokenData.fieldKey || "")}&query=${encodeURIComponent(tokenData.query || "")}&context=${encodeURIComponent(dbqlContext)}`,
+          `/api/observation-filters?field=${encodeURIComponent(
+            tokenData.fieldKey || "",
+          )}&query=${encodeURIComponent(
+            tokenData.query || "",
+          )}&context=${encodeURIComponent(dbqlContext)}`,
           { signal: controller.signal },
         );
         if (res.ok) {
@@ -924,13 +936,20 @@ Solicitação do usuário em linguagem natural:
 
 Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
 
+  const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
+    temporary: <TimerReset size={12} className="text-muted" />,
+    private: <HatGlasses size={12} className="text-muted" />,
+    public: <Globe size={12} className="text-muted" />,
+    shared: <Share2 size={12} className="text-muted" />,
+  };
+
   // ============================================================
   // Render
   // ============================================================
   return (
     <div className="relative w-full flex flex-col gap-1.5">
       <div
-        className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm hover:drop-shadow-lg transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
+        className={`relative flex flex-col bg-elevated border rounded-lg px-4 py-3 shadow-sm hover:drop-shadow-lg transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
           syntaxErrors.length > 0
             ? "border-apple-red"
             : "border-default dark:border-strong"
@@ -938,7 +957,9 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
       >
         <div className="flex items-start gap-2 w-full">
           <TriangleAlert
-            className={`w-4 h-4 shrink-0 ${syntaxErrors.length > 0 ? "block text-error" : "hidden"}`}
+            className={`w-4 h-4 shrink-0 ${
+              syntaxErrors.length > 0 ? "block text-error" : "hidden"
+            }`}
           />
 
           <div className="flex flex-col flex-1 gap-1.5 min-w-0">
@@ -1008,29 +1029,34 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <span>Limpar</span>
               </button>
             )}
-            {activeSavedQuery && activeSavedQuery.visibility !== "temporary" && (
-              <div className="flex ml-5 items-center gap-1.5 border-l border-default px-7">
-                <span
-                  className={`w-2 h-2 rounded-full ${isQueryModified ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
-                  title={
-                    isQueryModified
-                      ? "Consulta modificada (alterações não salvas)"
-                      : "Consulta salva e sincronizada"
-                  }
-                />
-                <span>
-                  Consulta:{" "}
-                  <strong className="text-heading dark:text-heading">
-                    {activeSavedQuery.name}
-                  </strong>
-                </span>
-                {isQueryModified && (
-                  <span className="text-amber-500 font-semibold text-[10px]">
-                    (modificada)
+            {activeSavedQuery &&
+              activeSavedQuery.visibility !== "temporary" && (
+                <div className="flex ml-5 items-center gap-1.5 border-l border-default px-7">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isQueryModified
+                        ? "bg-amber-500 animate-pulse"
+                        : "bg-emerald-500"
+                    }`}
+                    title={
+                      isQueryModified
+                        ? "Consulta modificada (alterações não salvas)"
+                        : "Consulta salva e sincronizada"
+                    }
+                  />
+                  <span>
+                    Consulta:{" "}
+                    <strong className="text-heading dark:text-heading">
+                      {activeSavedQuery.name}
+                    </strong>
                   </span>
-                )}
-              </div>
-            )}
+                  {isQueryModified && (
+                    <span className="text-amber-500 font-semibold text-[10px]">
+                      (modificada)
+                    </span>
+                  )}
+                </div>
+              )}
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
@@ -1082,7 +1108,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 createPortal(
                   <div
                     ref={savedDropdownRef}
-                    className="fixed z-[9999] w-64 bg-sunken border border-default dark:border-strong rounded-xl shadow-xl"
+                    className="fixed z-[9999] w-80 shadow-sm drop-shadow-sm bg-sunken border border-default dark:border-strong rounded-lg shadow-xl"
                     style={{
                       top: dropdownPosition.top,
                       right: dropdownPosition.right,
@@ -1121,15 +1147,27 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                               : "text-muted"
                           }`}
                         >
-                          <div className="flex flex-col gap-0.5 min-w-0 flex-1 group-hover:underline">
-                            <span className="font-medium truncate">{q.name}</span>
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <div className="flex gap-2">
+                              <span className="shrink-0 flex items-center justify-center">
+                                {VISIBILITY_ICONS[q.visibility]}
+                              </span>
+                              <h3
+                                className="font-semibold group-hover:underline text-body dark:text-body truncate flex-1 min-w-0"
+                                title={q.name}
+                              >
+                                {q.name}
+                              </h3>
+                            </div>
                             <span className="font-mono text-[10px] font-extralight text-muted truncate">
                               {q.queryString}
                             </span>
                           </div>
                           <button
                             type="button"
-                            onClick={(e) => handleDeleteSavedQuery(e, q._id.toString())}
+                            onClick={(e) =>
+                              handleDeleteSavedQuery(e, q._id.toString())
+                            }
                             title="Excluir consulta"
                             className="opacity-0 group-hover:opacity-100 p-1 text-muted hover:text-error transition-opacity"
                           >
@@ -1152,17 +1190,17 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   : "text-muted border-transparent hover:border-default"
               }`}
             >
-            {mode === "advanced" ? (
+              {mode === "advanced" ? (
                 <>
                   <Code2 className="w-3.5 h-3.5" />
-                  <span>Advanced</span>  
+                  <span>Advanced</span>
                 </>
               ) : (
                 <>
                   <TagIcon className="w-3.5 h-3.5" />
                   <span>Tags</span>
                 </>
-            )}
+              )}
             </button>
 
             <button
@@ -1240,29 +1278,35 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={saveModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-lg p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
           >
             <h3 className="text-base font-bold text-heading dark:text-heading">
               Salvar Consulta DBQL
             </h3>
             <form onSubmit={handleSaveSubmit} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted">Nome da consulta</label>
+                <label className="text-xs font-medium text-muted">
+                  Nome da consulta
+                </label>
                 <input
                   type="text"
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder="Ex: Observations Críticas de Segurança"
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl text-xs outline-none focus:border-brand text-heading dark:text-heading"
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg text-xs outline-none focus:border-brand text-heading dark:text-heading"
                   autoFocus
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted">Visibilidade</label>
+                <label className="text-xs font-medium text-muted">
+                  Visibilidade
+                </label>
                 <select
                   value={saveVisibility}
-                  onChange={(e) => setSaveVisibility(e.target.value as Visibility)}
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl text-xs outline-none focus:border-brand text-heading dark:text-heading"
+                  onChange={(e) =>
+                    setSaveVisibility(e.target.value as Visibility)
+                  }
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg text-xs outline-none focus:border-brand text-heading dark:text-heading"
                 >
                   <option value="private">Privada (Apenas você)</option>
                   <option value="shared">Compartilhada (Equipe)</option>
@@ -1273,14 +1317,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-muted hover:bg-apple-border-light/30"
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:bg-apple-border-light/30"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={!saveName.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-brand hover:opacity-90 disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-brand hover:opacity-90 disabled:opacity-40"
                 >
                   Salvar Consulta
                 </button>
@@ -1294,7 +1338,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={aiModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-lg p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-heading dark:text-heading flex items-center gap-2">
@@ -1311,10 +1355,11 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
             </div>
             <div className="flex flex-col gap-3">
               <p className="text-xs text-muted">
-                Descreva abaixo o que deseja buscar. O sistema vai gerar um prompt
-                estruturado contendo todas as regras da sintaxe DBQL e o contexto atual (
-                <code className="text-brand">{dbqlContext}</code>) para você colar na sua
-                IA favorita.
+                Descreva abaixo o que deseja buscar. O sistema vai gerar um
+                prompt estruturado contendo todas as regras da sintaxe DBQL e o
+                contexto atual (
+                <code className="text-brand">{dbqlContext}</code>) para você
+                colar na sua IA favorita.
               </p>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
@@ -1328,7 +1373,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   }}
                   rows={3}
                   placeholder="Ex: Quero todas as observations de severidade crítica ou alta do projeto GEPIN que não sejam do arquivo Auth"
-                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-xl p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono"
+                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -1336,9 +1381,11 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                     Prompt gerado com a documentação DBQL:
                   </label>
-                  <span className="text-[10px] text-muted">Pronto para envio</span>
+                  <span className="text-[10px] text-muted">
+                    Pronto para envio
+                  </span>
                 </div>
-                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-xl p-3 text-[11px] font-mono text-heading dark:text-heading max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
+                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-lg p-3 text-[11px] font-mono text-heading dark:text-heading max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
                   {generatedAiPromptText}
                 </div>
               </div>
@@ -1346,7 +1393,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-muted"
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted"
                 >
                   Fechar
                 </button>
@@ -1358,7 +1405,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                     setCopiedPrompt(true);
                     setTimeout(() => setCopiedPrompt(false), 3000);
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
                 >
                   {copiedPrompt ? (
                     <>

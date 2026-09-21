@@ -1,6 +1,8 @@
 {
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+  "js/ts.tsserver.maxMemory": 2048,
+  "js/ts.tsserver.automaticTypeAcquisition.enabled": false,
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
@@ -9,7 +11,8 @@
     "**/.next/**": true,
     "**/node_modules/**": true,
     "**/.git/**": true,
-    "**/dumps/**": true
+    "**/dumps/**": true,
+    "**/dist/**": true
   },
   "search.exclude": {
     "**/node_modules": true,
@@ -20,7 +23,5 @@
   "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
   "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
   "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "python.terminal.activateEnvironment": false,
-  "python.terminal.activateEnvInCurrentTerminal": false
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
 }

@@ -6,6 +6,19 @@ import type { PipelineStage } from 'mongoose';
 import { Team } from '@/models/Team';
 import mongoose from 'mongoose';
 
+/**
+ * Lista recursos do endpoint /api/repositories.
+ *
+ * Este endpoint expõe a operação get em /api/repositories.
+ *
+ * @summary Lista recursos do endpoint /api/repositories
+ * @tags Repositories
+ * @route GET /api/repositories
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 

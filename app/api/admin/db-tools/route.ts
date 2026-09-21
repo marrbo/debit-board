@@ -3,12 +3,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import * as Sentry from "@sentry/nextjs";
 import { connectToDatabase } from "@/lib/mongodb";
-import { getServerAuthSession } from "@/lib/auth-server";
 import { toNonEmptyString } from "@/lib/validators";
 import { dumpDatabase, restoreDatabase } from "@/lib/db-tools";
 import { verifyKeycloakPassword } from "@/lib/keycloak-verify";
 import { computeNextRun } from "@/lib/backup-schedule";
 import { BackupSchedule } from "@/models/BackupSchedule";
+import { requireAdmin, requireSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -17,8 +17,8 @@ export const maxDuration = 300;
 // Constantes
 // ============================================================
 const DUMPS_ROOT = path.resolve(
-  /* turbopackIgnore: true */ process.env.DB_DUMPS_DIR ?? 
-  path.join(process.cwd(), "dumps"),
+  /* turbopackIgnore: true */ process.env.DB_DUMPS_DIR ??
+    path.join(process.cwd(), "dumps"),
 );
 const MANIFEST_FILENAME = "manifest.json";
 const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -75,30 +75,24 @@ function resolveUri(sourceId: string): string {
 }
 
 // ============================================================
-// Autorização
-// ============================================================
-async function requireAdmin() {
-  const session = await getServerAuthSession();
-  if (!session?.user) throw new AuthError("Unauthorized");
-  if (!session.user.isAdmin) throw new AuthError("Forbidden");
-  return session;
-}
-
-// ============================================================
 // GET — lista dumps + schedule atual
 // ============================================================
+/**
+ * Lista recursos do endpoint /api/admin/db-tools.
+ *
+ * Este endpoint expõe a operação get em /api/admin/db-tools.
+ *
+ * @summary Lista recursos do endpoint /api/admin/db-tools
+ * @tags Admin, Db Tools
+ * @route GET /api/admin/db-tools
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET() {
-  try {
-    await requireAdmin();
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.message === "Forbidden" ? 403 : 401 },
-      );
-    }
-    throw error;
-  }
+  const admin = await requireSession();
+  if (admin.ok === false) return admin.response;
 
   try {
     const root = await getCanonicalRoot();
@@ -147,20 +141,24 @@ export async function GET() {
 // ============================================================
 // POST — ações
 // ============================================================
+/**
+ * Cria recurso do endpoint /api/admin/db-tools.
+ *
+ * Este endpoint expõe a operação post em /api/admin/db-tools.
+ *
+ * @summary Cria recurso do endpoint /api/admin/db-tools
+ * @tags Admin, Db Tools
+ * @route POST /api/admin/db-tools
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @access admin
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST(req: NextRequest) {
-  try {
-    await requireAdmin();
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.message === "Forbidden" ? 403 : 401 },
-      );
-    }
-    throw error;
-  }
+  const auth = await requireAdmin();
+  if (auth.ok === false) return auth.response;
 
-  const session = await getServerAuthSession();
   const body = (await req.json()) as Record<string, unknown>;
   const action = toNonEmptyString(body.action);
 
@@ -197,7 +195,7 @@ export async function POST(req: NextRequest) {
     if (action === "restore") {
       // 1. Verifica senha do admin
       const password = toNonEmptyString(body.password);
-      const email = session?.user?.email ?? "";
+      const email = auth?.user?.email ?? "";
       if (!password) {
         throw new AuthError("Senha obrigatória");
       }

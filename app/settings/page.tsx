@@ -1,47 +1,38 @@
-'use client';
+// app/settings/page.tsx
+"use client";
 
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import PageHeader from '@/components/PageHeader';
-import Link from 'next/link';
-import { ArrowRight, Cog } from 'lucide-react';
-import { settingsMenuGroups } from '@/lib/settingsMenu';
+import { useSession } from "next-auth/react";
+import PageHeader from "@/components/PageHeader";
+import Link from "next/link";
+import { ArrowRight, Cog } from "lucide-react";
+import { settingsMenuGroups } from "@/lib/settingsMenu";
 
 export default function SettingsDashboardPage() {
   const { status, data: session } = useSession();
-  const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    if (status === 'authenticated' && session?.user?.isAdmin) {
-      setIsAdmin(true);
-    }
-  }, [status, session]);
-
-  // Redireciona para a primeira aba após autenticação
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/settings/profile/user');
-    }
-  }, [status, router]);
-
-  if (status === 'loading') {
-    return <div className="py-10 text-muted dark:text-muted">Carregando...</div>;
+  if (status === "loading") {
+    return (
+      <div className="py-10 text-muted dark:text-muted">Carregando...</div>
+    );
   }
 
-  const showAdminGroup = status === 'authenticated' && isAdmin;
+  const isAdmin = session?.user?.isAdmin === true;
+  const isImpersonating = session?.user?.impersonating === true;
 
   return (
     <div className="w-full space-y-8 mx-auto">
       <PageHeader
         title="Settings"
-        icon={<Cog className="w-6 h-6 text-brand" />}
-        subtitle="Gerencie seu tenant e integrações."
+        icon={<Cog className="w-10 h-10 text-brand" />}
+        subtitle={
+          isImpersonating
+            ? "Você está visualizando as configurações de outro usuário."
+            : "Gerencie seu tenant e integrações."
+        }
       />
 
       {settingsMenuGroups.map((group) => {
-        if (group.adminOnly && !showAdminGroup) return null;
+        if (group.adminOnly && !isAdmin) return null;
 
         return (
           <div key={group.label} className="space-y-4">
@@ -51,12 +42,12 @@ export default function SettingsDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {group.items.map((item) => (
                 <Link
-                  key={item.label.replace(/\s+/g, '-').toLowerCase()}
+                  key={item.label.replace(/\s+/g, "-").toLowerCase()}
                   href={item.href}
-                  className="group bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-5 hover:bg-page dark:hover:bg-surface/80 transition-all duration-200 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none"
+                  className="group bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-5 hover:bg-page dark:hover:bg-surface/80 transition-all duration-200 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="p-3 bg-apple-tertiary-light/10 rounded-xl text-muted dark:text-muted group-hover:text-brand transition-colors">
+                    <div className="p-3 bg-apple-tertiary-light/10 rounded-lg text-muted dark:text-muted group-hover:text-brand transition-colors">
                       <item.icon className="w-6 h-6" />
                     </div>
                     <div>

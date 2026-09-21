@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import { getServerSessionIds } from "@/lib/session-server";
+import { requireSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,19 @@ const PATTERN_SELECT =
   "_id name description recommendation score severity category " +
   "externalId externalLink externalIdCWE externalLinkCWE";
 
+/**
+ * Lista recursos do endpoint /api/observations/{id}.
+ *
+ * Este endpoint expõe a operação get em /api/observations/{id}.
+ *
+ * @summary Lista recursos do endpoint /api/observations/{id}
+ * @tags Observations, Id
+ * @route GET /api/observations/{id}
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(
   _req: NextRequest,
   props: { params: Promise<{ id: string }> },
@@ -23,8 +36,9 @@ export async function GET(
   }
 
   // 2. Sessão / tenant
-  const sessionIds = await getServerSessionIds();
-  const tenantId = sessionIds.tenantId;
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+  const tenantId = auth.user.tenantId;
 
   if (!tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

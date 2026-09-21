@@ -5,6 +5,19 @@ import { SavedQuery } from '@/models/SavedQuery';
 import { handleGenericGet } from '@/lib/api-handler';
 import type { PipelineStage } from 'mongoose';
 
+/**
+ * Lista recursos do endpoint /api/projects.
+ *
+ * Este endpoint expõe a operação get em /api/projects.
+ *
+ * @summary Lista recursos do endpoint /api/projects
+ * @tags Projects
+ * @route GET /api/projects
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const dbqlId = searchParams.get('q');

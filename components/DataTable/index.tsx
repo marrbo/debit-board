@@ -1,3 +1,4 @@
+// components/DataTable.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
@@ -12,7 +13,7 @@ import {
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
 import { exportTableToPDF } from "./exportPDF";
 import { exportTableToExcel } from "./exportExcel";
-import { TablePagination } from "../PaginationInfo";
+import { TableToolbar, TablePagination } from "../PaginationInfo";
 
 // ============================================================
 // Tipos
@@ -30,6 +31,16 @@ export interface Column<T> {
   className?: string | ((item: T) => string);
   headerClassName?: string;
   exportable?: boolean;
+  /**
+   * Renderizador vetorial para PDF. Recebe `(doc, cell, item, extraData)`
+   * e desenha o conteúdo manualmente (shields, badges, ícones).
+   */
+  pdfCellRenderer?: (
+    doc: any,
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
 }
 
 export interface DataTableAction<T> {
@@ -57,9 +68,10 @@ export interface DataTableProps<T> {
   refreshKey?: number;
   onRowClick?: (item: T) => void;
   selectable?: boolean;
+  rowSelectable?: (item: T) => boolean;
   actions?: DataTableAction<T>[];
   canDelete?: boolean;
-  onDelete?: (selectedIds: string[]) => void;
+  onDelete?: (selectedIds: string[], selectedItems: T[]) => void;
   exportPDF?: boolean;
   exportOrientation?: "portrait" | "landscape";
   pdfTitle?: string;
@@ -73,26 +85,17 @@ export interface DataTableProps<T> {
   filterColumn?: string | null;
   filterValue?: string;
   filterFunction?: (item: T) => boolean;
+  /** Chave de persistência da preferência de view. Default: `datatable:viewMode:${endpoint}` */
+  storageKey?: string;
 }
 
 // ============================================================
-// Helpers (módulo — referência estável, não recriados por render)
+// Helpers
 // ============================================================
-
-/**
- * Normaliza `_id` (ObjectId | string) em string.
- * O driver serializa ObjectId como hex string no JSON, então no cliente o
- * `_id` já é string; no servidor continua ObjectId. Este helper unifica
- * os dois casos em um único ponto.
- */
 function toIdString(id: string | Types.ObjectId): string {
   return typeof id === "string" ? id : id.toString();
 }
 
-/**
- * Constrói a URL final com validação same-origin.
- * Lança para endpoints cross-origin — proteção contra redirect malicioso.
- */
 function buildEndpointUrl(endpoint: string, params: URLSearchParams): string {
   const url = new URL(endpoint, window.location.origin);
   if (
@@ -105,11 +108,6 @@ function buildEndpointUrl(endpoint: string, params: URLSearchParams): string {
   return url.toString();
 }
 
-/**
- * Filtra um item pelo valor informado (client-side).
- * Usado tanto no fetch principal quanto na exportação — antes estava
- * duplicado nos dois lugares.
- */
 function matchesFilter<T>(
   item: T,
   filterColumn: string | null,
@@ -146,11 +144,11 @@ function SkeletonTable({
   return (
     <tbody>
       {Array.from({ length: rows }).map((_, index) => (
-        <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
+        <tr key={index} className="border-b border-sunken dark:border-page">
           {columns.map((col, colIndex) => (
             <td key={colIndex} className="p-4">
               <div
-                className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+                className="h-4 bg-sunken dark:bg-strong rounded animate-pulse"
                 style={{ minWidth: col.minWidth || "4rem", width: col.width }}
               />
             </td>
@@ -173,7 +171,8 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   teamId,
   refreshKey = 0,
   onRowClick,
-  selectable = true,
+  selectable = false,
+  rowSelectable,
   actions = [],
   canDelete = true,
   onDelete,
@@ -190,6 +189,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   filterColumn = null,
   filterValue = "",
   filterFunction,
+  storageKey,
 }: DataTableProps<T>) {
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -206,6 +206,34 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   const [headerHeight, setHeaderHeight] = useState(0);
 
   // ============================================================
+  // View mode (tabela ↔ cards)
+  // ============================================================
+  const [currentVariant, setCurrentVariant] = useState<"table" | "cards">(
+    variant,
+  );
+  const viewModeKey = storageKey ?? `datatable:viewMode:${endpoint}`;
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(viewModeKey);
+      if (stored === "table" || stored === "cards") {
+        setCurrentVariant(stored);
+      }
+    } catch {
+      // localStorage indisponível — ignora
+    }
+  }, [viewModeKey]);
+
+  const handleViewModeChange = (mode: "table" | "cards") => {
+    setCurrentVariant(mode);
+    try {
+      window.localStorage.setItem(viewModeKey, mode);
+    } catch {
+      // ignora
+    }
+  };
+
+  // ============================================================
   // Seleção
   // ============================================================
   const toggleSelection = (id: string) => {
@@ -215,17 +243,8 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     setSelectAll(false);
   };
 
-  const toggleSelectAll = () => {
-    if (selectAll) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredData.map((item) => toIdString(item._id)));
-    }
-    setSelectAll(!selectAll);
-  };
-
   // ============================================================
-  // Dados filtrados (client-side + filterFunction)
+  // Dados filtrados
   // ============================================================
   const filteredData = (() => {
     let result = data;
@@ -244,8 +263,32 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     selectedIds.includes(toIdString(item._id)),
   );
 
+  const selectableItems = useMemo(
+    () => (rowSelectable ? filteredData.filter(rowSelectable) : filteredData),
+    [filteredData, rowSelectable],
+  );
+
+  const allSelectableChecked =
+    selectableItems.length > 0 &&
+    selectableItems.every((item) => selectedIds.includes(toIdString(item._id)));
+
+  const toggleSelectAll = () => {
+    if (selectableItems.length === 0) return;
+
+    if (allSelectableChecked) {
+      const idsToRemove = new Set(
+        selectableItems.map((item) => toIdString(item._id)),
+      );
+      setSelectedIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
+    } else {
+      const idsToAdd = selectableItems.map((item) => toIdString(item._id));
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+    }
+    setSelectAll(!selectAll);
+  };
+
   // ============================================================
-  // Colunas (inclui a coluna de seleção quando aplicável)
+  // Colunas
   // ============================================================
   const renderColumns = useMemo(() => {
     const cols: Column<T>[] = [];
@@ -256,22 +299,13 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
         width: "40px",
         align: "center",
         sortable: false,
-        render: (item: T) => (
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(toIdString(item._id))}
-            onChange={() => toggleSelection(toIdString(item._id))}
-            className="w-4 h-4 rounded text-brand focus:ring-brand"
-          />
-        ),
       });
     }
     return [...cols, ...columns];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectable, columns, selectedIds]);
+  }, [selectable, columns]);
 
   // ============================================================
-  // Medir altura do cabeçalho (para o overlay de loading)
+  // Medir altura do header
   // ============================================================
   useLayoutEffect(() => {
     if (theadRef.current) {
@@ -287,7 +321,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   }, [selectedIds, onSelectionChange]);
 
   // ============================================================
-  // Fetch de dados
+  // Fetch
   // ============================================================
   useEffect(() => {
     let cancelled = false;
@@ -387,6 +421,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     }
   };
 
+  // components/DataTable.tsx — dentro do componente
   const buildExportColumns = () =>
     columns
       .filter((col) => col.key !== "__select" && col.exportable !== false)
@@ -400,6 +435,10 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
         width: col.width,
         render: col.render
           ? (item: any) => col.render!(item, extraData)
+          : undefined,
+        pdfCellRenderer: col.pdfCellRenderer
+          ? (doc: any, cell: any, item: any) =>
+              col.pdfCellRenderer!(doc, cell, item, extraData)
           : undefined,
       }));
 
@@ -441,25 +480,26 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
       data: finalData,
       filename: safeFilename,
       orientation: exportOrientation,
+      extraData, // 🔑 repassa para os pdfCellRenderer
     });
   };
 
   // ============================================================
-  // Ações nativas (PDF, Excel, Excluir)
+  // Ações
   // ============================================================
   const exportActions: DataTableAction<T>[] = [];
 
   if (onExportPDF) {
     exportActions.push({
       label: "PDF",
-      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600 group-hover:text-white" />,
+      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600" />,
       onClick: () => onExportPDF({ projectId }),
       requiresSelection: false,
     });
   } else if (exportPDF !== false) {
     exportActions.push({
       label: "PDF",
-      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600 group-hover:text-white" />,
+      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600" />,
       onClick: handleNativeExportPDF,
       requiresSelection: false,
     });
@@ -468,14 +508,14 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   if (onExportExcel) {
     exportActions.push({
       label: "Excel",
-      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500 group-hover:text-white" />,
+      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500" />,
       onClick: () => onExportExcel({ projectId }),
       requiresSelection: false,
     });
   } else {
     exportActions.push({
       label: "Excel",
-      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500 group-hover:text-white" />,
+      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500" />,
       onClick: handleNativeExportExcel,
       requiresSelection: false,
     });
@@ -486,19 +526,18 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     nativeActions.push({
       label: "Excluir",
       icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (ids) => onDelete(ids),
+      onClick: (ids, items) => onDelete(ids, items),
+      requiresSelection: true,
     });
   }
 
-  const allActions: DataTableAction<T>[] = [
-    ...exportActions,
+  const bulkActions: DataTableAction<T>[] = [
     ...nativeActions,
-    ...actions,
+    ...actions.map((a) => ({ ...a, requiresSelection: true })),
   ];
-  const showExportBar = exportActions.length > 0 && selectedIds.length === 0;
 
   // ============================================================
-  // Ordenação (tri-state: asc → desc → none)
+  // Ordenação
   // ============================================================
   const handleSort = (col: Column<T>) => {
     const field = col.sortKey || String(col.key);
@@ -521,7 +560,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   };
 
   // ============================================================
-  // Estilos de célula
+  // Estilos
   // ============================================================
   const totalPages = Math.ceil(total / limit);
 
@@ -542,9 +581,25 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   // ============================================================
   // Render — Cards
   // ============================================================
-  if (variant === "cards") {
+  if (currentVariant === "cards") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
+        <TableToolbar
+          currentPage={page}
+          totalItems={total}
+          pageSize={limit}
+          pageSizeOptions={[5, 10, 25, 50, 100]}
+          onPageSizeChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          exportActions={exportActions}
+          viewMode={currentVariant}
+          onViewModeChange={
+            typeof renderCard === "function" ? handleViewModeChange : undefined
+          }
+        />
+
         <div className="relative">
           {loading && data.length === 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -594,14 +649,8 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
         <TablePagination
           currentPage={page}
           totalPages={totalPages}
-          totalItems={total}
           pageSize={limit}
           onPageChange={setPage}
-          onPageSizeChange={(newLimit) => {
-            setLimit(newLimit);
-            setPage(1);
-          }}
-          pageSizeOptions={[5, 10, 25, 50, 100]}
           selectable={selectable}
           selectedIds={selectedIds}
           selectedItems={selectedItems}
@@ -609,9 +658,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
             setSelectedIds([]);
             setSelectAll(false);
           }}
-          showExportBar={showExportBar}
-          exportActions={exportActions}
-          allActions={allActions}
+          bulkActions={bulkActions}
         />
       </div>
     );
@@ -622,30 +669,23 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   // ============================================================
   return (
     <div className="space-y-3">
-      <TablePagination
+      <TableToolbar
         currentPage={page}
-        totalPages={totalPages}
         totalItems={total}
         pageSize={limit}
-        onPageChange={setPage}
+        pageSizeOptions={[5, 10, 25, 50, 100]}
         onPageSizeChange={(newLimit) => {
           setLimit(newLimit);
           setPage(1);
         }}
-        pageSizeOptions={[5, 10, 25, 50, 100]}
-        selectable={selectable}
-        selectedIds={selectedIds}
-        selectedItems={selectedItems}
-        onClearSelection={() => {
-          setSelectedIds([]);
-          setSelectAll(false);
-        }}
-        showExportBar={showExportBar}
         exportActions={exportActions}
-        allActions={allActions}
+        viewMode={currentVariant}
+        onViewModeChange={
+          typeof renderCard === "function" ? handleViewModeChange : undefined
+        }
       />
 
-      <div className="relative bg-elevated dark:bg-dark/20 border border-default dark:border-strong rounded-xl overflow-hidden shadow-sm hover:drop-shadow-lg">
+      <div className="relative bg-page border border-sunken dark:border-page rounded-lg overflow-hidden shadow-sm hover:drop-shadow-lg">
         <table
           className="w-full text-sm text-left"
           style={{
@@ -654,16 +694,27 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
         >
           <thead
             ref={theadRef}
-            className="bg-sunken text-muted dark:text-muted border-b border-default dark:border-strong"
+            className="bg-elevated dark:bg-sunken text-subtle border-b border-sunken dark:border-page"
           >
             <tr>
               {selectable && (
-                <th className="p-4 w-10 text-center">
+                <th
+                  className="p-4 w-10 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
-                    checked={selectAll && filteredData.length > 0}
+                    checked={allSelectableChecked}
                     onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded border text-brand"
+                    disabled={selectableItems.length === 0}
+                    title={
+                      selectableItems.length === 0
+                        ? "Nenhum item selecionável nesta página"
+                        : allSelectableChecked
+                          ? "Desmarcar todos"
+                          : "Selecionar todos os itens editáveis"
+                    }
+                    className="w-4 h-4 rounded border border-sunken dark:border-strong text-brand disabled:opacity-30 disabled:cursor-not-allowed"
                   />
                 </th>
               )}
@@ -672,7 +723,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
                 .map((col) => (
                   <th
                     key={String(col.key)}
-                    className={`group p-4 border-r hover:text-link last:border-none ${
+                    className={`group p-4 border-r border-sunken dark:border-page hover:text-link last:border-none ${
                       col.sortable !== false ? "cursor-pointer" : ""
                     } font-medium ${col.headerClassName || ""}`}
                     style={getCellStyle(col)}
@@ -710,9 +761,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
             <SkeletonTable columns={renderColumns} rows={limit} />
           ) : (
             <tbody
-              className={`divide-y divide-apple-border-light dark:divide-apple-border-dark ${
-                loading ? "blur-sm opacity-60" : ""
-              }`}
+              className={`divide-y ${loading ? "blur-sm opacity-60" : ""}`}
             >
               {filteredData.length === 0 ? (
                 <tr>
@@ -728,24 +777,29 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
                   <tr
                     key={toIdString(item._id)}
                     onClick={() => onRowClick?.(item)}
-                    className={`hover:bg-page dark:hover:bg-surface border-sunken dark:border-surface transition-colors ${
-                      index % 2 === 0 ? "bg-pagepobser dark:bg-elevated" : ""
+                    className={`hover:bg-sunken border-b border-page dark:border-strong transition-colors ${
+                      index % 2 === 0 ? "bg-surface" : "bg-elevated"
                     } ${onRowClick ? "cursor-pointer" : ""}`}
                   >
                     {selectable && (
                       <td
                         className="p-4 text-center"
                         style={getCellStyle(renderColumns[0])}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
-                          checked={selectedIds.includes(
-                            toIdString(item._id),
-                          )}
-                          onChange={() =>
-                            toggleSelection(toIdString(item._id))
+                          checked={selectedIds.includes(toIdString(item._id))}
+                          onChange={() => toggleSelection(toIdString(item._id))}
+                          disabled={
+                            rowSelectable ? !rowSelectable(item) : false
                           }
-                          className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
+                          title={
+                            rowSelectable && !rowSelectable(item)
+                              ? "Você só pode selecionar itens criados por você"
+                              : undefined
+                          }
+                          className="w-4 h-4 rounded border-sunken dark:border-strong text-brand focus:ring-brand disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
                     )}
@@ -782,14 +836,8 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
       <TablePagination
         currentPage={page}
         totalPages={totalPages}
-        totalItems={total}
         pageSize={limit}
         onPageChange={setPage}
-        onPageSizeChange={(newLimit) => {
-          setLimit(newLimit);
-          setPage(1);
-        }}
-        pageSizeOptions={[5, 10, 25, 50, 100]}
         selectable={selectable}
         selectedIds={selectedIds}
         selectedItems={selectedItems}
@@ -797,9 +845,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
           setSelectedIds([]);
           setSelectAll(false);
         }}
-        showExportBar={showExportBar}
-        exportActions={exportActions}
-        allActions={allActions}
+        bulkActions={bulkActions}
       />
     </div>
   );

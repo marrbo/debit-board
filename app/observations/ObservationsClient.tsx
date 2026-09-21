@@ -50,7 +50,8 @@ export default function ObservationsClient({
 }) {
   const { data: session } = useSession();
 
-  const [selectedObservation, setSelectedObservation] = useState<IObservation | null>(null);
+  const [selectedObservation, setSelectedObservation] =
+    useState<IObservation | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkAssignIds, setBulkAssignIds] = useState<string[] | null>(null);
@@ -198,9 +199,10 @@ export default function ObservationsClient({
         width: "140px",
         label: "Responsável",
         sortable: true,
+        align: "center",
         render: (item) => (
           <div
-            className="relative w-fit"
+            className="flex itens-center relative w-fit"
             onClick={(e) => e.stopPropagation()}
           >
             <AssigneeSelect
@@ -237,7 +239,7 @@ export default function ObservationsClient({
         search={{
           type: "advanced",
           onSearch: handleSearch,
-          userId: session?.user?._id?.toString() || session?.user?.id,
+          userSub: session?.user?.sub?.toString() || session?.user?.sub,
           placeholder:
             "Buscar Observations, e.g. severity:critical OR project:my-api",
           context: "observations",
@@ -247,7 +249,7 @@ export default function ObservationsClient({
 
       {!teamsLoaded ? (
         // <div className="py-12 text-center text-muted">Carregando feed...</div>
-        <LoadingSkeleton ></LoadingSkeleton>
+        <LoadingSkeleton></LoadingSkeleton>
       ) : (
         <DataTable
           endpoint="/api/observations"

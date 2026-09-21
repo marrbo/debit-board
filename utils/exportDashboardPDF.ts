@@ -1,4 +1,9 @@
-import { generateFooter, generateHeader } from "@/components/DataTable/pdfShared";
+// utils/exportDashboardPDF.ts
+import {
+  generateFooter,
+  generateHeader,
+  drawSeverityShields,
+} from "@/components/DataTable/pdfShared";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -13,7 +18,10 @@ interface DashboardPDFData {
 
 // Helper para converter entradas de categorias para [string, number][]
 function toNumericEntries(obj: Record<string, any>): [string, number][] {
-  return Object.entries(obj || {}).map(([key, value]) => [key, Number(value) || 0]);
+  return Object.entries(obj || {}).map(([key, value]) => [
+    key,
+    Number(value) || 0,
+  ]);
 }
 
 export async function exportDashboardPDF(data: DashboardPDFData) {
@@ -73,7 +81,15 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
   doc.text(sevText || "Sem dados", margin + cardWidth + 10, y + 18);
 
   doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin + 2 * (cardWidth + 5), y, cardWidth, cardHeight, 2, 2, "F");
+  doc.roundedRect(
+    margin + 2 * (cardWidth + 5),
+    y,
+    cardWidth,
+    cardHeight,
+    2,
+    2,
+    "F",
+  );
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
   doc.text("STATUS", margin + 2 * (cardWidth + 5) + 5, y + 7);
@@ -107,15 +123,51 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
       doc.roundedRect(margin, y, barWidth, barHeight, 2, 2, "F");
 
       const colors = [
-        '#911eb4', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
-        '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#e6194B',
-        '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
-        '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9',
-        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        '#393b79', '#5254a3', '#6b6ecf', '#9c9ede', '#637939',
-        '#8ca252', '#b5cf6b', '#cedb9c', '#8c6d31', '#bd9e39',
-        '#e7ba52', '#e7cb94', '#843c39', '#ad494a', '#d6616b'
+        "#911eb4",
+        "#3cb44b",
+        "#ffe119",
+        "#4363d8",
+        "#f58231",
+        "#42d4f4",
+        "#f032e6",
+        "#bfef45",
+        "#fabed4",
+        "#e6194B",
+        "#469990",
+        "#dcbeff",
+        "#9A6324",
+        "#fffac8",
+        "#800000",
+        "#aaffc3",
+        "#808000",
+        "#ffd8b1",
+        "#000075",
+        "#a9a9a9",
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+        "#393b79",
+        "#5254a3",
+        "#6b6ecf",
+        "#9c9ede",
+        "#637939",
+        "#8ca252",
+        "#b5cf6b",
+        "#cedb9c",
+        "#8c6d31",
+        "#bd9e39",
+        "#e7ba52",
+        "#e7cb94",
+        "#843c39",
+        "#ad494a",
+        "#d6616b",
       ];
       let currentX = margin;
       singleCategories.forEach(([_, value], i) => {
@@ -125,7 +177,6 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
         currentX += segWidth;
       });
 
-      // Legendas em 2 colunas
       y += barHeight + 6;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
@@ -147,7 +198,9 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
   }
 
   // ===================== DISTRIBUIÇÃO (Agrupado) =====================
-  const groupedCategories = toNumericEntries(data.teamStats.categoryGroupTotals);
+  const groupedCategories = toNumericEntries(
+    data.teamStats.categoryGroupTotals,
+  );
   if (groupedCategories.length > 0) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
@@ -163,7 +216,17 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
       doc.setFillColor(229, 231, 235);
       doc.roundedRect(margin, y, barWidth, barHeight, 2, 2, "F");
 
-      const colors = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#911eb4", "#3cb44b", "#ffe119", "#4363d8", "#f58231"];
+      const colors = [
+        "#ef4444",
+        "#f59e0b",
+        "#3b82f6",
+        "#10b981",
+        "#911eb4",
+        "#3cb44b",
+        "#ffe119",
+        "#4363d8",
+        "#f58231",
+      ];
       let currentX = margin;
       groupedCategories.forEach(([_, value], i) => {
         const segWidth = (value / totalCat) * barWidth;
@@ -172,7 +235,6 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
         currentX += segWidth;
       });
 
-      // Legendas em 2 colunas
       y += barHeight + 6;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
@@ -207,15 +269,18 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
 
     y += 5;
 
+    // A coluna Severidade fica vazia no body — é desenhada via didDrawCell.
+    // Mantemos a ordem das colunas para casar com o `didDrawCell`.
     const tableData = data.projects.map((project: any) => {
       const description = project.description || "";
-      const truncatedDescription = description.length > 80
-        ? description.slice(0, 80) + " (...)"
-        : description;
+      const truncatedDescription =
+        description.length > 80
+          ? description.slice(0, 80) + " (...)"
+          : description;
 
       return [
         project.name || "",
-        `${project.severity?.critical || 0} / ${project.severity?.high || 0} / ${project.severity?.medium || 0} / ${project.severity?.low || 0}`,
+        "", // ← Severidade (renderizada por drawSeverityShields)
         truncatedDescription,
         project.lastScan || "",
       ];
@@ -226,19 +291,45 @@ export async function exportDashboardPDF(data: DashboardPDFData) {
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
-      head: [["Projeto", "Severidade (C/A/M/B)", "Descrição", "Último Scan"]],
+      head: [["Projeto", "Severidade", "Descrição", "Último Scan"]],
       body: tableData,
       theme: "grid",
-      tableWidth: tableWidth,
-      headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold" },
-      bodyStyles: { textColor: [51, 65, 85], fontSize: 8 },
+      tableWidth,
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      bodyStyles: {
+        textColor: [51, 65, 85],
+        fontSize: 8,
+        // Espaço para os shields (~9mm) + padding
+        minCellHeight: 14,
+        valign: "middle",
+      },
       alternateRowStyles: { fillColor: [241, 245, 249] },
-      styles: { overflow: 'linebreak' },
+      styles: { overflow: "linebreak" },
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.20 },
-        1: { cellWidth: tableWidth * 0.15, halign: "center" },
-        2: { cellWidth: tableWidth * 0.45, overflow: 'ellipsize' },
-        3: { cellWidth: tableWidth * 0.20, halign: "center" },
+        0: { cellWidth: tableWidth * 0.2 },
+        1: { cellWidth: tableWidth * 0.16, halign: "center" },
+        2: { cellWidth: tableWidth * 0.44, overflow: "ellipsize" },
+        3: { cellWidth: tableWidth * 0.2, halign: "center" },
+      },
+      didDrawCell: (cell) => {
+        // Só processa a coluna "Severidade" no corpo da tabela
+        if (cell.section !== "body" || cell.column.index !== 1) return;
+
+        const project = data.projects[cell.row.index];
+        const severity = project?.severity || {};
+
+        drawSeverityShields(
+          doc,
+          cell.cell.x,
+          cell.cell.y,
+          severity,
+          cell.cell.width,
+          cell.cell.height,
+        );
       },
     });
   }

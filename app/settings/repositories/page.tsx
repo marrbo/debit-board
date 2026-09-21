@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, ArrowLeft } from "lucide-react";
+import { RefreshCw, ArrowLeft, GitBranchPlus } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable, type Column } from "@/components/DataTable";
 import type { IRepository } from "@/types/IRepository";
@@ -17,10 +17,10 @@ import type { IRepository } from "@/types/IRepository";
 const columns: Column<IRepository>[] = [
   { key: "name", label: "Nome do Repositório", sortable: true },
   {
-    key: "project", 
+    key: "project",
     label: "Projeto",
     sortKey: "project.name",
-    sortable: true, 
+    sortable: true,
     render: (item: IRepository) => item.project?.name || "Sem projeto",
   },
   {
@@ -29,7 +29,8 @@ const columns: Column<IRepository>[] = [
     sortable: true,
     width: "120px",
     className: "text-sm text-center text-heading dark:text-heading",
-    render: (item: IRepository) => new Date(item.createdAt).toLocaleDateString(),
+    render: (item: IRepository) =>
+      new Date(item.createdAt).toLocaleDateString(),
   },
   {
     key: "actions",
@@ -38,9 +39,7 @@ const columns: Column<IRepository>[] = [
     width: "120px",
     exportable: false,
     render: () => (
-      <span className="text-xs text-muted dark:text-muted">
-        Em breve
-      </span>
+      <span className="text-xs text-muted dark:text-muted">Em breve</span>
     ),
   },
 ];
@@ -50,7 +49,7 @@ function RepositoriesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [syncing, setSyncing] = useState(false);
 
@@ -74,7 +73,7 @@ function RepositoriesContent() {
 
   if (status === "loading")
     return <div className="py-10 text-center">Carregando...</div>;
-    
+
   if (!session) {
     router.push("/login");
     return null;
@@ -84,6 +83,7 @@ function RepositoriesContent() {
     <div className="w-full space-y-4">
       <PageHeader
         title={projectId ? "Repositórios do Projeto" : "Repositórios do Tenant"}
+        icon={<GitBranchPlus className="w-10 h-10 text-brand" />}
         subtitle={
           projectId
             ? "Lista de repositórios pertencentes a este projeto."
@@ -94,7 +94,7 @@ function RepositoriesContent() {
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              className="flex items-center gap-2 btn-primary group"
             >
               {syncing ? (
                 <>
@@ -103,14 +103,15 @@ function RepositoriesContent() {
                 </>
               ) : (
                 <>
-                  <RefreshCw className="w-4 h-4" /> Sincronizar
+                  <RefreshCw className="w-4 h-4 group-hover:animate-[spin_0.5s_linear_1]" />{" "}
+                  Sincronizar
                 </>
               )}
             </button>
             {projectId && (
               <Link
                 href="/settings/projects"
-                className="flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-2xl text-sm font-medium transition-colors"
+                className="flex items-center gap-2 bg-page dark:bg-surface border border-default dark:border-strong text-heading dark:text-heading hover:bg-apple-tertiary-light/10 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Voltar para Projetos
               </Link>
@@ -118,11 +119,11 @@ function RepositoriesContent() {
           </div>
         }
         search={{
-          type: 'advanced',
+          type: "advanced",
           onSearch: setSearchQuery,
-          userId: session?.user?._id?.toString() || session?.user?.id,
-          placeholder: 'Buscar repositórios (ex: name:repo-backend)',
-          context: 'repositories',
+          userSub: session?.user?.sub?.toString() || session?.user?.sub,
+          placeholder: "Buscar repositórios (ex: name:repo-backend)",
+          context: "repositories",
         }}
       />
 

@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="min-h-screen bg-surface/80 dark:bg-surface flex flex-col transition-all">
+      <body className="min-h-screen bg-surface dark:bg-surface flex flex-col transition-all">
         {/* Aplica a classe .dark/.light ANTES da hidratação, sem flicker */}
         <InitColorSchemeScript attribute="class" />
         <Providers>

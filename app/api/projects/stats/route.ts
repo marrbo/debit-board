@@ -6,6 +6,19 @@ import type { PipelineStage } from 'mongoose';
 import { getServerSessionIds } from '@/lib/session-server';
 import { parseDBQL } from '@/lib/parseDBQL'; // Assumindo que você tem essa lib
 
+/**
+ * Lista recursos do endpoint /api/projects/stats.
+ *
+ * Este endpoint expõe a operação get em /api/projects/stats.
+ *
+ * @summary Lista recursos do endpoint /api/projects/stats
+ * @tags Projects, Stats
+ * @route GET /api/projects/stats
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
     const tenantId = sessionIds.tenantId;

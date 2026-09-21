@@ -7,6 +7,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeSync } from "@/components/ThemeSync";
 import { FeedbackProvider } from "@/components/feedback/FeedbackProvider";
+import { ConfirmProvider } from "@/hooks/useConfirm";
 
 const theme = createTheme({
   colorSchemes: { light: true, dark: true },
@@ -20,7 +21,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeSync />
         <CssBaseline enableColorScheme />
         <FeedbackProvider>
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider>
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </SessionProvider>
         </FeedbackProvider>
       </ThemeProvider>
     </AppRouterCacheProvider>

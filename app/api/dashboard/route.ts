@@ -1,48 +1,45 @@
 // app/api/dashboard/route.ts
-import { type NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { Project } from '@/models/Project';
-import { Observation } from '@/models/Observation';
-import { Team } from '@/models/Team';
-import { SavedQuery } from '@/models/SavedQuery';
-import { getServerSessionIds } from '@/lib/session-server';
-import { parseDBQL } from '@/lib/parseDBQL';
-import mongoose from 'mongoose';
-
-// 🔥 Função para achatar e validar IDs
-function normalizeProjectIds(ids: any[]): mongoose.Types.ObjectId[] {
-  const flat = Array.isArray(ids) ? ids.flat() : [];
-  return flat
-    .map((id) => {
-      if (typeof id === 'string' && mongoose.Types.ObjectId.isValid(id)) {
-        return new mongoose.Types.ObjectId(id);
-      }
-      if (id instanceof mongoose.Types.ObjectId) return id;
-      return null;
-    })
-    .filter((id): id is mongoose.Types.ObjectId => id !== null);
-}
-
+import { type NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Project } from "@/models/Project";
+import { Observation } from "@/models/Observation";
+import { Team } from "@/models/Team";
+import { SavedQuery } from "@/models/SavedQuery";
+import { parseDBQL } from "@/lib/parseDBQL";
+import mongoose from "mongoose";
+import { normalizeProjectIds } from "@/lib/serverUtils";
+import { requireSession } from "@/lib/api-auth";
+import { toObjectId } from "@/lib/mongo-id";
+/**
+ * Lista recursos do endpoint /api/dashboard.
+ *
+ * Este endpoint expõe a operação get em /api/dashboard.
+ *
+ * @summary Lista recursos do endpoint /api/dashboard
+ * @tags Dashboard
+ * @route GET /api/dashboard
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
-  const sessionIds = await getServerSessionIds();
-  const tenantIdRaw = sessionIds.tenantId;
-  
-  // 🔥 Converte tenantId para ObjectId se for uma string válida
-  const tenantId = mongoose.Types.ObjectId.isValid(tenantIdRaw)
-    ? new mongoose.Types.ObjectId(tenantIdRaw)
-    : tenantIdRaw;
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantId = toObjectId(auth.user.tenantId);
 
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
-  const teamId = searchParams.get('teamId');
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '10', 10);
-  const sortField = searchParams.get('sort') || 'createdAt';
-  const sortOrder = searchParams.get('order') === 'asc' ? 1 : -1;
-  const dbqlId = searchParams.get('q');
-  const searchQueryRaw = searchParams.get('search') || '';
-  const isAll = searchParams.get('all') === 'true';
+  const teamId = searchParams.get("teamId");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "10", 10);
+  const sortField = searchParams.get("sort") || "createdAt";
+  const sortOrder = searchParams.get("order") === "asc" ? 1 : -1;
+  const dbqlId = searchParams.get("q");
+  const searchQueryRaw = searchParams.get("search") || "";
+  const isAll = searchParams.get("all") === "true";
 
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
@@ -50,28 +47,34 @@ export async function GET(req: NextRequest) {
       const savedQuery = await SavedQuery.findById(dbqlId).lean();
       if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
     } catch (error) {
-      console.error('Erro ao buscar SavedQuery:', error);
+      console.error("Erro ao buscar SavedQuery:", error);
     }
   }
 
   // 🔥 Lógica para achar os IDs de Projetos permitidos
   let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
 
-  if (teamId && teamId !== 'all') {
+  if (teamId && teamId !== "all") {
     const teamObjectId = mongoose.Types.ObjectId.isValid(teamId)
       ? new mongoose.Types.ObjectId(teamId)
       : null;
 
     const team = await Team.findById(teamObjectId).lean();
     if (!team) {
-      return NextResponse.json({ data: [], total: 0, message: 'Time não encontrado' });
+      return NextResponse.json({
+        data: [],
+        total: 0,
+        message: "Time não encontrado",
+      });
     }
 
     // 🔥 Normaliza projectIds (achatamento + validação)
     allowedProjectIds = normalizeProjectIds(team.projectIds);
 
     // 🔥 Log para diagnóstico
-    console.log(`[Dashboard] Time: ${team.name}, projectIds normalizados: ${allowedProjectIds.length}`);
+    console.log(
+      `[Dashboard] Time: ${team.name}, projectIds normalizados: ${allowedProjectIds.length}`,
+    );
   }
 
   // Se houver DBQL, filtra pelos nomes de projetos que batem com a query
@@ -82,21 +85,34 @@ export async function GET(req: NextRequest) {
 
       // Intersecta com os projetos do time, se existir
       if (allowedProjectIds) {
-        const teamProjects = await Project.find({ _id: { $in: allowedProjectIds } }).select('name').lean();
-        obsMatch.project = { $in: teamProjects.map(p => p.name) };
+        const teamProjects = await Project.find({
+          _id: { $in: allowedProjectIds },
+        })
+          .select("name")
+          .lean();
+        obsMatch.project = { $in: teamProjects.map((p) => p.name) };
       }
 
       Object.assign(obsMatch, parsedMatch);
-      const matchedProjectNames = await Observation.distinct('project', obsMatch);
+      const matchedProjectNames = await Observation.distinct(
+        "project",
+        obsMatch,
+      );
 
-      const matchedProjects = await Project.find({ name: { $in: matchedProjectNames } }).select('_id').lean();
+      const matchedProjects = await Project.find({
+        name: { $in: matchedProjectNames },
+      })
+        .select("_id")
+        .lean();
 
       if (allowedProjectIds) {
-        const matchedIds = matchedProjects.map(p => p._id);
+        const matchedIds = matchedProjects.map((p) => p._id);
         // Intersecção
-        allowedProjectIds = allowedProjectIds.filter(id => matchedIds.some(mid => mid.equals(id)));
+        allowedProjectIds = allowedProjectIds.filter((id) =>
+          matchedIds.some((mid) => mid.equals(id)),
+        );
       } else {
-        allowedProjectIds = matchedProjects.map(p => p._id);
+        allowedProjectIds = matchedProjects.map((p) => p._id);
       }
     }
   }
@@ -118,12 +134,15 @@ export async function GET(req: NextRequest) {
         .skip(skip)
         .limit(effectiveLimit)
         .lean(),
-      Project.countDocuments(filter)
+      Project.countDocuments(filter),
     ]);
 
     return NextResponse.json({ data: projects, total });
   } catch (error: any) {
-    console.error('Erro ao buscar projetos:', error);
-    return NextResponse.json({ data: [], total: 0, error: error.message }, { status: 500 });
+    console.error("Erro ao buscar projetos:", error);
+    return NextResponse.json(
+      { data: [], total: 0, error: error.message },
+      { status: 500 },
+    );
   }
 }

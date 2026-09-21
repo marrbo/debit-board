@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Pencil, Trash2, Plus } from 'lucide-react';
-import PageHeader from '@/components/PageHeader';
-import { DataTable, type Column } from '@/components/DataTable';
+import { Suspense, useCallback, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2, Plus } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { DataTable, type Column } from "@/components/DataTable";
 
 // ============================================================
 // Tipos
@@ -14,7 +14,7 @@ interface Pattern {
   _id: string;
   name: string;
   queryPattern: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: "low" | "medium" | "high" | "critical";
   category: string;
   description: string;
   recommendation: string;
@@ -25,34 +25,38 @@ interface Pattern {
   enabled: boolean;
 }
 
-type PatternForm = Omit<Pattern, '_id'>;
+type PatternForm = Omit<Pattern, "_id">;
 
 const EMPTY_FORM: PatternForm = {
-  name: '',
-  queryPattern: '',
-  severity: 'medium',
-  category: '',
-  description: '',
-  recommendation: '',
+  name: "",
+  queryPattern: "",
+  severity: "medium",
+  category: "",
+  description: "",
+  recommendation: "",
   slaHours: 72,
-  externalId: '',
-  externalLink: '',
-  reference: '',
+  externalId: "",
+  externalLink: "",
+  reference: "",
   enabled: true,
 };
 
 // ============================================================
 // Badges
 // ============================================================
-const severityBadge = (severity: Pattern['severity']) => {
-  const map: Record<Pattern['severity'], string> = {
-    critical: 'bg-apple-red/20 text-error',
-    high: 'bg-apple-orange/20 text-warning',
-    medium: 'bg-brand/20 text-brand',
-    low: 'bg-apple-tertiary-light/20 text-muted',
+const severityBadge = (severity: Pattern["severity"]) => {
+  const map: Record<Pattern["severity"], string> = {
+    critical: "bg-apple-red/20 text-error",
+    high: "bg-apple-orange/20 text-warning",
+    medium: "bg-brand/20 text-brand",
+    low: "bg-apple-tertiary-light/20 text-muted",
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${map[severity] ?? map.low}`}>
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+        map[severity] ?? map.low
+      }`}
+    >
       {severity}
     </span>
   );
@@ -61,10 +65,12 @@ const severityBadge = (severity: Pattern['severity']) => {
 const enabledBadge = (enabled: boolean) => (
   <span
     className={`px-2 py-0.5 rounded-full text-xs ${
-      enabled ? 'bg-apple-green/20 text-success' : 'bg-apple-tertiary-light/20 text-muted'
+      enabled
+        ? "bg-apple-green/20 text-success"
+        : "bg-apple-tertiary-light/20 text-muted"
     }`}
   >
-    {enabled ? 'Sim' : 'Não'}
+    {enabled ? "Sim" : "Não"}
   </span>
 );
 
@@ -73,41 +79,42 @@ const enabledBadge = (enabled: boolean) => (
 // ============================================================
 const buildColumns = (
   onEdit: (pattern: Pattern) => void,
-  onDelete: (ids: string[]) => void
+  onDelete: (ids: string[]) => void,
 ): Column<Pattern>[] => [
-  { key: 'name', label: 'Nome', sortable: true, minWidth: '200px' },
-  { key: 'category', label: 'Categoria', sortable: true },
+  { key: "name", label: "Nome", sortable: true, minWidth: "200px" },
+  { key: "category", label: "Categoria", sortable: true, width: "200px" },
   {
-    key: 'severity',
-    label: 'Severidade',
+    key: "severity",
+    label: "Severidade",
     sortable: true,
-    align: 'center',
+    align: "center",
+    width: "130px",
     render: (item) => severityBadge(item.severity),
   },
   {
-    key: 'slaHours',
-    label: 'SLA (h)',
+    key: "slaHours",
+    label: "SLA (h)",
     sortable: true,
-    align: 'center',
-    width: '100px',
+    align: "center",
+    width: "100px",
   },
   {
-    key: 'enabled',
-    label: 'Ativo',
+    key: "enabled",
+    label: "Ativo",
     sortable: true,
-    align: 'center',
-    width: '100px',
+    align: "center",
+    width: "100px",
     render: (item) => enabledBadge(item.enabled),
   },
   {
-    key: 'actions',
-    label: 'Ações',
+    key: "actions",
+    label: "Ações",
     sortable: false,
-    align: 'right',
-    width: '120px',
+    align: "right",
+    width: "120px",
     exportable: false,
     render: (item) => (
-      <div className="flex justify-end gap-2">
+      <div className="flex">
         <button
           type="button"
           onClick={(e) => {
@@ -115,7 +122,7 @@ const buildColumns = (
             onEdit(item);
           }}
           title="Editar"
-          className="text-brand hover:text-brand/80 transition-colors"
+          className="btn-primary !bg-transparent text-brand aspect-square"
         >
           <Pencil className="w-4 h-4" />
         </button>
@@ -126,7 +133,7 @@ const buildColumns = (
             onDelete([item._id]);
           }}
           title="Excluir"
-          className="text-error hover:text-error/80 transition-colors"
+          className="btn-cancel !bg-transparent text-error aspect-square"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -144,7 +151,7 @@ function PatternsContent() {
 
   // Busca client-side (padrão SimpleColumnSearch)
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
-  const [filterValue, setFilterValue] = useState('');
+  const [filterValue, setFilterValue] = useState("");
 
   // Estado do DataTable
   const [refreshKey, setRefreshKey] = useState(0);
@@ -157,10 +164,13 @@ function PatternsContent() {
   // ============================================================
   // Handlers
   // ============================================================
-  const handleSimpleSearch = useCallback((column: string | null, value: string) => {
-    setFilterColumn(column);
-    setFilterValue(value);
-  }, []);
+  const handleSimpleSearch = useCallback(
+    (column: string | null, value: string) => {
+      setFilterColumn(column);
+      setFilterValue(value);
+    },
+    [],
+  );
 
   const openCreate = useCallback(() => {
     setForm(EMPTY_FORM);
@@ -194,14 +204,14 @@ function PatternsContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const method = editingPattern ? 'PUT' : 'POST';
+    const method = editingPattern ? "PUT" : "POST";
     const url = editingPattern
       ? `/api/patterns?id=${editingPattern._id}`
-      : '/api/patterns';
+      : "/api/patterns";
 
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
 
@@ -209,14 +219,14 @@ function PatternsContent() {
       closeModal();
       setRefreshKey((k) => k + 1);
     } else {
-      alert('Erro ao salvar padrão.');
+      alert("Erro ao salvar padrão.");
     }
   };
 
   const handleDelete = useCallback(async (ids: string[]) => {
     if (!confirm(`Remover ${ids.length} padrão(ões)?`)) return;
     await Promise.all(
-      ids.map((id) => fetch(`/api/patterns?id=${id}`, { method: 'DELETE' }))
+      ids.map((id) => fetch(`/api/patterns?id=${id}`, { method: "DELETE" })),
     );
     setRefreshKey((k) => k + 1);
   }, []);
@@ -224,14 +234,14 @@ function PatternsContent() {
   // Colunas memoizadas com handlers estáveis
   const columns = useMemo(
     () => buildColumns(openEdit, handleDelete),
-    [openEdit, handleDelete]
+    [openEdit, handleDelete],
   );
 
-  if (status === 'loading') {
+  if (status === "loading") {
     return <div className="py-10 text-center text-muted">Carregando...</div>;
   }
   if (!session) {
-    router.push('/login');
+    router.push("/login");
     return null;
   }
 
@@ -241,19 +251,20 @@ function PatternsContent() {
   return (
     <div className="w-full space-y-4">
       <PageHeader
-        title="SAST Patterns"
+        title="Padrões de Segurança"
         subtitle="Gerencie os padrões de detecção utilizados pelo scanner SAST."
         search={{
-          type: 'simple',
+          type: "simple",
           onSearch: handleSimpleSearch,
-          userId: session?.user?._id?.toString() || session?.user?.id,
+          userSub: session?.user?.sub?.toString() || session?.user?.sub,
           columns: columns.map((c) => ({ key: c.key, label: c.label })),
-          placeholder: 'Buscar padrões (ex: name:SQL OR category:"Broken Access Control")',
+          placeholder:
+            'Buscar padrões (ex: name:SQL OR category:"Broken Access Control")',
         }}
         actions={
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 bg-apple-green hover:bg-apple-green/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+            className="flex items-center gap-2 btn-primary"
           >
             <Plus className="w-4 h-4" />
             Novo Padrão
@@ -265,9 +276,9 @@ function PatternsContent() {
         key={refreshKey}
         endpoint="/api/patterns"
         columns={columns}
-        defaultSort={{ field: 'name', order: 'asc' }}
+        defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={10}
-        pdfTitle="SAST Patterns"
+        pdfTitle="Padrões de Segurança"
         selectable={true}
         canDelete={true}
         onDelete={handleDelete}
@@ -279,9 +290,9 @@ function PatternsContent() {
       {/* Modal Criar/Editar */}
       {(showCreate || editingPattern) && (
         <div className="fixed inset-0 bg-page/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto transition-colors">
+          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto transition-colors">
             <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">
-              {editingPattern ? 'Editar Padrão' : 'Criar Novo Padrão'}
+              {editingPattern ? "Editar Padrão" : "Criar Novo Padrão"}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -293,7 +304,7 @@ function PatternsContent() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   required
                 />
               </div>
@@ -305,8 +316,10 @@ function PatternsContent() {
                 <input
                   type="text"
                   value={form.queryPattern}
-                  onChange={(e) => setForm({ ...form, queryPattern: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  onChange={(e) =>
+                    setForm({ ...form, queryPattern: e.target.value })
+                  }
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   required
                 />
               </div>
@@ -319,8 +332,10 @@ function PatternsContent() {
                   <input
                     type="text"
                     value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    onChange={(e) =>
+                      setForm({ ...form, category: e.target.value })
+                    }
+                    className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   />
                 </div>
                 <div>
@@ -330,9 +345,12 @@ function PatternsContent() {
                   <select
                     value={form.severity}
                     onChange={(e) =>
-                      setForm({ ...form, severity: e.target.value as Pattern['severity'] })
+                      setForm({
+                        ...form,
+                        severity: e.target.value as Pattern["severity"],
+                      })
                     }
-                    className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -350,9 +368,12 @@ function PatternsContent() {
                   type="number"
                   value={form.slaHours}
                   onChange={(e) =>
-                    setForm({ ...form, slaHours: parseInt(e.target.value) || 0 })
+                    setForm({
+                      ...form,
+                      slaHours: parseInt(e.target.value) || 0,
+                    })
                   }
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </div>
 
@@ -362,8 +383,10 @@ function PatternsContent() {
                 </label>
                 <textarea
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   rows={2}
                 />
               </div>
@@ -374,8 +397,10 @@ function PatternsContent() {
                 </label>
                 <textarea
                   value={form.recommendation}
-                  onChange={(e) => setForm({ ...form, recommendation: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  onChange={(e) =>
+                    setForm({ ...form, recommendation: e.target.value })
+                  }
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   rows={3}
                   placeholder="Ex: Utilize PreparedStatement, ORM, etc."
                 />
@@ -388,8 +413,10 @@ function PatternsContent() {
                 <input
                   type="text"
                   value={form.externalId}
-                  onChange={(e) => setForm({ ...form, externalId: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  onChange={(e) =>
+                    setForm({ ...form, externalId: e.target.value })
+                  }
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </div>
 
@@ -400,8 +427,10 @@ function PatternsContent() {
                 <input
                   type="url"
                   value={form.externalLink}
-                  onChange={(e) => setForm({ ...form, externalLink: e.target.value })}
-                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  onChange={(e) =>
+                    setForm({ ...form, externalLink: e.target.value })
+                  }
+                  className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-1.5 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </div>
 
@@ -410,10 +439,15 @@ function PatternsContent() {
                   type="checkbox"
                   id="enabled"
                   checked={form.enabled}
-                  onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+                  onChange={(e) =>
+                    setForm({ ...form, enabled: e.target.checked })
+                  }
                   className="w-4 h-4 rounded bg-surface dark:bg-surface border-default dark:border-strong focus:ring-2 focus:ring-brand/30"
                 />
-                <label htmlFor="enabled" className="text-sm text-body dark:text-body">
+                <label
+                  htmlFor="enabled"
+                  className="text-sm text-body dark:text-body"
+                >
                   Ativo
                 </label>
               </div>
@@ -428,7 +462,7 @@ function PatternsContent() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-2xl font-medium transition-colors"
+                  className="bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   Salvar
                 </button>
@@ -448,7 +482,9 @@ export default function PatternsPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-muted">Carregando página de padrões...</div>
+        <div className="py-12 text-center text-muted">
+          Carregando página de padrões...
+        </div>
       }
     >
       <PatternsContent />

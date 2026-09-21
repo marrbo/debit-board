@@ -1,3 +1,4 @@
+//app/stats/page.tsx
 import { Suspense } from "react";
 import { getStats } from "./services/statsService";
 import StatsClient from "./StatsClient";

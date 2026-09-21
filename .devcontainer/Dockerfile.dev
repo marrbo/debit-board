@@ -30,13 +30,13 @@ RUN if [ "$(id -u $USERNAME 2>/dev/null || echo '')" != "$USER_UID" ]; then \
  && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
  && chmod 0440 /etc/sudoers.d/$USERNAME
 
-WORKDIR /src
+WORKDIR /app
 
 # 🔥 Cria os diretórios que serão sobrescritos por volumes nomeados
 #    e já delega a posse para o usuário `node`. Sem isso, o Docker
 #    monta o volume vazio como root:root e o `npm ci` falha com EACCES.
-RUN mkdir -p /src/node_modules /src/.next /home/$USERNAME/.npm-global \
- && chown -R $USERNAME:$USERNAME /src /home/$USERNAME \
+RUN mkdir -p /app/node_modules /app/.next /home/$USERNAME/.npm-global \
+ && chown -R $USERNAME:$USERNAME /app /home/$USERNAME \
  && echo 'prefix=/home/'$USERNAME'/.npm-global' > /home/$USERNAME/.npmrc \
  && chown $USERNAME:$USERNAME /home/$USERNAME/.npmrc
 

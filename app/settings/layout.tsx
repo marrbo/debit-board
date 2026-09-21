@@ -2,9 +2,13 @@
 import { getServerAuthSession } from "@/lib/auth-server";
 import SettingsNav from "./SettingsNav";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default async function SettingsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const session = await getServerAuthSession();
   const isAdmin = !!session?.user?.isAdmin;
 
@@ -15,9 +19,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <SettingsNav isAdmin={isAdmin} />
       </div>
       {/* Conteúdo flexível */}
-      <main className="flex-1 min-w-0 p-8 overflow-y-auto">
-        {children}
-      </main>
+      <main className="flex-1 min-w-0 p-8 overflow-y-auto">{children}</main>
     </div>
   );
 }

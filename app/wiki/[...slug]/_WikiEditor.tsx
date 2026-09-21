@@ -1,11 +1,11 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import MarkdownRenderer from '@/components/MarkdownRenderer';
+"use client";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 export default function WikiEditor({ slug }: { slug: string }) {
   const router = useRouter();
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export default function WikiEditor({ slug }: { slug: string }) {
         // Tenta fazer parse do JSON com segurança
         const text = await res.text();
         if (!text) {
-          setContent('');
+          setContent("");
           return;
         }
 
@@ -43,12 +43,12 @@ export default function WikiEditor({ slug }: { slug: string }) {
         try {
           data = JSON.parse(text);
         } catch {
-          throw new Error('Resposta inválida da API (não é JSON).');
+          throw new Error("Resposta inválida da API (não é JSON).");
         }
 
-        setContent(data?.content || '');
+        setContent(data?.content || "");
       } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Erro ao carregar conteúdo.');
+        if (!cancelled) setError(err.message || "Erro ao carregar conteúdo.");
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -66,13 +66,13 @@ export default function WikiEditor({ slug }: { slug: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/wiki/${slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
 
       if (!res.ok) {
-        let errorMsg = 'Erro ao salvar a página.';
+        let errorMsg = "Erro ao salvar a página.";
         try {
           const data = await res.json();
           if (data?.error) errorMsg = data.error;
@@ -82,7 +82,7 @@ export default function WikiEditor({ slug }: { slug: string }) {
 
       router.push(`/wiki/${slug}`); // Volta para a visualização
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar.');
+      setError(err.message || "Erro ao salvar.");
       setSaving(false);
     }
   };
@@ -94,21 +94,22 @@ export default function WikiEditor({ slug }: { slug: string }) {
       {/* Barra de Ferramentas */}
       <div className="h-14 border-b bg-white dark:bg-zinc-800 px-6 flex items-center justify-between shrink-0">
         <h2 className="text-sm px-2 font-medium text-zinc-500">
-          Editando: <span className="text-zinc-900 dark:text-white">{slug}</span>
+          Editando:{" "}
+          <span className="text-zinc-900 dark:text-white">{slug}</span>
         </h2>
         <div className="flex gap-3">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 border border-default dark:border-strong text-heading dark:text-heading px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
+            className="inline-flex items-center gap-1.5 border border-default dark:border-strong text-heading dark:text-heading px-3 py-1.5 rounded-lg text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 border border-brand text-brand px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-brand/30"
+            className="inline-flex items-center gap-1.5 border border-brand text-brand px-3 py-1.5 rounded-lg text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-brand/30"
           >
-            {saving ? 'Salvando...' : 'Salvar'}
+            {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
@@ -132,7 +133,7 @@ export default function WikiEditor({ slug }: { slug: string }) {
 
       {/* Mensagens de erro (opcional) */}
       {error && (
-        <div className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-xl text-sm shadow-sm hover:drop-shadow-lg">
+        <div className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-lg text-sm shadow-sm hover:drop-shadow-lg">
           {error}
         </div>
       )}

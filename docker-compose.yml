@@ -46,7 +46,8 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/27017' || exit 1"]
+      test:
+        ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/27017' || exit 1"]
       interval: 60s
       timeout: 5s
       retries: 1
@@ -68,7 +69,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:-keycloak} -d ${KEYCLOAK_DB_NAME:-keycloak}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${KEYCLOAK_DB_USER:-keycloak} -d ${KEYCLOAK_DB_NAME:-keycloak}",
+        ]
       interval: 60s
       timeout: 3s
       retries: 3
@@ -86,14 +91,17 @@ services:
       - "start-dev"
       - "--http-port=8080"
       - "--http-management-port=9000"
-      - "--hostname=http://debitboard-keycloak:8080"
+      - "--hostname=http://localhost:8080"
       - "--import-realm"
       - "--spi-theme-static-max-age=-1"
-      - "--spi-theme-cache-themes=false"
-      - "--spi-theme-cache-templates=false"
+      - "--spi-theme-cache-themes=true"
+      - "--spi-theme-cache-templates=true"
     ports:
       - "8080:8080"
     environment:
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://debitboard-keycloak-db:5432/${KEYCLOAK_DB_NAME:-keycloak}
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
@@ -102,7 +110,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
     volumes:
-      - ./.docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./.docker/keycloak:/opt/keycloak/data/import/realm.json:ro
       - ./.docker/keycloak/providers:/opt/keycloak/providers:ro
     depends_on:
       debitboard-keycloak-db:

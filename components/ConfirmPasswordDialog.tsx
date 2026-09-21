@@ -42,7 +42,7 @@ export default function ConfirmPasswordDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface border border-default dark:border-strong rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+        className="bg-surface border border-default dark:border-strong rounded-lg p-6 w-full max-w-md shadow-2xl space-y-4"
       >
         <div className="flex items-start gap-3">
           <ShieldAlert className="w-6 h-6 text-warning shrink-0" />
@@ -63,7 +63,7 @@ export default function ConfirmPasswordDialog({
             autoFocus
             required
             disabled={busy}
-            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
 
@@ -85,7 +85,7 @@ export default function ConfirmPasswordDialog({
           <button
             type="submit"
             disabled={busy || !password}
-            className="px-4 py-2 rounded-xl bg-error text-white text-sm font-medium hover:bg-error/90 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 disabled:opacity-50 flex items-center gap-2"
           >
             {busy && <LoaderCircle className="w-4 h-4 animate-spin" />}
             Confirmar

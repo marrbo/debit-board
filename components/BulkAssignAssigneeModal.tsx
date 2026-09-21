@@ -35,8 +35,7 @@ export default function BulkAssignAssigneeModal({
     if (!q) return users;
     return users.filter(
       (u) =>
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q),
+        u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
     );
   }, [users, search]);
 
@@ -67,7 +66,7 @@ export default function BulkAssignAssigneeModal({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface border border-default dark:border-strong rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+      <div className="bg-surface border border-default dark:border-strong rounded-lg shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-default dark:border-strong">
           <div className="flex items-center gap-2">
@@ -102,7 +101,7 @@ export default function BulkAssignAssigneeModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar usuários..."
-              className="w-full pl-9 pr-3 py-2 bg-page dark:bg-sunken border border-default dark:border-strong rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full pl-9 pr-3 py-2 bg-page dark:bg-sunken border border-default dark:border-strong rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
           </div>
         </div>
@@ -132,6 +131,7 @@ export default function BulkAssignAssigneeModal({
                     src={getAvatarUrl(user)}
                     width={32}
                     height={32}
+                    loading="eager"
                     className="w-8 h-8 rounded-full object-cover"
                     alt={user.name || user.email || "User"}
                   />
@@ -170,14 +170,14 @@ export default function BulkAssignAssigneeModal({
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-muted hover:text-heading transition-colors disabled:opacity-40"
+            className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-heading transition-colors disabled:opacity-40"
           >
             Cancelar
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="px-4 py-2 rounded-xl text-xs font-medium bg-brand text-white hover:bg-brand/90 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+            className="px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand/90 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
           >
             {saving && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
             {saving ? "Aplicando..." : `Aplicar a ${observationIds.length}`}

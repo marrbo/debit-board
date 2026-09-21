@@ -31,11 +31,11 @@ services:
       - "9229:9229"
     volumes:
       # 🔥 `.` e não `..` — resolvido a partir do project dir (raiz do projeto)
-      - .:/src:cached
-      - ./.devcontainer/env.development.local:/src/.env.development.local:ro
+      - .:/app:cached
+      - ./.devcontainer/env.development.local:/app/.env.development.local:ro
       # node_modules e .next ficam em volumes nomeados (isolados do host)
-      - dev_node_modules:/src/node_modules
-      - dev_next_cache:/src/.next
+      - dev_node_modules:/app/node_modules
+      - dev_next_cache:/app/.next
       - dumps_data:/var/lib/debit-board/dumps
     cap_add:
       - SYS_PTRACE

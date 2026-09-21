@@ -1,3 +1,4 @@
+// lib/settingsMenu.ts
 import {
   ShieldCheck,
   Puzzle,
@@ -7,41 +8,61 @@ import {
   SquareAsterisk,
   DatabaseSearch,
   UserCog2,
-  UsersIcon,
-  Database
-} from 'lucide-react';
+  UserGroup,
+  Database,
+} from "lucide-react";
+import { SiOpenapiinitiative } from "react-icons/si";
 
-// Itens comuns
-export const settingsMenuItems = [
-  { href: '/settings/profile/user', label: 'Profile', icon: UserCog2 },
-  { href: '/settings/teams', label: 'Teams', icon: UsersIcon },
-  { href: '/settings/projects', label: 'Projetos', icon: FolderGit2 },
-  { href: '/settings/repositories', label: 'Repositórios', icon: GitBranchPlus },
-  { href: '/settings/saved-queries', label: 'Queries', icon: DatabaseSearch },
-];
+type MenuItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 
-// Itens de admin
-export const adminMenuItems = [
-  { href: '/settings/admin/patterns', label: 'Security Patterns', icon: SquareAsterisk },
-  { href: '#', label: 'Integrations (Azure)', icon: Puzzle },
-  { href: '#', label: 'Auth (OpenID)', icon: ShieldCheck },
-  { href: '/settings/admin', label: 'Admin', icon: UserCog },
+const byLabel = (a: MenuItem, b: MenuItem) =>
+  a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" });
+
+export const settingsMenuItems: MenuItem[] = [
+  { href: "/settings/profile/user", label: "Perfil", icon: UserCog2 },
+  { href: "/settings/projects", label: "Projetos", icon: FolderGit2 },
+  { href: "/settings/saved-queries", label: "Queries", icon: DatabaseSearch },
   {
-      label: "Backup & Restore",
-      href: "/settings/admin/db-tools",
-      icon: Database,
-    },
-];
+    href: "/settings/repositories",
+    label: "Repositórios",
+    icon: GitBranchPlus,
+  },
+  { href: "/settings/teams", label: "Times", icon: UserGroup },
+].sort(byLabel);
 
-// Grupos (exportação obrigatória)
+export const adminMenuItems: MenuItem[] = [
+  { href: "/settings/admin", label: "Admin", icon: UserCog },
+  {
+    href: "/settings/admin/api-docs",
+    label: "API Docs",
+    icon: SiOpenapiinitiative,
+  },
+  { href: "#", label: "Auth (OpenID)", icon: ShieldCheck },
+  {
+    href: "/settings/admin/db-tools",
+    label: "Backup & Restore",
+    icon: Database,
+  },
+  { href: "#", label: "Integrations (Azure)", icon: Puzzle },
+  {
+    href: "/settings/admin/patterns",
+    label: "Padrões de Segurança",
+    icon: SquareAsterisk,
+  },
+].sort(byLabel);
+
 export const settingsMenuGroups = [
   {
-    label: 'Organização',
+    label: "Organização",
     items: settingsMenuItems,
     adminOnly: false,
   },
   {
-    label: 'Administração',
+    label: "Administração",
     items: adminMenuItems,
     adminOnly: true,
   },

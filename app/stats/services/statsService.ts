@@ -1,5 +1,5 @@
 // app/stats/services/statsService.ts
-import { serverFetch } from '@/lib/serverFetch';
+import { serverFetch } from "@/lib/serverFetch";
 
 export interface DailyStats {
   label: string;
@@ -15,7 +15,14 @@ export interface DailyStats {
 }
 
 export interface StatsData {
-  kpi: { total: number; accepted: number; resolved: number; recurring: number; wontFix: number; expired: number };
+  kpi: {
+    total: number;
+    accepted: number;
+    resolved: number;
+    recurring: number;
+    wontFix: number;
+    expired: number;
+  };
   severityTotals: Record<string, number>;
   categoryTotals: { label: string; value: number }[];
   projectTotals: {
@@ -27,12 +34,38 @@ export interface StatsData {
   chartData: DailyStats[];
 }
 
-export async function getStats(searchQuery?: string): Promise<StatsData> {
-  const params = new URLSearchParams();
-  if (searchQuery) params.set('search', searchQuery);
+const EMPTY_STATS: StatsData = {
+  kpi: {
+    total: 0,
+    accepted: 0,
+    resolved: 0,
+    recurring: 0,
+    wontFix: 0,
+    expired: 0,
+  },
+  severityTotals: {},
+  categoryTotals: [],
+  projectTotals: [],
+  chartData: [],
+};
 
-  const data = await serverFetch<StatsData>(`/api/stats?${params.toString()}`, {
-    cache: 'no-store',
-  });
-  return data;
+export async function getStats(q?: string): Promise<StatsData> {
+  try {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+
+    const data = await serverFetch<StatsData>(
+      `/api/stats?${params.toString()}`,
+      { cache: "no-store" },
+    );
+
+    // Sanity check: se veio vazio/erro, devolve o shape esperado
+    if (!data || typeof data !== "object" || !("kpi" in data)) {
+      return EMPTY_STATS;
+    }
+    return data;
+  } catch {
+    // SSR falhou (sem cookie, 401, etc.) — o cliente vai refazer o fetch
+    return EMPTY_STATS;
+  }
 }

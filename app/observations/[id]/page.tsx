@@ -58,10 +58,6 @@ export default function IssueDetailPage(props: {
   // =========================================================================
   useEffect(() => {
     if (status === "loading") return;
-    if (!session) {
-      router.push("/login");
-      return;
-    }
 
     let cancelled = false;
 
@@ -151,11 +147,26 @@ export default function IssueDetailPage(props: {
   const getLanguageFromExtension = (fileName: string) => {
     const ext = fileName.split(".").pop()?.toLowerCase();
     const map: Record<string, string> = {
-      cs: "csharp", js: "javascript", ts: "typescript", py: "python",
-      java: "java", go: "go", rb: "ruby", rs: "rust",
-      swift: "swift", php: "php", html: "html", css: "css",
-      json: "json", xml: "xml", yaml: "yaml", yml: "yaml",
-      md: "markdown", sh: "bash", bash: "bash", ps1: "powershell",
+      cs: "csharp",
+      js: "javascript",
+      ts: "typescript",
+      py: "python",
+      java: "java",
+      go: "go",
+      rb: "ruby",
+      rs: "rust",
+      swift: "swift",
+      php: "php",
+      html: "html",
+      css: "css",
+      json: "json",
+      xml: "xml",
+      yaml: "yaml",
+      yml: "yaml",
+      md: "markdown",
+      sh: "bash",
+      bash: "bash",
+      ps1: "powershell",
     };
     return map[ext || ""] || "text";
   };
@@ -167,23 +178,25 @@ export default function IssueDetailPage(props: {
       </div>
     );
   if (errorIssue)
-    return <div className="w-full px-4 py-6 text-error">Erro: {errorIssue}</div>;
+    return (
+      <div className="w-full px-4 py-6 text-error">Erro: {errorIssue}</div>
+    );
   if (!issue)
     return (
       <div className="text-center py-12 text-muted">Issue não encontrada.</div>
     );
 
   const pattern = issue.patternId || null;
-  const azureUrl = `${
-    session?.user?.azureSettings?.instanceUrl || ""
-  }/tfs/${session?.user?.azureSettings?.azureCollection || ""}/${issue.project}/_git/${
-    issue.repository
-  }?path=${issue.filePath}&version=GB${issue.branch}&_a=contents`;
+  const azureUrl = `${session?.user?.azureSettings?.instanceUrl || ""}/tfs/${
+    session?.user?.azureSettings?.azureCollection || ""
+  }/${issue.project}/_git/${issue.repository}?path=${
+    issue.filePath
+  }&version=GB${issue.branch}&_a=contents`;
 
   const renderSnippetContent = () => {
     if (loadingSnippets) {
       return (
-        <div className="flex flex-col items-center justify-center h-44 border border-default dark:border-strong rounded-xl bg-surface/50">
+        <div className="flex flex-col items-center justify-center h-44 border border-default dark:border-strong rounded-lg bg-surface/50">
           <div className="w-6 h-6 border-2 border-brand/30 border-t-brand rounded-full animate-spin mb-3" />
           <p className="text-sm text-muted">
             Carregando trecho de código do Azure...
@@ -194,7 +207,7 @@ export default function IssueDetailPage(props: {
 
     if (errorSnippets) {
       return (
-        <div className="flex flex-col items-center justify-center h-44 border border-apple-red/20 rounded-xl bg-apple-red/5 p-4 text-center">
+        <div className="flex flex-col items-center justify-center h-44 border border-apple-red/20 rounded-lg bg-apple-red/5 p-4 text-center">
           <p className="text-sm font-medium text-error mb-1">
             Falha ao carregar o código
           </p>
@@ -203,7 +216,7 @@ export default function IssueDetailPage(props: {
           </p>
           <button
             onClick={handleRetrySnippet}
-            className="inline-flex items-center gap-2 bg-brand hover:bg-[#0063CE] text-white px-4 py-2 rounded-xl text-xs font-medium transition-colors"
+            className="inline-flex items-center gap-2 bg-brand hover:bg-[#0063CE] text-white px-4 py-2 rounded-lg text-xs font-medium transition-colors"
           >
             <RotateCw className="w-3 h-3" /> Tentar novamente
           </button>
@@ -232,9 +245,7 @@ export default function IssueDetailPage(props: {
           {snippets.length > 1 && (
             <div className="flex gap-2">
               <button
-                onClick={() =>
-                  setActiveSnippetIndex((i) => Math.max(0, i - 1))
-                }
+                onClick={() => setActiveSnippetIndex((i) => Math.max(0, i - 1))}
                 disabled={activeSnippetIndex === 0}
                 className="px-2 py-1 bg-apple-tertiary-light/10 rounded text-xs disabled:opacity-30"
               >
@@ -257,7 +268,7 @@ export default function IssueDetailPage(props: {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-default dark:border-strong overflow-hidden">
+        <div className="rounded-lg border border-default dark:border-strong overflow-hidden">
           <SyntaxHighlighter
             language={getLanguageFromExtension(issue.fileName)}
             wrapLongLines
@@ -272,8 +283,7 @@ export default function IssueDetailPage(props: {
             }}
             startingLineNumber={current?.startLine}
             lineProps={(lineNumber) => {
-              const globalLine =
-                (current?.startLine || 1) + (lineNumber - 1);
+              const globalLine = (current?.startLine || 1) + (lineNumber - 1);
               const isHit =
                 globalLine ===
                 (current?.hitLine || 0) + (current?.startLine || 1) - 1;
@@ -325,10 +335,10 @@ export default function IssueDetailPage(props: {
               issue.severity === "critical"
                 ? "bg-apple-red/10 text-error border border-apple-red/20"
                 : issue.severity === "high"
-                  ? "bg-apple-orange/10 text-warning border border-apple-orange/20"
-                  : issue.severity === "medium"
-                    ? "bg-apple-yellow/10 text-warning border border-apple-yellow/20"
-                    : "bg-brand/10 text-brand border border-brand/20"
+                ? "bg-apple-orange/10 text-warning border border-apple-orange/20"
+                : issue.severity === "medium"
+                ? "bg-apple-yellow/10 text-warning border border-apple-yellow/20"
+                : "bg-brand/10 text-brand border border-brand/20"
             }`}
           >
             {issue.severity?.toUpperCase()}
@@ -338,8 +348,8 @@ export default function IssueDetailPage(props: {
               issue.status === "open" || issue.status === "recurring"
                 ? "bg-brand/10 text-brand border border-brand/20"
                 : issue.status === "resolved"
-                  ? "bg-apple-green/10 text-success border border-apple-green/20"
-                  : "bg-apple-tertiary-light/10 text-muted border border-default"
+                ? "bg-apple-green/10 text-success border border-apple-green/20"
+                : "bg-apple-tertiary-light/10 text-muted border border-default"
             }`}
           >
             {issue.status.toUpperCase()}
@@ -350,7 +360,7 @@ export default function IssueDetailPage(props: {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Coluna principal */}
         <div className="w-full lg:w-[65%] space-y-8">
-          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg shadow-sm overflow-hidden">
             <div className="flex border-b border-default dark:border-strong bg-page/30 dark:bg-page/20">
               <button
                 onClick={() => setActiveTab("code")}
@@ -396,14 +406,17 @@ export default function IssueDetailPage(props: {
                     </p>
                   </div>
                   {renderSnippetContent()}
-                  {!loadingSnippets && !errorSnippets && snippets.length > 0 && (
-                    <div className="mt-4 flex items-center justify-start gap-1.5 text-[10px] text-muted border-t border-default/50 pt-3 pl-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-success" />
-                      <span>
-                        Este trecho é consultado em tempo real e não é armazenado.
-                      </span>
-                    </div>
-                  )}
+                  {!loadingSnippets &&
+                    !errorSnippets &&
+                    snippets.length > 0 && (
+                      <div className="mt-4 flex items-center justify-start gap-1.5 text-[10px] text-muted border-t border-default/50 pt-3 pl-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-success" />
+                        <span>
+                          Este trecho é consultado em tempo real e não é
+                          armazenado.
+                        </span>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -436,7 +449,7 @@ export default function IssueDetailPage(props: {
 
         {/* Sidebar */}
         <div className="w-full lg:w-[35%] space-y-6">
-          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-5 shadow-sm">
+          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-5 shadow-sm">
             <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-3">
               Actions
             </h3>
@@ -444,13 +457,13 @@ export default function IssueDetailPage(props: {
               href={azureUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 py-2.5 rounded-xl text-sm font-medium text-heading transition-colors border border-default dark:border-transparent"
+              className="flex items-center justify-center gap-2 w-full bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 py-2.5 rounded-lg text-sm font-medium text-heading transition-colors border border-default dark:border-transparent"
             >
               Ver no Azure <ExternalLink className="w-4 h-4" />
             </a>
           </div>
 
-          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-5 shadow-sm divide-y divide-apple-border-light/50 dark:divide-apple-border-dark/50">
+          <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-5 shadow-sm divide-y divide-apple-border-light/50 dark:divide-apple-border-dark/50">
             <div className="pb-4 mb-4">
               <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-3">
                 Origem

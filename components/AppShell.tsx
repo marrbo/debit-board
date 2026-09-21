@@ -1,14 +1,14 @@
 // components/AppShell.tsx
-'use client';
+"use client";
 
-import { usePathname } from 'next/navigation';
-import Sidebar from './Sidebar';
+import { usePathname } from "next/navigation";
+import Sidebar from "./Sidebar";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Lista de páginas que NÃO devem ter a Sidebar
-  const isPublicPage = pathname === '/login' || pathname.startsWith('/login');
+  const isPublicPage = pathname === "/login" || pathname.startsWith("/login");
 
   if (isPublicPage) {
     return (
@@ -21,7 +21,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full transition-colors duration-200">
       <Sidebar />
-      <main className="flex-1 w-full ml-20 h-screen overflow-y-auto">
+      <main className="flex-1 w-full ml-16 h-screen overflow-y-auto">
         {children}
       </main>
     </div>

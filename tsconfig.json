@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": false, // 🔹 desative se não houver JS puro
     "skipLibCheck": true,
     "strict": false,
@@ -30,9 +26,7 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -42,8 +36,10 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts",
-    "next.config.mjs"
-, "tailwind.config.mjs"  ],
+    "next.config.mjs",
+    "tailwind.config.mjs",
+    "auto-swagger.config.cjs"
+  ],
   "exclude": [
     "node_modules",
     "**/*.test.ts",

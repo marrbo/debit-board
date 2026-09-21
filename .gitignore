@@ -4,6 +4,8 @@
 .devcontainer/dev_node_modules/
 .vscode/.debug/
 
+*.pem
+
 # dependencies
 /node_modules
 /.pnp

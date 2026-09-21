@@ -8,6 +8,19 @@ import type { PipelineStage } from 'mongoose';
 import { getServerSessionIds } from '@/lib/session-server';
 import mongoose from 'mongoose';
 
+/**
+ * Lista recursos do endpoint /api/teams/stats.
+ *
+ * Este endpoint expõe a operação get em /api/teams/stats.
+ *
+ * @summary Lista recursos do endpoint /api/teams/stats
+ * @tags Teams, Stats
+ * @route GET /api/teams/stats
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
   const tenantId = sessionIds.tenantId;

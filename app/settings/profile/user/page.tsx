@@ -1,10 +1,10 @@
 // app/settings/profile/user/page.tsx
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import PageHeader from '@/components/PageHeader';
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import PageHeader from "@/components/PageHeader";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -12,33 +12,33 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '',
-    company: '',
-    jobTitle: '',
-    phone: '',
+    name: "",
+    company: "",
+    jobTitle: "",
+    phone: "",
   });
 
   useEffect(() => {
-    if (status === 'loading') return;
-    if (!session) router.push('/login');
+    if (status === "loading") return;
+    if (!session) router.push("/login");
 
     const fetchProfile = async () => {
       setLoading(true);
-      const res = await fetch('/api/users/me');
+      const res = await fetch("/api/users/me");
       if (res.ok) {
         const data = await res.json();
         setForm({
-          name: data.name || session?.user.name || '',
-          company: data.company || '',
-          jobTitle: data.jobTitle || '',
-          phone: data.phone || '',
+          name: data.name || session?.user.name || "",
+          company: data.company || "",
+          jobTitle: data.jobTitle || "",
+          phone: data.phone || "",
         });
       } else {
         setForm({
-          name: session?.user.name || '',
-          company: '',
-          jobTitle: '',
-          phone: '',
+          name: session?.user.name || "",
+          company: "",
+          jobTitle: "",
+          phone: "",
         });
       }
       setLoading(false);
@@ -49,73 +49,91 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch('/api/users/me', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/users/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      alert('Perfil atualizado com sucesso!');
+      alert("Perfil atualizado com sucesso!");
     } else {
       const errorData = await res?.json();
-      alert('Erro ao salvar perfil: ' + (errorData.error || 'Erro desconhecido'));
+      alert(
+        "Erro ao salvar perfil: " + (errorData.error || "Erro desconhecido"),
+      );
     }
     setSaving(false);
   };
 
-  if (loading) return <div className="text-center py-10 text-muted dark:text-muted">Carregando perfil...</div>;
+  if (loading)
+    return (
+      <div className="text-center py-10 text-muted dark:text-muted">
+        Carregando perfil...
+      </div>
+    );
 
   return (
     <div className="w-full space-y-6 mx-auto">
-      <PageHeader title="Profile" subtitle="Gerencie suas informações pessoais." />
-      
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-6 shadow-sm hover:drop-shadow-lg transition-colors">
+      <PageHeader
+        title="Profile"
+        subtitle="Gerencie suas informações pessoais."
+      />
+
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-6 shadow-sm hover:drop-shadow-lg transition-colors">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-body dark:text-body mb-1">Nome Completo</label>
-            <input 
-              type="text" 
-              value={form.name} 
-              onChange={e => setForm({...form, name: e.target.value})} 
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30" 
-              required 
+            <label className="block text-sm font-medium text-body dark:text-body mb-1">
+              Nome Completo
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30"
+              required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-body dark:text-body mb-1">Empresa / Organização</label>
-            <input 
-              type="text" 
-              value={form.company} 
-              onChange={e => setForm({...form, company: e.target.value})} 
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30" 
+            <label className="block text-sm font-medium text-body dark:text-body mb-1">
+              Empresa / Organização
+            </label>
+            <input
+              type="text"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-body dark:text-body mb-1">Cargo</label>
-              <input 
-                type="text" 
-                value={form.jobTitle} 
-                onChange={e => setForm({...form, jobTitle: e.target.value})} 
-                className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30" 
+              <label className="block text-sm font-medium text-body dark:text-body mb-1">
+                Cargo
+              </label>
+              <input
+                type="text"
+                value={form.jobTitle}
+                onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
+                className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-body dark:text-body mb-1">Telefone</label>
-              <input 
-                type="text" 
-                value={form.phone} 
-                onChange={e => setForm({...form, phone: e.target.value})} 
-                className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30" 
+              <label className="block text-sm font-medium text-body dark:text-body mb-1">
+                Telefone
+              </label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
             </div>
           </div>
-          <button 
-            type="submit" 
-            disabled={saving} 
-            className="bg-brand hover:bg-brand/90 text-white px-4 py-2 rounded-2xl font-medium mt-4 transition-all disabled:opacity-50"
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-brand hover:bg-brand/90 text-white px-4 py-2 rounded-lg font-medium mt-4 transition-all disabled:opacity-50"
           >
-            {saving ? 'Salvando...' : 'Salvar Alterações'}
+            {saving ? "Salvando..." : "Salvar Alterações"}
           </button>
         </form>
       </div>

@@ -8,14 +8,29 @@ import {
   Pencil,
   X,
   TimerReset,
-  FolderLock,
+  HatGlasses,
   Share2,
   Globe,
+  LockIcon,
+  Eye,
+  DatabaseSearch,
 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useFeedback } from "@/hooks/useFeedback";
 import type { ISavedQuery } from "@/types/ISavedQuery";
+import { useConfirm } from "@/hooks/useConfirm";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+} from "@mui/material";
 
 // ============================================================
 // Tipos
@@ -35,10 +50,10 @@ const EMPTY_FORM: SavedQueryForm = {
 };
 
 const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
-  temporary: <TimerReset size={20} className="text-muted" />,
-  private: <FolderLock size={20} className="text-muted" />,
-  public: <Globe size={20} className="text-muted" />,
-  shared: <Share2 size={20} className="text-muted" />,
+  temporary: <TimerReset size={18} className="text-muted" />,
+  private: <HatGlasses size={18} className="text-muted" />,
+  public: <Globe size={18} className="text-muted" />,
+  shared: <Share2 size={18} className="text-muted" />,
 };
 
 // ============================================================
@@ -47,7 +62,8 @@ const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
 function SavedQueriesContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { toast, confirm } = useFeedback();
+  const { toast } = useFeedback();
+  const confirm = useConfirm();
 
   // Busca client-side (padrão SimpleColumnSearch)
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
@@ -60,6 +76,48 @@ function SavedQueriesContent() {
   const [saving, setSaving] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [bulkVisOpen, setBulkVisOpen] = useState(false);
+  const [bulkVisIds, setBulkVisIds] = useState<string[]>([]);
+  const [bulkVisValue, setBulkVisValue] =
+    useState<ISavedQuery["visibility"]>("private");
+  const [bulkVisSaving, setBulkVisSaving] = useState(false);
+
+  const handleBulkVisibility = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkVisIds(ids);
+    setBulkVisValue("private");
+    setBulkVisOpen(true);
+  }, []);
+
+  const handleBulkVisConfirm = async () => {
+    setBulkVisSaving(true);
+    try {
+      const res = await fetch("/api/saved-query/bulk-visibility", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: bulkVisIds, visibility: bulkVisValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao atualizar visibilidade.");
+        return;
+      }
+
+      toast.success(
+        data.modified === 1
+          ? "Visibilidade atualizada."
+          : `${data.modified} consultas atualizadas.`,
+      );
+      setBulkVisOpen(false);
+      setRefreshKey((prev) => prev + 1);
+    } catch {
+      toast.error("Erro de rede.");
+    } finally {
+      setBulkVisSaving(false);
+    }
+  };
 
   // ============================================================
   // Handlers
@@ -78,32 +136,44 @@ function SavedQueriesContent() {
     setIsModalOpen(true);
   }, []);
 
-  const handleOpenEdit = useCallback((item: ISavedQuery) => {
-    setEditingId(String(item._id));
-    setForm({
-      name: item.name,
-      queryString: item.queryString,
-      context: item.context,
-      visibility: item.visibility,
-    });
-    setIsModalOpen(true);
-  }, []);
+  const handleOpenEdit = useCallback(
+    (item: ISavedQuery) => {
+      const isOwner = item.sub === session?.user?.sub;
+      if (!isOwner) {
+        toast.error("Você só pode editar consultas criadas por você.");
+        return;
+      }
+      setEditingId(String(item._id));
+      setForm({
+        name: item.name,
+        queryString: item.queryString,
+        context: item.context,
+        visibility: item.visibility,
+      });
+      setIsModalOpen(true);
+    },
+    [session?.user?.sub, toast],
+  );
 
   const handleDelete = useCallback(
-    async (ids: string[]) => {
+    async (ids: string[], items: ISavedQuery[]) => {
       if (ids.length === 0) return;
 
+      const isBulk = ids.length > 1;
+      const single = !isBulk ? items[0] : null;
+
+      // Nome seguro para exibir (fallback se `name` estiver vazio)
+      const singleName = single?.name?.trim() || "consulta selecionada";
+
       const ok = await confirm({
-        title:
-          ids.length === 1
-            ? "Excluir consulta salva?"
-            : `Excluir ${ids.length} consultas salvas?`,
-        message:
-          ids.length === 1
-            ? "Esta ação não pode ser desfeita."
-            : `As ${ids.length} consultas selecionadas serão removidas permanentemente.`,
+        title: isBulk
+          ? `Excluir ${ids.length} consultas salvas?`
+          : "Excluir consulta salva?",
+        message: isBulk
+          ? `As ${ids.length} consultas selecionadas serão removidas permanentemente.\nEsta ação não pode ser desfeita.`
+          : `A consulta "${singleName}" será removida permanentemente.\nEsta ação não pode ser desfeita.`,
         confirmLabel: "Excluir",
-        variant: "danger",
+        confirmColor: "error",
       });
       if (!ok) return;
 
@@ -112,18 +182,30 @@ function SavedQueriesContent() {
           method: "DELETE",
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          toast.success(
-            ids.length === 1
-              ? "Consulta excluída."
-              : `${data.deleted ?? ids.length} consultas excluídas.`,
-          );
-          setRefreshKey((prev) => prev + 1);
-        } else {
+        if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           toast.error(err.error || "Erro ao excluir consultas.");
+          return;
         }
+
+        const data = await res.json().catch(() => ({}));
+        const deleted = data.deleted ?? ids.length;
+
+        if (deleted < ids.length) {
+          // Acontece quando o backend filtra por `sub` e algum item
+          // não pertencia ao usuário (defesa em profundidade).
+          toast.error(
+            `${deleted} de ${ids.length} consultas excluídas. Algumas não pertencem a você.`,
+          );
+        } else {
+          toast.success(
+            deleted === 1
+              ? "Consulta excluída."
+              : `${deleted} consultas excluídas.`,
+          );
+        }
+
+        setRefreshKey((prev) => prev + 1);
       } catch {
         toast.error("Erro de rede ao excluir.");
       }
@@ -146,9 +228,7 @@ function SavedQueriesContent() {
       });
 
       if (res.ok) {
-        toast.success(
-          editingId ? "Consulta atualizada." : "Consulta criada.",
-        );
+        toast.success(editingId ? "Consulta atualizada." : "Consulta criada.");
         setIsModalOpen(false);
         setRefreshKey((prev) => prev + 1);
       } else {
@@ -217,24 +297,36 @@ function SavedQueriesContent() {
         sortable: false,
         width: "80px",
         exportable: false,
-        render: (item) => (
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenEdit(item);
-              }}
-              className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-brand transition-colors"
-              title="Editar"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-          </div>
-        ),
+        render: (item) => {
+          const isOwner = item.sub === session?.user?.sub;
+          return (
+            <div className="flex justify-center">
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenEdit(item);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-apple-tertiary-light/10 text-brand transition-colors"
+                  title="Editar"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              ) : (
+                <span
+                  className="p-1.5 text-muted opacity-60 cursor-not-allowed"
+                  title="Somente leitura — consulta de outro usuário"
+                >
+                  <LockIcon className="w-4 h-4" />
+                </span>
+              )}
+            </div>
+          );
+        },
       },
     ],
-    [handleOpenEdit],
+    [handleOpenEdit, session?.user?.sub],
   );
 
   // ============================================================
@@ -253,20 +345,68 @@ function SavedQueriesContent() {
   // ============================================================
   return (
     <div className="w-full space-y-4">
+      <Dialog
+        open={bulkVisOpen}
+        onClose={bulkVisSaving ? undefined : () => setBulkVisOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Mudar visibilidade de {bulkVisIds.length}{" "}
+          {bulkVisIds.length === 1 ? "consulta" : "consultas"}
+        </DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+            <InputLabel id="bulk-vis-label">Visibilidade</InputLabel>
+            <Select
+              labelId="bulk-vis-label"
+              label="Visibilidade"
+              value={bulkVisValue}
+              onChange={(e) =>
+                setBulkVisValue(e.target.value as ISavedQuery["visibility"])
+              }
+            >
+              <MenuItem value="private">Private</MenuItem>
+              <MenuItem value="shared">Shared</MenuItem>
+              <MenuItem value="public">Public</MenuItem>
+              <MenuItem value="temporary">Temporary</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setBulkVisOpen(false)}
+            disabled={bulkVisSaving}
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleBulkVisConfirm}
+            disabled={bulkVisSaving}
+            variant="contained"
+          >
+            {bulkVisSaving ? "Salvando..." : "Aplicar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <PageHeader
         title="Consultas Salvas"
+        icon={<DatabaseSearch className="w-10 h-10 text-brand" />}
         subtitle="Gerencie suas consultas DBQL reutilizáveis."
         search={{
           type: "simple",
           onSearch: handleSimpleSearch,
-          userId: session?.user?._id?.toString() || session?.user?.id,
+          userSub: session?.user?.sub?.toString() || session?.user?.sub,
           columns: columns.map((c) => ({ key: c.key, label: c.label })),
           placeholder: "Buscar por nome, contexto, query...",
         }}
         actions={
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-1.5 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+            className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
           >
             <Plus className="w-4 h-4" /> Nova Consulta
           </button>
@@ -281,17 +421,67 @@ function SavedQueriesContent() {
         pdfTitle="Consultas Salvas"
         refreshKey={refreshKey}
         selectable
-        canDelete={!!session.user.isAdmin}
+        rowSelectable={(item) => item.sub === session?.user?.sub}
+        canDelete={true}
         onDelete={handleDelete}
         onRowClick={handleOpenEdit}
         filterColumn={filterColumn}
         filterValue={filterValue}
+        actions={[
+          {
+            label: "Mudar visibilidade",
+            icon: <Eye className="w-3.5 h-3.5 hover:text-white" />,
+            onClick: (ids) => handleBulkVisibility(ids),
+          },
+        ]}
+        renderCard={(item) => (
+          <div
+            className={`flex flex-col h-full p-4 rounded-lg hover:shadow-md hover:bg-page border bg-surface transition-colors ${
+              item.sub === session?.user?.sub
+                ? "border-brand/30 hover:border-brand/60"
+                : "border-default dark:border-strong"
+            }`}
+          >
+            {/* Header: ícone de visibilidade + título */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="shrink-0 flex items-center justify-center">
+                {VISIBILITY_ICONS[item.visibility]}
+              </span>
+              <h3
+                className="font-semibold text-body dark:text-body truncate flex-1 min-w-0"
+                title={item.name}
+              >
+                {item.name}
+              </h3>
+            </div>
+
+            {/* Divisor */}
+            <div className="border-b border-subtle mb-3" />
+
+            {/* Query — ocupa o espaço restante, limitado a 2 linhas */}
+            <div className="flex-1 min-h-[2.5rem] mb-3 overflow-hidden">
+              <p className="text-xs text-muted font-mono leading-snug line-clamp-2 break-all">
+                {item.queryString}
+              </p>
+            </div>
+
+            {/* Footer: contexto + data */}
+            <div className="flex items-center justify-between gap-2 text-xs text-muted">
+              <span className="pr-2 py-0.5 rounded bg-apple-tertiary-light/10 font-mono truncate max-w-[60%]">
+                contexto: {item.context}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {new Date(item.createdAt).toLocaleDateString("pt-BR")}
+              </span>
+            </div>
+          </div>
+        )}
       />
 
       {/* Modal Criar/Editar */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-surface border border-default dark:border-strong rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+          <div className="bg-surface border border-default dark:border-strong rounded-lg p-6 w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-heading dark:text-heading">
                 {editingId ? "Editar Consulta" : "Nova Consulta"}
@@ -313,7 +503,7 @@ function SavedQueriesContent() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   required
                   autoFocus
                 />
@@ -328,7 +518,7 @@ function SavedQueriesContent() {
                   onChange={(e) =>
                     setForm({ ...form, queryString: e.target.value })
                   }
-                  className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 font-mono text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 font-mono text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
                   rows={4}
                   required
                 />
@@ -347,7 +537,7 @@ function SavedQueriesContent() {
                         context: e.target.value as ISavedQuery["context"],
                       })
                     }
-                    className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading"
+                    className="w-full bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading"
                   >
                     <option value="observations">Observations</option>
                     <option value="projects">Projects</option>
@@ -368,7 +558,7 @@ function SavedQueriesContent() {
                         visibility: e.target.value as ISavedQuery["visibility"],
                       })
                     }
-                    className="w-full bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading"
+                    className="w-full bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading"
                   >
                     <option value="private">Private</option>
                     <option value="shared">Shared</option>
@@ -382,14 +572,14 @@ function SavedQueriesContent() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm rounded-xl text-muted hover:text-heading transition-colors"
+                  className="px-4 py-2 text-sm rounded-lg text-muted hover:text-heading transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl bg-brand text-white hover:bg-brand/80 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:bg-brand/80 disabled:opacity-50 transition-colors"
                 >
                   {saving ? "Salvando..." : "Salvar"}
                 </button>

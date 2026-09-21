@@ -14,6 +14,7 @@ import {
   createUser,
 } from "./actions";
 import type mongoose from "mongoose";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export default function AdminTabs({
   tenants,
@@ -22,6 +23,9 @@ export default function AdminTabs({
   tenants: any[];
   users: any[];
 }) {
+  // ✅ Hook chamado UMA vez, no topo do componente
+  const confirm = useConfirm();
+
   const [activeTab, setActiveTab] = useState<"tenants" | "users">("tenants");
 
   const [filterTenant, setFilterTenant] = useState<string>("all");
@@ -46,53 +50,116 @@ export default function AdminTabs({
 
   const handleBulkAssign = async () => {
     if (selectedUsers.length === 0 || !bulkTargetTenant) return;
-    if (
-      !confirm(
-        `Atribuir ${selectedUsers.length} usuários ao tenant selecionado?`
-      )
-    )
-      return;
+
+    const ok = await confirm({
+      title: "Atribuir usuários",
+      message: `Atribuir ${selectedUsers.length} usuário(s) ao tenant selecionado?`,
+      confirmLabel: "Atribuir",
+      confirmColor: "primary",
+    });
+    if (!ok) return;
+
     setLoading(true);
-    await assignUsersToTenant(selectedUsers, bulkTargetTenant);
-    setSelectedUsers([]);
-    setBulkTargetTenant("");
-    setLoading(false);
+    try {
+      await assignUsersToTenant(selectedUsers, bulkTargetTenant);
+      setSelectedUsers([]);
+      setBulkTargetTenant("");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteTenant = async (id: string) => {
-    if (!confirm("Deletar este tenant? Essa ação é irreversível.")) return;
-    await deleteTenant(id);
+    const ok = await confirm({
+      title: "Deletar tenant",
+      message: "Deletar este tenant?\nEssa ação é irreversível.",
+      confirmLabel: "Deletar",
+      confirmColor: "error",
+    });
+    if (!ok) return;
+
+    try {
+      await deleteTenant(id);
+    } catch (e: any) {
+      await confirm({
+        title: "Erro ao deletar",
+        message: e?.message ?? "Erro desconhecido.",
+        confirmLabel: "OK",
+        cancelLabel: "Fechar",
+        confirmColor: "error",
+      });
+    }
   };
 
   const handleToggleTenant = async (
     id: mongoose.Types.ObjectId,
-    currentStatus: boolean | undefined
+    currentStatus: boolean | undefined,
   ) => {
     const isActive = currentStatus ?? true;
-    if (!confirm(`Deseja ${isActive ? "desativar" : "ativar"} este tenant?`))
-      return;
-    await toggleTenantStatus(id, !isActive);
+
+    const ok = await confirm({
+      title: isActive ? "Desativar tenant" : "Ativar tenant",
+      message: `Deseja ${isActive ? "desativar" : "ativar"} este tenant?`,
+      confirmLabel: isActive ? "Desativar" : "Ativar",
+      confirmColor: isActive ? "warning" : "success",
+      action: async () => {
+        await toggleTenantStatus(id, !isActive);
+      },
+    });
+    if (!ok) return;
   };
 
   const handleToggleUser = async (
     sub: string,
-    currentStatus: boolean | undefined
+    currentStatus: boolean | undefined,
   ) => {
     const isActive = currentStatus ?? true;
-    if (!confirm(`Deseja ${isActive ? "desativar" : "ativar"} este usuário?`))
-      return;
-    await toggleUserStatus(sub, !isActive);
+
+    const ok = await confirm({
+      title: isActive ? "Desativar usuário" : "Ativar usuário",
+      message: `Deseja ${isActive ? "desativar" : "ativar"} este usuário?`,
+      confirmLabel: isActive ? "Desativar" : "Ativar",
+      confirmColor: isActive ? "warning" : "success",
+      action: async () => {
+        await toggleUserStatus(sub, !isActive);
+      },
+    });
+    if (!ok) return;
   };
 
   const handleImpersonate = async (sub: string) => {
-    if (!confirm("Deseja se passar por este usuário?")) return;
-    const res = await fetch("/api/admin/impersonate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: sub }),
+    const ok = await confirm({
+      title: "Impersonar usuário",
+      message:
+        "Deseja se passar por este usuário em uma nova janela?\nA sessão de impersonação dura 15 minutos.",
+      confirmLabel: "Impersonar",
+      confirmColor: "primary",
     });
-    if (res.ok) window.location.href = "/stats";
-    else alert("Erro ao iniciar impersonação.");
+    if (!ok) return;
+
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: sub }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
+
+      const { url } = await res.json();
+      window.open(url, "_blank");
+    } catch (e: any) {
+      await confirm({
+        title: "Erro ao impersonar",
+        message: e?.message ?? "Erro desconhecido.",
+        confirmLabel: "OK",
+        cancelLabel: "Fechar",
+        confirmColor: "error",
+      });
+    }
   };
 
   return (
@@ -130,12 +197,12 @@ export default function AdminTabs({
             </h3>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 bg-apple-green hover:bg-apple-green/80 text-white px-4 py-2 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              className="flex items-center gap-2 bg-apple-green hover:bg-apple-green/80 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
               <Plus className="w-4 h-4" /> Novo Tenant
             </button>
           </div>
-          <div className="overflow-x-auto border border-default dark:border-strong rounded-2xl shadow-sm hover:drop-shadow-lg">
+          <div className="overflow-x-auto border border-default dark:border-strong rounded-lg shadow-sm hover:drop-shadow-lg">
             <table className="w-full text-sm text-left">
               <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-muted dark:text-muted border-b border-default dark:border-strong">
                 <tr>
@@ -154,7 +221,9 @@ export default function AdminTabs({
                       key={t._id}
                       className="hover:bg-page dark:hover:bg-surface/80 transition-colors"
                     >
-                      <td className="p-4 font-medium text-heading dark:text-heading">{t.name}</td>
+                      <td className="p-4 font-medium text-heading dark:text-heading">
+                        {t.name}
+                      </td>
                       <td className="p-4 font-mono text-muted dark:text-muted text-xs">
                         {t.uuid}
                       </td>
@@ -174,12 +243,12 @@ export default function AdminTabs({
                         </button>
                       </td>
                       <td className="p-4 text-right flex items-center justify-end gap-2">
-                        <Link 
-                            href={`/settings/admin/tenants/${t.uuid}/azure-settings`} 
-                            className="text-brand hover:text-brand/80 transition-colors"
-                            title="Configurações do Azure"
-                            >
-                            <Settings className="w-4 h-4" />
+                        <Link
+                          href={`/settings/admin/tenants/${t.uuid}/azure-settings`}
+                          className="text-brand hover:text-brand/80 transition-colors"
+                          title="Configurações do Azure"
+                        >
+                          <Settings className="w-4 h-4" />
                         </Link>
 
                         <button
@@ -216,7 +285,7 @@ export default function AdminTabs({
                 <select
                   value={filterTenant}
                   onChange={(e) => setFilterTenant(e.target.value)}
-                  className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading w-48 focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+                  className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading w-48 focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
                 >
                   <option value="all">Todos</option>
                   <option value="pending">⏳ Pendentes</option>
@@ -231,6 +300,7 @@ export default function AdminTabs({
                 <input
                   type="checkbox"
                   checked={filterPending}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => setFilterPending(e.target.checked)}
                   className="w-4 h-4 bg-surface dark:bg-surface border-default dark:border-strong rounded focus:ring-2 focus:ring-brand transition-colors"
                 />
@@ -241,20 +311,20 @@ export default function AdminTabs({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowCreateUser(true)}
-                className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-2xl text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+                className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
               >
                 <Plus className="w-4 h-4" /> Novo Usuário
               </button>
 
               {selectedUsers.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 bg-brand/10 p-3 rounded-2xl border border-default dark:border-strong transition-colors">
+                <div className="flex flex-wrap items-center gap-2 bg-brand/10 p-3 rounded-lg border border-default dark:border-strong transition-colors">
                   <span className="text-sm text-brand">
                     {selectedUsers.length} selecionado(s)
                   </span>
                   <select
-                    value={bulkTargetTenant.toString()}
+                    value={bulkTargetTenant?.toString() ?? ""}
                     onChange={(e) => setBulkTargetTenant(e.target.value)}
-                    className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-2 py-1 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+                    className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-2 py-1 text-sm text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
                   >
                     <option value="">Atribuir ao Tenant...</option>
                     {tenants.map((t) => (
@@ -266,7 +336,7 @@ export default function AdminTabs({
                   <button
                     onClick={handleBulkAssign}
                     disabled={!bulkTargetTenant || loading}
-                    className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-3 py-1 rounded-2xl text-sm transition-colors"
+                    className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-3 py-1 rounded-lg text-sm transition-colors"
                   >
                     {loading ? "Processando..." : "Aplicar"}
                   </button>
@@ -281,7 +351,7 @@ export default function AdminTabs({
             </div>
           </div>
 
-          <div className="border border-default dark:border-strong rounded-2xl overflow-hidden shadow-sm hover:drop-shadow-lg">
+          <div className="border border-default dark:border-strong rounded-lg overflow-hidden shadow-sm hover:drop-shadow-lg">
             <table className="w-full text-sm text-left">
               <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-muted dark:text-muted border-b border-default dark:border-strong">
                 <tr>
@@ -296,7 +366,7 @@ export default function AdminTabs({
                         setSelectedUsers(
                           e.target.checked
                             ? filteredUsers.map((u) => u.sub)
-                            : []
+                            : [],
                         )
                       }
                       className="w-4 h-4 rounded bg-surface dark:bg-surface border-default dark:border-strong focus:ring-2 focus:ring-brand transition-colors"
@@ -314,7 +384,10 @@ export default function AdminTabs({
                 {filteredUsers.map((u) => {
                   const isActive = u.isActive ?? true;
                   return (
-                    <tr key={u._id} className="hover:bg-page dark:hover:bg-surface/80 transition-colors">
+                    <tr
+                      key={u._id}
+                      className="hover:bg-page dark:hover:bg-surface/80 transition-colors"
+                    >
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -323,14 +396,18 @@ export default function AdminTabs({
                             setSelectedUsers(
                               e.target.checked
                                 ? [...selectedUsers, u.sub]
-                                : selectedUsers.filter((id) => id !== u.sub)
+                                : selectedUsers.filter((id) => id !== u.sub),
                             )
                           }
                           className="w-4 h-4 rounded bg-surface dark:bg-surface border-default dark:border-strong focus:ring-2 focus:ring-brand transition-colors"
                         />
                       </td>
-                      <td className="p-3 text-heading dark:text-heading">{u.name || "Sem Nome"}</td>
-                      <td className="p-3 text-body dark:text-body">{u.email}</td>
+                      <td className="p-3 text-heading dark:text-heading">
+                        {u.name || "Sem Nome"}
+                      </td>
+                      <td className="p-3 text-body dark:text-body">
+                        {u.email}
+                      </td>
                       <td className="p-3 text-muted dark:text-muted">
                         {u.tenantId === "pending" ? (
                           <span className="text-warning text-xs font-bold">
@@ -424,7 +501,7 @@ export default function AdminTabs({
 }
 
 // ============================================================
-// COMPONENTES DOS MODAIS (REFATORADOS PARA APPLE)
+// COMPONENTES DOS MODAIS
 // ============================================================
 
 function TenantForm({
@@ -442,8 +519,10 @@ function TenantForm({
 }) {
   return (
     <div className="fixed inset-0 bg-page/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl w-full max-w-md p-6 shadow-2xl transition-colors">
-        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">{title}</h2>
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg w-full max-w-md p-6 shadow-2xl transition-colors">
+        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">
+          {title}
+        </h2>
         <form
           action={action}
           onSubmit={() => setTimeout(onClose, 200)}
@@ -454,7 +533,7 @@ function TenantForm({
             name="name"
             defaultValue={initialName}
             placeholder="Nome da Empresa"
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             required
           />
           <div>
@@ -466,20 +545,20 @@ function TenantForm({
               name="dominio"
               defaultValue={initialDomain}
               placeholder="empresa.com.br"
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-2xl text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
+              className="px-4 py-2 rounded-lg text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-2xl font-medium transition-all"
+              className="bg-brand hover:bg-brand/80 text-white px-4 py-2 rounded-lg font-medium transition-all"
             >
               Salvar
             </button>
@@ -501,6 +580,7 @@ function UserEditForm({
 }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const currentTenant = user.tenantId === "pending" ? "pending" : user.tenantId;
+  const confirm = useConfirm();
 
   const handleUpdateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -511,7 +591,15 @@ function UserEditForm({
       await updateUser(user.sub, formData);
       onClose();
     } catch (err: any) {
-      alert("Erro ao salvar as alterações: " + (err.message || "Erro desconhecido"));
+      await confirm({
+        title: "Erro ao salvar",
+        message:
+          "Não foi possível salvar as alterações: " +
+          (err.message || "Erro desconhecido"),
+        confirmLabel: "OK",
+        cancelLabel: "Fechar",
+        confirmColor: "error",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -519,8 +607,10 @@ function UserEditForm({
 
   return (
     <div className="fixed inset-0 bg-page/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl w-full max-w-md p-6 shadow-2xl transition-colors">
-        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">Editar Usuário</h2>
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg w-full max-w-md p-6 shadow-2xl transition-colors">
+        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">
+          Editar Usuário
+        </h2>
         <p className="text-xs text-muted dark:text-muted mb-4">
           Altere os dados ou force a conclusão do onboarding.
         </p>
@@ -534,7 +624,7 @@ function UserEditForm({
               type="text"
               name="name"
               defaultValue={user.name || ""}
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
               required
             />
           </div>
@@ -547,7 +637,7 @@ function UserEditForm({
               type="email"
               name="email"
               defaultValue={user.email || ""}
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
               required
             />
           </div>
@@ -559,7 +649,7 @@ function UserEditForm({
             <select
               name="tenantId"
               defaultValue={currentTenant}
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             >
               <option value="pending">⏳ Pendente</option>
               {tenants.map((t) => (
@@ -591,7 +681,7 @@ function UserEditForm({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-2xl text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
+              className="px-4 py-2 rounded-lg text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
               disabled={isUpdating}
             >
               Cancelar
@@ -599,7 +689,7 @@ function UserEditForm({
             <button
               type="submit"
               disabled={isUpdating}
-              className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-2 rounded-2xl font-medium transition-all"
+              className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-all"
             >
               {isUpdating ? "Salvando..." : "Salvar Alterações"}
             </button>
@@ -618,6 +708,7 @@ function UserCreateForm({
   tenants: any[];
 }) {
   const [isCreating, setIsCreating] = useState(false);
+  const confirm = useConfirm();
 
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -627,7 +718,13 @@ function UserCreateForm({
       await createUser(formData);
       onClose();
     } catch (err: any) {
-      alert("Erro ao criar usuário: " + (err.message || "Erro desconhecido"));
+      await confirm({
+        title: "Erro ao criar usuário",
+        message: err.message || "Erro desconhecido",
+        confirmLabel: "OK",
+        cancelLabel: "Fechar",
+        confirmColor: "error",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -635,8 +732,10 @@ function UserCreateForm({
 
   return (
     <div className="fixed inset-0 bg-page/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl w-full max-w-md p-6 shadow-2xl transition-colors">
-        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">Criar Novo Usuário</h2>
+      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg w-full max-w-md p-6 shadow-2xl transition-colors">
+        <h2 className="text-lg font-bold text-heading dark:text-heading mb-4">
+          Criar Novo Usuário
+        </h2>
         <p className="text-xs text-muted dark:text-muted mb-4">
           Adicione um usuário manualmente para testar a impersonação.
         </p>
@@ -649,7 +748,7 @@ function UserCreateForm({
               type="text"
               name="name"
               placeholder="João da Silva"
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             />
           </div>
           <div>
@@ -660,7 +759,7 @@ function UserCreateForm({
               type="email"
               name="email"
               placeholder="joao@sefaz.ba.gov.br"
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
               required
             />
           </div>
@@ -670,7 +769,7 @@ function UserCreateForm({
             </label>
             <select
               name="tenantId"
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-4 py-2 text-heading dark:text-heading focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
               required
             >
               <option value="">Selecione um Tenant...</option>
@@ -685,7 +784,7 @@ function UserCreateForm({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-2xl text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
+              className="px-4 py-2 rounded-lg text-muted dark:text-muted hover:text-heading dark:hover:text-heading transition-colors"
               disabled={isCreating}
             >
               Cancelar
@@ -693,7 +792,7 @@ function UserCreateForm({
             <button
               type="submit"
               disabled={isCreating}
-              className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-2 rounded-2xl font-medium transition-all"
+              className="bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-all"
             >
               {isCreating ? "Criando..." : "Criar Usuário"}
             </button>

@@ -1,10 +1,10 @@
 // components/UserMenu.tsx
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useSession, signOut } from 'next-auth/react';
-import { LogOut, Settings, UserMinus } from 'lucide-react';
-import Link from 'next/link';
+import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { LogOut, Settings, UserMinus } from "lucide-react";
+import Link from "next/link";
 
 export default function UserMenu() {
   const { data: session } = useSession();
@@ -12,11 +12,11 @@ export default function UserMenu() {
   const isImpersonating = session?.user?.impersonating === true;
 
   const handleUnimpersonate = async () => {
-    const res = await fetch('/api/admin/unimpersonate', { method: 'POST' });
+    const res = await fetch("/api/admin/unimpersonate", { method: "POST" });
     if (res.ok) {
-      window.location.reload(); 
+      window.location.reload();
     } else {
-      alert('Erro ao sair da impersonação.');
+      alert("Erro ao sair da impersonação.");
     }
     setIsOpen(false);
   };
@@ -27,20 +27,26 @@ export default function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 rounded-xl p-1 pr-3 transition-colors border ${isImpersonating ? 'bg-[#AF52DE]/20 border-[#AF52DE]' : 'bg-[#F2F2F7] dark:bg-[#2C2C2E] border-default dark:border-strong hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C]'}`}
+        className={`flex items-center gap-2 rounded-lg p-1 pr-3 transition-colors border ${
+          isImpersonating
+            ? "bg-[#AF52DE]/20 border-[#AF52DE]"
+            : "bg-[#F2F2F7] dark:bg-[#2C2C2E] border-default dark:border-strong hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C]"
+        }`}
       >
         <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold text-sm">
-          {session.user?.name?.charAt(0).toUpperCase() || 'U'}
+          {session.user?.name?.charAt(0).toUpperCase() || "U"}
         </div>
         <span className="text-sm text-heading dark:text-heading hidden md:block max-w-[100px] truncate">
-          {session.user?.name || 'Usuário'}
+          {session.user?.name || "Usuário"}
         </span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-12 w-64 bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] overflow-hidden z-50 py-1 transition-colors">
+        <div className="absolute right-0 top-12 w-64 bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] overflow-hidden z-50 py-1 transition-colors">
           <div className="px-4 py-3 border-b border-default dark:border-strong">
-            <p className="text-sm font-medium text-heading dark:text-heading">{session.user?.name}</p>
+            <p className="text-sm font-medium text-heading dark:text-heading">
+              {session.user?.name}
+            </p>
             <p className="text-xs text-muted truncate">{session.user?.email}</p>
             {isImpersonating && (
               <div className="mt-2 inline-block bg-[#AF52DE]/20 text-[#AF52DE] border border-[#AF52DE]/40 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
@@ -48,7 +54,7 @@ export default function UserMenu() {
               </div>
             )}
           </div>
-          
+
           {isImpersonating ? (
             <button
               onClick={handleUnimpersonate}
@@ -58,8 +64,8 @@ export default function UserMenu() {
             </button>
           ) : (
             <>
-              <Link 
-                href="/settings" 
+              <Link
+                href="/settings"
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-body dark:text-body hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] hover:text-heading dark:hover:text-heading transition-colors"
                 onClick={() => setIsOpen(false)}
               >
@@ -69,7 +75,7 @@ export default function UserMenu() {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  signOut({ callbackUrl: '/login' });
+                  signOut({ callbackUrl: "/login" });
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] hover:text-[#FF453A] transition-colors text-left border-t border-default dark:border-strong mt-1"
               >

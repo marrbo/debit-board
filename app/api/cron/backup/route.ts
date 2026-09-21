@@ -43,6 +43,19 @@ async function pruneOldDumps(retentionDays: number): Promise<void> {
   }
 }
 
+/**
+ * Cria recurso do endpoint /api/cron/backup.
+ *
+ * Este endpoint expõe a operação post em /api/cron/backup.
+ *
+ * @summary Cria recurso do endpoint /api/cron/backup
+ * @tags Cron, Backup
+ * @route POST /api/cron/backup
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST(req: NextRequest) {
   // Autenticação via token compartilhado
   const expected = `Bearer ${process.env.CRON_TOKEN}`;

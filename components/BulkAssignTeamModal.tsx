@@ -9,7 +9,11 @@ interface BulkAssignTeamModalProps {
   onSuccess: () => void;
 }
 
-export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: BulkAssignTeamModalProps) {
+export default function BulkAssignTeamModal({
+  projectIds,
+  onClose,
+  onSuccess,
+}: BulkAssignTeamModalProps) {
   const [teams, setTeams] = useState<ITeam[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [newTeamName, setNewTeamName] = useState("");
@@ -19,8 +23,8 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
 
   useEffect(() => {
     fetch("/api/teams")
-      .then(res => res.json())
-      .then(json => setTeams(json.data || []));
+      .then((res) => res.json())
+      .then((json) => setTeams(json.data || []));
   }, []);
 
   const handleSubmit = async () => {
@@ -33,7 +37,7 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
           projectIds,
           teamId: selectedTeamId || undefined,
           newTeamName: creatingNew ? newTeamName : undefined,
-          description
+          description,
         }),
       });
 
@@ -53,8 +57,10 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-full max-w-md bg-white dark:bg-surface p-6 rounded-2xl shadow-xl">
-        <h2 className="text-xl font-bold mb-4">Atribuir {projectIds.length} projeto(s) a um Time</h2>
+      <div className="w-full max-w-md bg-white dark:bg-surface p-6 rounded-lg shadow-xl">
+        <h2 className="text-xl font-bold mb-4">
+          Atribuir {projectIds.length} projeto(s) a um Time
+        </h2>
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -85,8 +91,10 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             >
               <option value="">Selecione um time...</option>
-              {teams.map(team => (
-                <option key={team._id.toString()} value={team._id.toString()}>{team.name}</option>
+              {teams.map((team) => (
+                <option key={team._id.toString()} value={team._id.toString()}>
+                  {team.name}
+                </option>
               ))}
             </select>
           ) : (
@@ -109,10 +117,16 @@ export default function BulkAssignTeamModal({ projectIds, onClose, onSuccess }: 
           )}
 
           <div className="flex justify-end gap-2 pt-4">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancelar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-lg border">
+              Cancelar
+            </button>
             <button
               onClick={handleSubmit}
-              disabled={loading || (!creatingNew && !selectedTeamId) || (creatingNew && !newTeamName)}
+              disabled={
+                loading ||
+                (!creatingNew && !selectedTeamId) ||
+                (creatingNew && !newTeamName)
+              }
               className="px-4 py-2 rounded-lg bg-brand text-white disabled:opacity-50"
             >
               {loading ? "Atribuindo..." : "Confirmar"}

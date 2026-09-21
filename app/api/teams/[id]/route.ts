@@ -2,9 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
 import { Project } from "@/models/Project";
-import { getServerSessionIds } from "@/lib/session-server";
 import { toObjectId, toObjectIds } from "@/lib/mongo-id";
 import { toNonEmptyString } from "@/lib/validators";
+import { requireSession } from "@/lib/api-auth";
 
 // ============================================================
 // Helpers locais
@@ -20,25 +20,34 @@ function toOptionalString(value: unknown): string | undefined {
 // ============================================================
 // PUT
 // ============================================================
+/**
+ * Atualiza recurso do endpoint /api/teams/{id}.
+ *
+ * Este endpoint expõe a operação put em /api/teams/{id}.
+ *
+ * @summary Atualiza recurso do endpoint /api/teams/{id}
+ * @tags Teams, Id
+ * @route PUT /api/teams/{id}
+ * @async
+ * @function PUT
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const sessionIds = await getServerSessionIds();
-  const tenantObjectId = toObjectId(sessionIds.tenantId);
-  if (!tenantObjectId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantObjectId = auth.user.tenantId;
 
   await connectToDatabase();
 
   const { id } = await params;
   const teamObjectId = parseIdParam(id);
   if (!teamObjectId) {
-    return NextResponse.json(
-      { error: "ID de team inválido" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "ID de team inválido" }, { status: 400 });
   }
 
   const body = (await req.json()) as Record<string, unknown>;
@@ -146,25 +155,34 @@ export async function PUT(
 // ============================================================
 // DELETE
 // ============================================================
+/**
+ * Remove recurso do endpoint /api/teams/{id}.
+ *
+ * Este endpoint expõe a operação delete em /api/teams/{id}.
+ *
+ * @summary Remove recurso do endpoint /api/teams/{id}
+ * @tags Teams, Id
+ * @route DELETE /api/teams/{id}
+ * @async
+ * @function DELETE
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function DELETE(
   _: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const sessionIds = await getServerSessionIds();
-  const tenantObjectId = toObjectId(sessionIds.tenantId);
-  if (!tenantObjectId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantObjectId = auth.user.tenantId;
 
   await connectToDatabase();
 
   const { id } = await params;
   const teamObjectId = parseIdParam(id);
   if (!teamObjectId) {
-    return NextResponse.json(
-      { error: "ID de team inválido" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "ID de team inválido" }, { status: 400 });
   }
 
   // ============================================================

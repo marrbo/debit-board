@@ -1,10 +1,10 @@
 // components/Filters.tsx
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import type { SearchItem } from '@/lib/types';
-import { Search } from 'lucide-react';
-import { parseRepoName } from '@/lib/utils';
+import { useMemo } from "react";
+import type { SearchItem } from "@/lib/types";
+import { Search } from "lucide-react";
+import { parseRepoName } from "@/lib/utils";
 
 interface FiltersProps {
   allItems: SearchItem[];
@@ -45,33 +45,40 @@ export default function Filters({
   setGroupBy,
   onSearch,
 }: FiltersProps) {
-  
   const projects = useMemo(() => {
-    return Array.from(new Set(allItems.map(i => i.project).filter(Boolean))).sort();
+    return Array.from(
+      new Set(allItems.map((i) => i.project).filter(Boolean)),
+    ).sort();
   }, [allItems]);
 
   const repos = useMemo(() => {
-    return Array.from(new Set(allItems.map(i => i.repository).filter(Boolean))).sort();
+    return Array.from(
+      new Set(allItems.map((i) => i.repository).filter(Boolean)),
+    ).sort();
   }, [allItems]);
 
   const gerencias = useMemo(() => {
-    return Array.from(new Set(
-      allItems
-        .map(i => parseRepoName(i.repository).gerencia)
-        .filter(g => g !== 'Sem Gerência')
-    )).sort();
+    return Array.from(
+      new Set(
+        allItems
+          .map((i) => parseRepoName(i.repository).gerencia)
+          .filter((g) => g !== "Sem Gerência"),
+      ),
+    ).sort();
   }, [allItems]);
 
   const nucleos = useMemo(() => {
-    return Array.from(new Set(
-      allItems
-        .map(i => parseRepoName(i.repository).nucleo)
-        .filter(n => n !== 'Sem Núcleo')
-    )).sort();
+    return Array.from(
+      new Set(
+        allItems
+          .map((i) => parseRepoName(i.repository).nucleo)
+          .filter((n) => n !== "Sem Núcleo"),
+      ),
+    ).sort();
   }, [allItems]);
 
   return (
-    <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-2xl p-5 space-y-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none transition-colors">
+    <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-5 space-y-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none transition-colors">
       {/* Busca API */}
       <div className="flex flex-col md:flex-row gap-4 items-end">
         <div className="flex-1">
@@ -83,12 +90,12 @@ export default function Filters({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder='Ex: ext:cs file:*Controller.cs AllowAnonymous OR NOT Authorize'
-              className="flex-1 bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
+              placeholder="Ex: ext:cs file:*Controller.cs AllowAnonymous OR NOT Authorize"
+              className="flex-1 bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 transition-colors"
             />
             <button
               onClick={onSearch}
-              className="bg-brand hover:bg-[#0063CE] text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm hover:drop-shadow-lg"
+              className="bg-brand hover:bg-[#0063CE] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm hover:drop-shadow-lg"
             >
               Buscar
             </button>
@@ -109,7 +116,7 @@ export default function Filters({
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Filtrar resultados..."
-              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl pl-9 pr-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted"
+              className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg pl-9 pr-3 py-2 text-sm text-heading dark:text-heading placeholder:text-muted dark:placeholder:text-muted"
             />
           </div>
         </div>
@@ -121,10 +128,14 @@ export default function Filters({
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
-            {projects.map(p => <option key={p} value={p}>{p}</option>)}
+            {projects.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -135,10 +146,14 @@ export default function Filters({
           <select
             value={selectedGerencia}
             onChange={(e) => setSelectedGerencia(e.target.value)}
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todas</option>
-            {gerencias.map(g => <option key={g} value={g}>{g}</option>)}
+            {gerencias.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -149,10 +164,14 @@ export default function Filters({
           <select
             value={selectedNucleo}
             onChange={(e) => setSelectedNucleo(e.target.value)}
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
-            {nucleos.map(n => <option key={n} value={n}>{n}</option>)}
+            {nucleos.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -163,10 +182,14 @@ export default function Filters({
           <select
             value={selectedRepo}
             onChange={(e) => setSelectedRepo(e.target.value)}
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="">Todos</option>
-            {repos.map(r => <option key={r} value={r}>{r}</option>)}
+            {repos.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -177,7 +200,7 @@ export default function Filters({
           <select
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-xl px-3 py-2 text-sm text-heading dark:text-heading"
+            className="w-full bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg px-3 py-2 text-sm text-heading dark:text-heading"
           >
             <option value="project-repo">Projeto → Repositório</option>
             <option value="gerencia-nucleo">Gerência → Núcleo</option>

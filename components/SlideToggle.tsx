@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import type { LucideIcon } from "lucide-react";
 
@@ -25,59 +25,85 @@ export default function SlideToggle<T extends string = string>({
   onChange,
   width = 200,
   height = 35,
-  className = '',
+  className = "",
 }: SlideToggleProps<T>) {
   const parseSize = (size: number | string): number => {
-    if (typeof size === 'number') return size;
+    if (typeof size === "number") return size;
     return parseFloat(size) || 200;
   };
 
   const containerWidth = parseSize(width);
   const containerHeight = parseSize(height);
-  const padding = 4; // p-1
-  const borderWidth = 1; // classe "border" aplica 1px
 
-  // Área útil descontando borda e padding
-  const effectivePadding = padding + borderWidth;
+  // 🔑 Border 1px + padding interno de 4px
+  const BORDER = 1;
+  const PADDING = 4;
+  const offset = BORDER + PADDING; // 5px total em cada lado
 
-  // Largura e altura do knob
-  const knobWidth = (containerWidth - 2 * effectivePadding) / options.length;
-  const knobHeight = containerHeight - 2 * effectivePadding;
+  const innerWidth = containerWidth - 2 * offset;
+  const innerHeight = containerHeight - 2 * offset;
+  const knobWidth = innerWidth / options.length;
 
-  const activeIndex = options.findIndex(opt => opt.key === value);
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((opt) => opt.key === value),
+  );
   const translateX = activeIndex * knobWidth;
-
-  const knobStyle = {
-    width: `${knobWidth}px`,
-    height: `${knobHeight}px`,
-    transform: `translateX(${translateX}px)`,
-  };
 
   return (
     <div
-      className={`relative flex rounded-full border bg-page dark:bg-surface shadow-inner p-1 ${className}`}
-      style={{ width: containerWidth, height: containerHeight }}
+      className={`relative flex font-mono rounded-full border bg-page dark:bg-surface shadow-inner ${className}`}
+      style={{
+        width: containerWidth,
+        height: containerHeight,
+        padding: PADDING,
+        boxSizing: "border-box",
+      }}
     >
+      {/* Knob deslizante */}
       <span
-        className="absolute top-1 left-1 rounded-full bg-sunken drop-shadow-sm transition-all duration-300"
-        style={knobStyle}
+        className="absolute rounded-full bg-sunken drop-shadow-sm transition-transform duration-300 ease-out pointer-events-none"
+        style={{
+          width: `${knobWidth}px`,
+          height: `${innerHeight}px`,
+          top: `${PADDING}px`,
+          left: `${PADDING}px`,
+          transform: `translateX(${translateX}px)`,
+        }}
       />
 
+      {/* Botões */}
       {options.map((opt) => {
         const Icon = opt.icon;
         const isActive = opt.key === value;
-        const activeClass = opt.activeClassName || 'text-success';
-        const inactiveClass = opt.inactiveClassName || '';
+        const activeClass = opt.activeClassName || "text-success";
+        const inactiveClass = opt.inactiveClassName || "text-muted";
 
         return (
           <button
             key={opt.key}
             type="button"
             onClick={() => onChange(opt.key)}
-            className="flex-1 relative z-10 flex items-center justify-center gap-1 text-muted rounded-full text-[11px] transition-colors"
+            className="relative z-10 flex items-center justify-center gap-1 text-[11px] transition-colors"
+            style={{
+              width: `${knobWidth}px`,
+              height: `${innerHeight}px`,
+            }}
           >
-            {Icon && <Icon className={`w-3 h-3 ${isActive ? activeClass : inactiveClass}`} />}
-            <span className={`${isActive ? activeClass + ' font-semibold' : inactiveClass}`}>
+            {Icon && (
+              <Icon
+                className={`w-3 h-3 shrink-0 ${
+                  isActive ? activeClass : inactiveClass
+                }`}
+              />
+            )}
+            <span
+              className={` ${
+                isActive
+                  ? `${activeClass} font-mono font-semibold`
+                  : inactiveClass
+              }`}
+            >
               {opt.label}
             </span>
           </button>

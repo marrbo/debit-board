@@ -2,17 +2,27 @@ import { type NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import { getServerSessionIds } from "@/lib/session-server";
+import { requireSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Atualiza parcialmente recurso do endpoint /api/observations/bulk-assign.
+ *
+ * Este endpoint expõe a operação patch em /api/observations/bulk-assign.
+ *
+ * @summary Atualiza parcialmente recurso do endpoint /api/observations/bulk-assign
+ * @tags Observations, Bulk Assign
+ * @route PATCH /api/observations/bulk-assign
+ * @async
+ * @access Member
+ * @function PATCH
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function PATCH(req: NextRequest) {
-  const sessionIds = await getServerSessionIds();
-  const tenantId = sessionIds.tenantId;
-
-  if (!tenantId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
 
   const body = (await req.json()) as {
     observationIds?: string[];
@@ -39,7 +49,7 @@ export async function PATCH(req: NextRequest) {
   await connectToDatabase();
 
   const result = await Observation.updateMany(
-    { _id: { $in: validIds }, tenantId },
+    { _id: { $in: validIds }, tenantId: auth.user.tenantId },
     { $set: { assignedTo: assignedTo || null } },
   );
 
