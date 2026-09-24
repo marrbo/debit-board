@@ -1,26 +1,13 @@
 // lib/ai/openapi-ingest.ts
 import AiEmbedding from "@/models/AiEmbedding";
 import { generateEmbedding } from "@/lib/ollama";
-import { buildOpenApiSpec, type OpenApiSpec } from "@/lib/openapi/build";
+import { buildOpenApiSpec } from "@/lib/openapi/build";
 
 interface OperationChunk {
   parentId: string;
   title: string;
   content: string;
   metadata: Record<string, unknown>;
-}
-
-function isUsableSummary(s: string): boolean {
-  if (!s) return false;
-  const trimmed = s.trim();
-  if (trimmed.length < 6) return false;
-  if (/^=+$/.test(trimmed)) return false;
-  if (
-    /^(content|description|type|properties|required|summary)\s*:/i.test(trimmed)
-  )
-    return false;
-  if (/^\d{3}\s*:/.test(trimmed)) return false;
-  return true;
 }
 
 // lib/ai/openapi-ingest.ts
@@ -59,7 +46,6 @@ function extractOperation(
   path: string,
   method: string,
   operation: Record<string, unknown>,
-  spec: OpenApiSpec,
 ): OperationChunk {
   const summary = pickSummary(operation, method.toUpperCase(), path);
   const description = (operation.description as string) ?? "";
@@ -134,7 +120,7 @@ export async function reconcileOpenApi(): Promise<void> {
       const operation = pathItem[method] as Record<string, unknown> | undefined;
       if (!operation) continue;
 
-      const chunk = extractOperation(path, method, operation, spec);
+      const chunk = extractOperation(path, method, operation);
       const embedding = await generateEmbedding(chunk.content);
 
       await AiEmbedding.create({
