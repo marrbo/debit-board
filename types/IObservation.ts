@@ -1,12 +1,34 @@
-// types/IObservation.ts
-import type { Document } from 'mongoose';
-import type mongoose from 'mongoose';
+import type { IVulnerabilityPattern } from "@/models/VulnerabilityPattern";
+import type { Document, Types } from "mongoose";
+
+export type ObservationSeverity = "low" | "medium" | "high" | "critical";
+
+export type ObservationStatus =
+  | "open"
+  | "resolved"
+  | "recurring"
+  | "wont_fix"
+  | "expired";
+
+export interface ObservationHit {
+  charOffset: number;
+  length: number;
+}
 
 export type IObservation = Document & {
-  tenantId: string;
-  scanId: mongoose.Types.ObjectId;
-  patternId: mongoose.Types.ObjectId;
-  pattern?: string;
+  tenantId: Types.ObjectId;
+  scanId: Types.ObjectId;
+  patternId: Types.ObjectId;
+
+  /**
+   * Enriquecidos pelo handler `/api/observations` em tempo de resposta
+   * (via `.populate()` + merge in-memory). Não persistem no banco.
+   */
+  pattern?: Partial<IVulnerabilityPattern> | null;
+  patternName?: string;
+  description?: string;
+  recommendation?: string;
+
   query: string;
   category: string;
   fileName: string;
@@ -15,9 +37,9 @@ export type IObservation = Document & {
   repository: string;
   branch: string;
   hitCount: number;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: ObservationSeverity;
   slaHours: number;
-  status: 'new' | 'open' | 'resolved' | 'recurring' | 'wont_fix' | 'expired';
+  status: ObservationStatus;
   firstSeen: Date;
   lastSeen: Date;
   resolvedAt?: Date;
@@ -25,5 +47,5 @@ export type IObservation = Document & {
   assignedTo?: string;
   snippet?: string;
   lineNumber?: number;
-  hits?: { charOffset: number; length: number }[];
-}
+  hits?: ObservationHit[];
+};

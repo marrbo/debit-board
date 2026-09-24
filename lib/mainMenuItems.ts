@@ -20,7 +20,7 @@ export interface MenuItem {
 export const topNavItems: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: ChartAreaIcon },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
-  { href: '/observations', label: 'Observations', icon: Binoculars },
+  { href: '/observations', label: 'Feed', icon: Binoculars },
   { href: '/sast', label: 'SAST', icon: ShieldKeyhole },
   { href: '/azure-search-code', label: 'Search', icon: SearchCode },
 ];
@@ -28,5 +28,5 @@ export const topNavItems: MenuItem[] = [
 // Itens da base (Wiki e Settings, logo acima do botão Account)
 export const bottomNavItems: MenuItem[] = [
   { href: '/wiki', label: 'Wiki', icon: BookOpen },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/settings', label: '', icon: Settings },
 ];

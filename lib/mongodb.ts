@@ -1,27 +1,23 @@
 import mongoose from 'mongoose';
 import fs from 'fs/promises';
 
-// 1. Definimos a interface primeiro
 interface CachedConnection {
   conn: mongoose.Connection | null;
   promise: Promise<typeof mongoose> | null;
 }
 
-// 2. ESTA É A CHAVE: Aumentamos a definição do objeto global do Node.js
 declare global {
-  // Usamos 'var' aqui porque é a única forma de adicionar propriedades 
-  // ao objeto global em arquivos TypeScript/Node
   var mongooseCache: CachedConnection | undefined;
 }
 
 // ============================================================================
-// Configuração e cache da conexão
+// Configuração da conexão
 // ============================================================================
-
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
-}
+// 🔥 A URI é lida DENTRO da função, não no top-level do módulo.
+//    Motivo: o Turbopack avalia o top-level uma vez no build/cache,
+//    congelando o valor que estava no .env.local. Lendo dentro do connect,
+//    pegamos sempre o valor vigente em runtime.
+// ============================================================================
 
 const CONNECTION_OPTIONS: mongoose.ConnectOptions = {
   bufferCommands: false,
@@ -36,17 +32,22 @@ if (!cached) {
   cached = global.mongooseCache = { conn: null, promise: null };
 }
 
-/**
- * Estabelece a conexão com o MongoDB usando singleton com cache.
- */
 export async function connectToDatabase(): Promise<mongoose.Connection> {
+  // 🔥 Leitura em runtime — sempre pega o valor atual do processo
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('[mongodb] MONGODB_URI não configurada no ambiente');
+  }
+
+  console.log('[mongodb] connecting to:', uri);  // debug — remover depois
+
   if (cached?.conn && cached.conn.readyState === 1) {
     return cached.conn;
   }
 
   if (!cached?.promise) {
     cached!.promise = mongoose
-      .connect(MONGODB_URI, CONNECTION_OPTIONS)
+      .connect(uri, CONNECTION_OPTIONS)
       .then((mongooseInstance) => {
         mongooseInstance.connection.on('error', (err) => {
           console.error('❌ MongoDB connection error:', err);
@@ -95,8 +96,7 @@ export async function restoreDatabase(filePath: string): Promise<void> {
 
     const collection = db.collection(collectionName);
     await collection.deleteMany({});
-    
-    await collection.insertMany(documents); 
+    await collection.insertMany(documents);
     console.log(`✅ Restored ${documents.length} documents into '${collectionName}'`);
   }
 }

@@ -1,0 +1,51 @@
+# ============================================================
+# Devcontainer — Node 22 (alinha com engines do package.json)
+# ============================================================
+FROM node:22-alpine
+
+# Ferramentas de debug e conveniências
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    vim \
+    nano \
+    tini \
+    mongodb-tools \
+    gettext \
+    libc6-compat \
+    sudo
+
+# Usuário não-root (o VSCode prefere que o workspace tenha um owner previsível)
+ARG USERNAME=node
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN if [ "$(id -u $USERNAME 2>/dev/null || echo '')" != "$USER_UID" ]; then \
+      deluser $USERNAME 2>/dev/null || true; \
+      delgroup $USERNAME 2>/dev/null || true; \
+      addgroup -g $USER_GID $USERNAME; \
+      adduser -u $USER_UID -G $USERNAME -s /bin/bash -D $USERNAME; \
+    fi \
+ && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
+ && chmod 0440 /etc/sudoers.d/$USERNAME
+
+WORKDIR /app
+
+# 🔥 Cria os diretórios que serão sobrescritos por volumes nomeados
+#    e já delega a posse para o usuário `node`. Sem isso, o Docker
+#    monta o volume vazio como root:root e o `npm ci` falha com EACCES.
+RUN mkdir -p /app/node_modules /app/.next /home/$USERNAME/.npm-global \
+ && chown -R $USERNAME:$USERNAME /app /home/$USERNAME \
+ && echo 'prefix=/home/'$USERNAME'/.npm-global' > /home/$USERNAME/.npmrc \
+ && chown $USERNAME:$USERNAME /home/$USERNAME/.npmrc
+
+USER $USERNAME
+
+ENV PATH=/home/$USERNAME/.npm-global/bin:$PATH
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# tini garante que sinais (SIGTERM) cheguem ao processo Node corretamente
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["sleep", "infinity"]

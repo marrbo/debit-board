@@ -1,47 +1,54 @@
 // components/ThemeToggle.tsx
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Sun, Moon } from 'lucide-react';
+import { useSyncExternalStore } from "react";
+import { Sun, Moon } from "lucide-react";
+import { useLocalSetting } from "@/hooks/useLocalSettings";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
+
+// Detecta se estamos no cliente sem causar cascading render.
+// No SSR: false. Após hidratação: true. Nunca muda depois.
+const emptySubscribe = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [, setTheme] = useLocalSetting("theme");
+  const isDark = useResolvedTheme() === "dark";
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
-  useEffect(() => {
-    const storedTheme = localStorage.getItem('wiki-theme');
-    if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-      setTheme('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      setTheme('light');
-    }
-  }, []);
+  const toggleTheme = () => setTheme(isDark ? "light" : "dark");
 
-  const toggleTheme = () => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('wiki-theme', 'dark');
-      setTheme('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('wiki-theme', 'light');
-      setTheme('light');
-    }
-  };
+  const active = mounted && isDark;
 
   return (
     <button
       onClick={toggleTheme}
-      className="flex flex-col items-center justify-center py-2 px-1 rounded-lg text-[9px] font-medium transition-colors w-full text-apple-tertiary-light dark:text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E]"
+      className="relative inline-flex items-center h-6 w-10 rounded-full transition-colors duration-300 focus:outline-none"
       aria-label="Alternar tema"
+      role="switch"
+      aria-checked={active}
     >
-      {theme === 'light' ? (
-        <Moon className="w-5 h-5 mb-1 text-apple-tertiary-light dark:text-apple-tertiary-light" />
-      ) : (
-        <Sun className="w-5 h-5 mb-1 text-[#FFD60A]" />
-      )}
-      <span className="text-center leading-tight">Theme</span>
+      <span
+        className={`absolute inset-0 rounded-full transition-colors duration-300 shadow-inner shadow-black/20 ${
+          active ? "bg-gray-700 !shadow-none" : "bg-gray-300"
+        }`}
+      />
+      <span
+        className={`absolute flex items-center justify-center w-5 h-5 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
+          active ? "translate-x-0" : "-translate-x-3.5"
+        }`}
+      >
+        {active ? (
+          <Moon className="w-4 h-4 text-white" />
+        ) : (
+          <Sun className="w-4 h-4 text-orange-500" />
+        )}
+      </span>
     </button>
   );
 }

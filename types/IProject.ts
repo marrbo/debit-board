@@ -4,8 +4,8 @@ import type mongoose from 'mongoose';
 import type { Document } from 'mongoose';
 
 export interface IProject extends TeamProject, Document {
-  tenantId: string;
-  teamId: mongoose.Types.ObjectId,
+  tenantId: mongoose.Types.ObjectId;
+  teamId: mongoose.Types.ObjectId;
   azureProjectId: string;
   syncDate: Date;
   repositoryCount: number;
@@ -15,4 +15,5 @@ export interface IProject extends TeamProject, Document {
   pipelineClassicCount: number;
   pipelineYamlCount: number;
   pipelineSuccessCount: number;
+  isActive: boolean;
 }

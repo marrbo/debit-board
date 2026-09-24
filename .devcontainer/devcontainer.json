@@ -1,0 +1,69 @@
+{
+  "name": "Debit Board (dev)",
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "docker-compose.extend.yml"
+  ],
+  "service": "debitboard-app",
+  "workspaceFolder": "/src",
+  "runServices": [
+    "debitboard-mongo-db",
+    "debitboard-keycloak-db",
+    "debitboard-keycloak"
+  ],
+  "shutdownAction": "stopCompose",
+
+  // Extensões que fazem sentido no container
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "mongodb.mongodb-vscode",
+        "orta.vscode-jest",
+        "vitest.explorer",
+        "sanity-io.vscode-sanity",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "js/ts.tsdk.path": "node_modules/typescript/lib",
+        "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "files.watcherExclude": {
+          "**/.next/**": true,
+          "**/node_modules/**": true,
+          "**/.git/**": true
+        }
+      }
+    }
+  },
+
+  // Setup inicial: instala deps dentro do volume nomeado
+  "postCreateCommand": "cd /src && npm ci",
+
+  // Sobe o dev server automaticamente ao anexar
+  "postStartCommand": "cd /src && npm run dev:docker",
+
+  // Redirecionamento de portas para o browser do host
+  "forwardPorts": [3001, 9229],
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "portsAttributes": {
+    "3000": {
+      "label": "Nunca usar (porta reservada pelo VSCode)",
+      "onAutoForward": "ignore"
+    },
+    "3001": { "label": "Next.js", "onAutoForward": "notify" },
+    "9229": { "label": "Node Inspector", "onAutoForward": "silent" }
+  },
+
+  // O debugger roda por padrão no usuário node (não-root)
+  "remoteUser": "node",
+
+  // Aguarda o `npm ci` do postCreateCommand antes de considerar pronto
+  "waitFor": "postCreateCommand"
+}

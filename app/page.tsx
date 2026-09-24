@@ -1,65 +1,225 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Check } from "lucide-react";
+import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
 import PageHeader from "@/components/PageHeader";
-import { DataTable } from "@/components/DataTable";
-import type { Column } from '@/components/DataTable';
+import { ChartAreaIcon } from "lucide-react";
+import { FaFilePdf } from "react-icons/fa";
 import TeamStatsCard from "@/components/TeamStatsCard";
+import TeamSelector from "@/components/TeamSelector";
+import { DataTable, type Column } from "@/components/DataTable";
+import { useTeam } from "@/hooks/useLocalSettings";
+import { useTeams } from "@/hooks/useTeams";
+import { drawSeverityShields } from "@/components/DataTable/pdfShared";
 
-// const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-//   open: { label: "Novo", bg: "bg-blue-100", color: "text-blue-600" },
-//   resolved: { label: "Corrigido", bg: "bg-green-100", color: "text-green-600" },
-//   recurring: { label: "Recorrente", bg: "bg-red-100", color: "text-red-600" },
-//   wont_fix: { label: "Não Corrigir", bg: "bg-gray-100", color: "text-gray-600" },
-// };
+// ============================================================
+// Colunas do grid
+// ============================================================
+/**
+ * Aplica cor de fundo suave + fonte bold colorida a uma célula
+ * de severidade. Quando o valor é 0, deixa neutro para o olho
+ * bater nas células com contagem > 0.
+ */
+function applySeverityCellStyle(
+  cell: any,
+  value: number,
+  palette: { fill: string; font: string },
+) {
+  cell.value = value;
+  cell.alignment = {
+    vertical: "middle",
+    horizontal: "center",
+  };
 
-// Coluna do Grid (agora recebendo dados da rota /api/dashboard/stats)
+  if (value > 0) {
+    cell.font = {
+      name: "Arial",
+      size: 10,
+      bold: true,
+      color: { argb: palette.font },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: palette.fill },
+    };
+  } else {
+    // Zero: cinza neutro, sem fill — não compete visualmente
+    cell.font = {
+      name: "Arial",
+      size: 10,
+      color: { argb: "FF94A3B8" }, // slate-400
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFFFF" },
+    };
+  }
+}
+
 const columns: Column<any>[] = [
-  { key: "name", width:'250px', label: "Projeto", sortable: true },
+  { key: "name", width: "250px", label: "Projeto", sortable: true },
   {
     key: "observationSeverityCounts",
     label: "Severidade",
     sortable: false,
-    width: '250px',
+    width: "260px",
+    align: "center",
+    className: "hover:scale-150 hover:translate-x-16 translate-x-10",
+    /**
+     * No PDF: desenha os shields C/H/M/L com as contagens abaixo,
+     * lendo os dados do `extraData` (projectStats) — igual à tela.
+     */
+    pdfCellRenderer: (doc, cell, item, extraData) => {
+      const stats = extraData?.[item.name] || {};
+      const sev = stats.severity || {};
+      drawSeverityShields(
+        doc,
+        cell.cell.x,
+        cell.cell.y,
+        sev,
+        cell.cell.width,
+        cell.cell.height,
+      );
+    },
+    // 🔑 Excel: 4 colunas separadas (Crítico, Alto, Médio, Baixo)
+    excelSubColumns: [
+      {
+        label: "Crítico",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.critical || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.critical || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFEE2E2", // red-100
+            font: "FF991B1B", // red-800
+          });
+        },
+      },
+      {
+        label: "Alto",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.high || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.high || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFED7AA", // orange-200
+            font: "FF9A3412", // orange-800
+          });
+        },
+      },
+      {
+        label: "Médio",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.medium || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.medium || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFEF3C7", // amber-100
+            font: "FF92400E", // amber-800
+          });
+        },
+      },
+      {
+        label: "Baixo",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.low || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.low || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFDCFCE7", // green-100
+            font: "FF166534", // green-800
+          });
+        },
+      },
+    ],
     render: (item: any, extraData?: Record<string, any>) => {
       const stats = extraData?.[item.name] || {};
       const sev = stats.severity || {};
+      const severityItems = [
+        {
+          letter: "C",
+          count: sev.critical || 0,
+          color: "#ef4444",
+          label: "Critical",
+        },
+        { letter: "H", count: sev.high || 0, color: "#f97316", label: "High" },
+        {
+          letter: "M",
+          count: sev.medium || 0,
+          color: "#eab308",
+          label: "Medium",
+        },
+        { letter: "L", count: sev.low || 0, color: "#22c55e", label: "Low" },
+      ];
 
       return (
-        <div className="flex flex-col gap-1">
-          <div className="grid grid-cols-4 gap-2 hover:scale-150">
-            <div className="px-2 py-1 flex flex-col text-center p-2 rounded-lg hover:scale-150 bg-red-100 text-red-600 text-xs font-bold">
-              {sev.critical || 0}
-              <span className="text-[7px] text-xs text-red-600/50 align-center uppercase">critical</span>
+        <div className="flex items-center gap-2">
+          {severityItems.map((sevItem) => (
+            <div
+              key={sevItem.letter}
+              className="flex flex-col items-center gap-0.5"
+              title={`${sevItem.label}: ${sevItem.count}`}
+            >
+              <div className="relative w-7 h-8">
+                <svg viewBox="0 0 24 24" className="w-full h-full">
+                  <path
+                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
+                    fill={sevItem.color}
+                  />
+                  <path
+                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
+                    fill="none"
+                    stroke="rgba(0,0,0,0.15)"
+                    strokeWidth="0.8"
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[11px]">
+                  {sevItem.letter}
+                </span>
+              </div>
+              <span className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">
+                {sevItem.count}
+              </span>
             </div>
-            
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-orange-100 text-orange-600 text-xs font-bold">
-              {sev.high || 0}
-              <span className="text-[7px] text-xs text-orange-600/50 uppercase">high</span>
-            </div>
-            <div className="px-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-yellow-100 text-yellow-600 text-xs font-bold">
-              {sev.medium || 0}
-              <span className="text-[7px] text-xs text-yellow-600/50 uppercase">medium</span>
-            </div>
-            <div className="p-2 py-1 flex flex-col text-center rounded-lg hover:scale-150 bg-green-100 text-green-600 text-xs font-bold">
-              {sev.low || 0}
-              <span className="text-[7px] text-xs text-green-600/50 uppercase">low</span>
-            </div>
-          </div>
+          ))}
         </div>
       );
     },
   },
-  { key: "description", label: "Descrição", sortable: true, className: 'text-ellipsis text-apple-tertiary-light italic font-mono text-xs line-clamp-1 text-wrap ' },
+  {
+    key: "description",
+    label: "Descrição",
+    sortable: true,
+    exportable: false,
+    className:
+      "text-ellipsis text-muted italic font-mono text-xs line-clamp-1 text-wrap",
+  },
   {
     key: "lastScan",
     label: "Last scan",
     sortable: true,
-    width: '120px',
-    align: 'center',
+    width: "120px",
+    align: "center",
     render: (item: any) => {
       if (!item.syncDate) return "—";
       const diff = Date.now() - new Date(item.syncDate).getTime();
@@ -71,83 +231,179 @@ const columns: Column<any>[] = [
   },
 ];
 
+// ============================================================
+// Conteúdo
+// ============================================================
 function DashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [teamId] = useTeam();
+  const { teams, loaded: teamsLoaded } = useTeams();
 
-  const [teamId, setTeamId] = useState(searchParams.get('teamId') || '');
-  const [teams, setTeams] = useState<any[]>([]);
-  const [effectiveTeamId, setEffectiveTeamId] = useState('');
-  const [searchTerm, setSearchTerm] = useState(''); // ID da query DBQL
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
 
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Dados dos Cards e do Grid (vindo da rota dedicada /api/dashboard/stats)
   const [stats, setStats] = useState<any>({
-    teamStats: { total: 0, severityTotals: {}, statusTotals: {}, categoryTotals: {} },
-    projectStats: {}
+    teamStats: {
+      total: 0,
+      severityTotals: {},
+      statusTotals: {},
+      categoryTotals: {},
+    },
+    projectStats: {},
   });
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const [projects, setProjects] = useState<any[]>([]);
 
-  // Busca os Teams (Prioridade: Global ou único time)
-  useEffect(() => {
-    fetch("/api/teams")
-      .then(res => res.json())
-      .then(json => {
-        const allTeams = json.data || [];
-        setTeams(allTeams);
-
-        const globalTeam = allTeams.find((t: any) => t.isGlobal);
-        const nonGlobalTeams = allTeams.filter((t: any) => !t.isGlobal);
-
-        if (!teamId && allTeams.length > 0) {
-          if (nonGlobalTeams.length === 1) {
-            setTeamId(nonGlobalTeams[0]._id);
-            setEffectiveTeamId(nonGlobalTeams[0]._id);
-          } else {
-            setTeamId(globalTeam?._id || allTeams[0]._id);
-            setEffectiveTeamId(globalTeam ? 'all' : allTeams[0]._id);
-          }
-        }
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!teamId) return;
-    const selected = teams.find(t => t._id === teamId);
-    if (selected?.isGlobal) setEffectiveTeamId('all');
-    else setEffectiveTeamId(teamId);
+  // Time efetivo (global → 'all')
+  const effectiveTeamId = useMemo(() => {
+    if (!teamId) return "all";
+    const selected = teams.find((t) => t._id === teamId);
+    return selected?.isGlobal ? "all" : teamId;
   }, [teamId, teams]);
 
-  // 🔥 Busca as Stats na nova Rota Dedicada (com DBQL aplicado)
+  // teamName derivado
+  const teamName = useMemo(
+    () => teams.find((t) => t._id === teamId)?.name ?? "",
+    [teams, teamId],
+  );
+
+  // ============================================================
+  // Stats
+  // ============================================================
   useEffect(() => {
-    if (!effectiveTeamId) return;
-    
+    if (!teamsLoaded || !effectiveTeamId) return;
     const params = new URLSearchParams({
       teamId: effectiveTeamId,
-      range: "30d"
+      range: "30d",
     });
-    
-    if (searchTerm) params.set('q', searchTerm);
+    if (searchTerm) params.set("q", searchTerm);
 
     fetch(`/api/dashboard/stats?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(console.error);
-  }, [effectiveTeamId, searchTerm]);
+      .then((res) => {
+        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((text) => {
+        const fallback = {
+          teamStats: {
+            total: 0,
+            severityTotals: {},
+            statusTotals: {},
+            categoryTotals: {},
+          },
+          projectStats: {},
+        };
+        if (!text) {
+          setStats(fallback);
+          return;
+        }
+        try {
+          setStats(JSON.parse(text));
+        } catch (e) {
+          console.error("Erro ao parsear JSON de stats:", e);
+          setStats(fallback);
+        }
+      })
+      .catch((err) => {
+        console.error("Erro ao buscar stats:", err);
+        setStats({
+          teamStats: {
+            total: 0,
+            severityTotals: {},
+            statusTotals: {},
+            categoryTotals: {},
+          },
+          projectStats: {},
+        });
+      });
+  }, [teamsLoaded, effectiveTeamId, searchTerm]);
 
-  if (status === "loading") return <div className="py-10 text-center">Carregando...</div>;
+  // ============================================================
+  // Lista de projetos (para export e título)
+  // ============================================================
+  useEffect(() => {
+    if (!teamsLoaded || !effectiveTeamId) return;
+    const params = new URLSearchParams({
+      teamId: effectiveTeamId,
+      page: "1",
+      limit: "100",
+      sort: "name",
+      order: "asc",
+    });
+    if (searchTerm) params.set("q", searchTerm);
+
+    fetch(`/api/dashboard?${params.toString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((text) => {
+        if (!text) {
+          setProjects([]);
+          return;
+        }
+        try {
+          const json = JSON.parse(text);
+          setProjects(json.data || []);
+        } catch (e) {
+          console.error("Erro ao parsear JSON de projetos:", e);
+          setProjects([]);
+        }
+      })
+      .catch((err) => {
+        console.error("Erro ao buscar projetos:", err);
+        setProjects([]);
+      });
+  }, [teamsLoaded, effectiveTeamId, searchTerm]);
+
+  const handleSearch = useCallback((newQuery: string) => {
+    setSearchTerm(newQuery);
+  }, []);
+
+  const handleExportPDF = useCallback(async () => {
+    const params = new URLSearchParams({
+      teamId: effectiveTeamId,
+      all: "true",
+      sort: "name",
+      order: "asc",
+    });
+    if (searchTerm) params.set("q", searchTerm);
+
+    const res = await fetch(`/api/dashboard?${params.toString()}`);
+    if (!res.ok) {
+      alert("Erro ao buscar dados para exportação");
+      return;
+    }
+
+    const json = await res.json();
+    const allProjects = json.data || [];
+
+    const projectsForPDF = allProjects.map((p: any) => {
+      const projectStat = stats.projectStats?.[p.name] || {};
+      return {
+        name: p.name,
+        description: p.description,
+        lastScan: p.syncDate
+          ? new Date(p.syncDate).toLocaleDateString("pt-BR")
+          : "—",
+        severity: projectStat.severity || {},
+      };
+    });
+
+    await exportDashboardPDF({
+      teamName,
+      generatedAt: new Date(),
+      teamStats: stats.teamStats,
+      projectStats: stats.projectStats,
+      projects: projectsForPDF,
+      categoryDetails: stats.categoryDetails,
+    });
+  }, [effectiveTeamId, searchTerm, stats, teamName]);
+
+  if (status === "loading")
+    return <div className="py-10 text-center">Carregando...</div>;
+
   if (!session) {
     router.push("/login");
     return null;
@@ -157,51 +413,38 @@ function DashboardContent() {
     <div className="w-full space-y-6 p-8">
       <PageHeader
         title="Dashboard"
+        icon={<ChartAreaIcon className="w-10 h-10 text-brand" />}
         subtitle="Visão geral do time selecionado."
+        search={{
+          type: "advanced",
+          onSearch: handleSearch,
+          userSub: session?.user?.sub || session?.user?.sub,
+          placeholder:
+            "Filtrar stats, e.g. severity:critical OR project:my-api",
+          context: "observations",
+        }}
         actions={
-          <div className="relative" ref={dropdownRef}>
+          <div className="flex items-center gap-4">
             <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-4 py-2 rounded-2xl text-sm font-medium hover:bg-apple-tertiary-light/10 transition-all focus:outline-none"
+              onClick={handleExportPDF}
+              disabled={projects.length === 0}
+              className="group btn-ghost !text-red-500 hover:!bg-red-600"
             >
-              <span className="font-bold">
-                {teams.find(t => t._id === teamId)?.name || "Selecione um Time"}
+              <span className="hidden group-hover:block transition-transform mr-2">
+                Resumo Executivo{" "}
               </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              <FaFilePdf className="w-5 h-5" />
             </button>
 
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg z-20 overflow-hidden">
-                {teams.map((team) => (
-                  <button
-                    key={team._id}
-                    onClick={() => {
-                      const newTeamId = team.isGlobal ? 'all' : team._id;
-                      setTeamId(team._id);
-                      setEffectiveTeamId(newTeamId);
-                      setDropdownOpen(false);
-                    }}
-                    className={`flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-apple-tertiary-light/10 transition-colors ${
-                      teamId === team._id
-                        ? "bg-apple-tertiary-light/5 font-semibold text-apple-blue"
-                        : "text-apple-label-light dark:text-apple-label-dark"
-                    }`}
-                  >
-                    <span className="truncate">
-                      {team.isGlobal ? `${team.name} (Todos)` : team.name}
-                    </span>
-                    {teamId === team._id && <Check className="w-4 h-4 text-apple-blue" />}
-                  </button>
-                ))}
-              </div>
-            )}
+            <TeamSelector teams={teams} />
           </div>
         }
       />
 
-      {teamId ? (
+      {!teamsLoaded ? (
+        <div className="py-12 text-center text-muted">Carregando times...</div>
+      ) : teamId ? (
         <>
-          {/* Top Cards (usando teamStats) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <TeamStatsCard
               type="status"
@@ -212,32 +455,34 @@ function DashboardContent() {
             />
             <TeamStatsCard
               type="category"
-              title="Categoria"
+              title="Distribuição por Categoria"
               total={stats.teamStats.total}
               category={stats.teamStats.categoryTotals}
+              categoryGroup={stats.teamStats.categoryGroupTotals}
+              categoryDetails={stats.categoryDetails}
             />
           </div>
 
-          {/* Projects Table (usando a rota /api/dashboard e projectStats para extraData) */}
-          <div className="pt-4 border-t border-apple-border-light dark:border-apple-border-dark">
-            <h3 className="text-lg font-semibold mb-4">Projetos do Time</h3>
+          <div className="pt-4 border-t border-default dark:border-strong">
+            <h3 className="text-lg font-semibold mb-4">
+              Projetos - {effectiveTeamId === "all" ? "Global" : teamName}
+            </h3>
             <DataTable
               endpoint="/api/dashboard"
               columns={columns}
               defaultSort={{ field: "name", order: "asc" }}
               defaultLimit={10}
-              searchPlaceholder="Buscar Projetos (ex: name:debit-board)"
-              searchContext="projects"
-              userId={session?.user?._id?.toString()}
+              pdfTitle={`Projetos: Severidades - ${
+                effectiveTeamId === "all" ? "Global" : teamName
+              }`}
               teamId={effectiveTeamId}
-              extraData={stats.projectStats} // 🔥 Usa o map de stats dedicado
-              onSearchChange={(value) => setSearchTerm(value)}
+              extraData={stats.projectStats}
               onRowClick={() => {}}
             />
           </div>
         </>
       ) : (
-        <div className="py-12 text-center text-apple-tertiary-light">
+        <div className="py-12 text-center text-muted">
           Selecione um time para visualizar o dashboard.
         </div>
       )}
@@ -247,7 +492,11 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="py-12 text-center">Carregando dashboard...</div>}>
+    <Suspense
+      fallback={
+        <div className="py-12 text-center">Carregando dashboard...</div>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

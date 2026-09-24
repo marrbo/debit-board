@@ -4,7 +4,7 @@ import type { Model } from 'mongoose';
 import mongoose, { Schema } from 'mongoose';
 
 const RepositorySchema = new Schema<IRepository>({
-  tenantId: { type: String, required: true, ref: 'Tenant' },
+  tenantId: { type: mongoose.Types.ObjectId, required: true, ref: 'Tenant' },
   projectId: { type: String, required: true, ref: 'Project' },
   azureProjectId: { type: String, required: true },
   name: { type: String, required: true },
@@ -19,9 +19,9 @@ const RepositorySchema = new Schema<IRepository>({
   pipelineFailedCount: { type: Number, default: 0 },
   pipelineClassicCount: { type: Number, default: 0 },
   pipelineYamlCount: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true },
 });
 
-// Índices para evitar duplicatas
 RepositorySchema.index({ tenantId: 1, azureRepoId: 1 }, { unique: true });
 RepositorySchema.index({ tenantId: 1, projectId: 1, name: 1 });
 

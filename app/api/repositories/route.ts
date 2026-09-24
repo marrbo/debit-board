@@ -4,26 +4,42 @@ import { SavedQuery } from '@/models/SavedQuery';
 import { handleGenericGet } from '@/lib/api-handler';
 import type { PipelineStage } from 'mongoose';
 import { Team } from '@/models/Team';
+import mongoose from 'mongoose';
 
+/**
+ * Lista recursos do endpoint /api/repositories.
+ *
+ * Este endpoint expõe a operação get em /api/repositories.
+ *
+ * @summary Lista recursos do endpoint /api/repositories
+ * @tags Repositories
+ * @route GET /api/repositories
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  
+
   // 1. Identificação da Query (ID Salvo ou String na URL)
   const dbqlId = searchParams.get('q'); // ou 'dbqlId' dependendo da sua convenção
   const searchQueryRaw = searchParams.get('search') || '';
+  const isAll = searchParams.get('all') === 'true'; 
 
   const additionalMatch: Record<string, unknown> = {};
   const projectId = searchParams.get('projectId');
 
   const teamId = searchParams.get('teamId');
   if (teamId && teamId !== 'all') {
-    const team = await Team.findById(teamId).lean();
+    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId) ? new mongoose.Types.ObjectId(teamId) : null;
+    const team = await Team.findById(teamObjectId).lean();
     if (team) {
       const projectIds = (team.projectIds || []).map((id: any) => id.toString());
       additionalMatch.projectId = { $in: projectIds };
     }
   }
-  
+
   let finalSearchQuery = searchQueryRaw;
 
   if (dbqlId) {
@@ -67,20 +83,30 @@ export async function GET(req: NextRequest) {
         as: 'projectInfo'
       }
     },
-    { $unwind: { path: '$projectInfo', preserveNullAndEmptyArrays: true } }
+    { $unwind: { path: '$projectInfo', preserveNullAndEmptyArrays: true } },
+    // 🔥 Cria o campo "project" para que o $sort consiga usar "project.name"
+    {
+      $addFields: {
+        project: {
+          _id: '$projectInfo._id',
+          name: '$projectInfo.name'
+        }
+      }
+    }
   ];
 
   // Se houver busca por nome de projeto, injetamos o match após o lookup
   if (projectNameFilter) {
     const escaped = projectNameFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regexPattern = projectNameFilter.includes('*') 
-      ? escaped.replace(/\*/g, '.*') 
+    const regexPattern = projectNameFilter.includes('*')
+      ? escaped.replace(/\*/g, '.*')
       : '^' + escaped + '$';
 
     customPipeline.push({
       $match: {
-        'projectInfo.name': { $regex: regexPattern, $options: 'i' }
-      }
+        'projectInfo.name': { $regex: regexPattern, $options: 'i' },
+        'project.name': { $regex: regexPattern, $options: 'i' }
+      },
     });
   }
 
@@ -91,6 +117,7 @@ export async function GET(req: NextRequest) {
     additionalMatch,
     overrideSearchQuery: finalSearchQuery,
     customPipeline,
+    all: isAll,
     projection: {
       _id: 1,
       name: 1,

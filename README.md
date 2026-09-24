@@ -62,3 +62,7 @@ npm install -D vitest @vitejs/plugin-react @testing-library/react @testing-libra
 npm install -D @vitest/coverage-v8
 ```
 
+### Backup dos volumes
+```shell
+docker run --rm -v debitboard_mongo_data:/data -v $(pwd):/backup alpine tar czf /backup/mongo-data.tgz -C /data .
+```

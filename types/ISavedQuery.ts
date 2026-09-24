@@ -1,14 +1,26 @@
-// types/ISavedQuery.ts
-import type mongoose from "mongoose";
-import type { Document } from 'mongoose';
+//types/ISavedQuery.ts
+import type { Document, Types } from "mongoose";
+
+export type SavedQueryContext =
+  | "observations"
+  | "projects"
+  | "repositories"
+  | "none"
+  | "stats";
+
+export type SavedQueryVisibility =
+  | "private"
+  | "shared"
+  | "public"
+  | "temporary";
 
 export interface ISavedQuery extends Document {
-  _id: mongoose.Types.ObjectId;
   name: string;
   queryString: string;
-  context: string;
-  visibility: 'private' | 'shared' | 'public' | 'temporary';
-  tenantId: string;
-  createdAt?: Date;
-  userId: string;
+  context: SavedQueryContext;
+  visibility: SavedQueryVisibility;
+  tenantId: Types.ObjectId;
+  userId: Types.ObjectId;
+  sub: string;
+  createdAt: Date;
 }

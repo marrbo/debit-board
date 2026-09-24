@@ -1,21 +1,12 @@
 // components/dbql/DBQLAdvancedSearch.tsx
 "use client";
 
-import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
-import type { CSSProperties } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
-  Search,
   X,
   Code2,
   HelpCircle,
-  AlertCircle,
   BookmarkPlus,
   Bookmark,
   Check,
@@ -23,15 +14,24 @@ import {
   Trash2,
   Copy,
   PlayCircleIcon,
-  ChevronDown,
-  ChevronUp,
+  TriangleAlert,
+  TagIcon,
+  Share2,
+  Globe,
+  TimerReset,
+  HatGlasses,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
 import DBQLHelpModal from "./DBQLHelpModal";
 import DBQLSuggestions from "./DBQLSuggestions";
 import type { ISavedQuery } from "@/types/ISavedQuery";
 import { useSession } from "next-auth/react";
-
+import { createPortal } from "react-dom";
+import {
+  getDBQLQueryId,
+  setDBQLQueryId,
+  clearDBQLQueryId,
+} from "@/lib/local-settings";
 
 // ============================================================
 // Tipos e interfaces
@@ -40,7 +40,7 @@ interface AdvancedSearchProps {
   onSearch?: (queryString: string) => void;
   placeholder?: string;
   context?: string;
-  userId: string;
+  userSub: string;
   onManageQueries?: () => void;
   value?: string;
 }
@@ -55,13 +55,11 @@ type Visibility = "private" | "shared" | "public";
 
 const MEME_QUIPS = [
   "Houston, temos um problema lógico: 'You shall not pass!' 🧙‍♂️",
-  "Inception booleana detectada: operador lógico dentro de operador.",
   "Matrix corrompida: tentar misturar tantos operadores vai acordar o Neo.",
   "Erro 418: Sou um bule de chá, mas até eu sei que essa sintaxe não faz sentido!",
   "Stack overflow de tokens: operadores encadeados demais para uma única query.",
   "Essa entrada tá com cara de SQL Injection de estagiário. 🕵️‍♂️",
   "Erro 403: O firewall olhou para essa requisição, deu risada e cortou a conexão. 🛡️",
-  "Alerta de segurança: essa lógica tá mais exposta que um bucket S3 público na sexta-feira à noite. 🪣☁️",
   "Sua validação de dados é tão robusta quanto a senha 'admin123'. 🔑",
   "Nem com criptografia quântica a gente consegue esconder o tamanho dessa gambiarra. 🔐",
   "Acalme-se, jovem Padawan. Essa quantidade de parâmetros já tá virando um ataque DDoS! ⚔️",
@@ -71,11 +69,11 @@ const MEME_QUIPS = [
   "Erro de CORS: Sua requisição tentou cruzar a fronteira, mas o passaporte não tava carimbado. 🛂",
   "Man-in-the-Middle detectado: e ele ficou confuso com a bagunça que está esse payload. 🥷",
   "Criptografia de ponta a ponta? Só se for da ponta do desespero até a ponta da gambiarra. 🧵",
-  "Você tem certeza de que não é um script de ransomware disfarçado de JSON? 🏴‍☠️"
+  "Você tem certeza de que não é um script de ransomware disfarçado de JSON? 🏴‍☠️",
 ];
 
 // ============================================================
-// Funções auxiliares
+// Helpers puros
 // ============================================================
 const hasComplexSyntax = (q: string): boolean =>
   /[\(\)!\*]|\b(>=|<=|>|<|!=|:|=|and|or|not)\b/i.test(q);
@@ -90,45 +88,49 @@ const parseInputToTags = (input: string): string[] => {
 const validateDBQL = (query: string): ValidationError[] => {
   if (!query) return [];
   const errors: ValidationError[] = [];
-  const tokens: string[] = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-  let searchIndex = 0;
+
+  const tokenRegex =
+    /!?[a-zA-Z0-9_.]+(>=|<=|>|<|!=|:|=)(?:"[^"]*"|[^\s()]+)|\(|\)|[^\s()]+/g;
+  const tokens = query.match(tokenRegex) || [];
+
+  let index = 0;
   let looseTextStart: number | null = null;
   let looseTextEnd: number | null = null;
   let looseTextContent = "";
 
-  tokens.forEach((token) => {
-    const cleanToken = token.replace(/^[\(]+|[\)]+$/g, "");
-    const tokenIndex = query.indexOf(token, searchIndex);
+  for (const token of tokens) {
+    const tokenIndex = query.indexOf(token, index);
+    if (tokenIndex === -1) continue;
+    index = tokenIndex + token.length;
 
-    if (cleanToken !== "") {
-      const lower = cleanToken.toLowerCase();
-      const isOperator = ["and", "or", "not"].includes(lower);
-      const isField = /^!?[a-zA-Z0-9_]+(>=|<=|>|<|!=|:|=)/i.test(cleanToken);
-      const isParens = /^[\(\)]+$/.test(token);
+    const cleanToken = token.replace(/^\(+/, "").replace(/\)+$/, "");
+    const lower = cleanToken.toLowerCase();
 
-      if (!isOperator && !isField && !isParens) {
-        if (looseTextStart === null) {
-          looseTextStart = tokenIndex;
-          looseTextContent = token;
-        } else {
-          looseTextContent += ` ${token}`;
-        }
-        looseTextEnd = tokenIndex + token.length;
-      } else {
-        if (looseTextStart !== null && looseTextEnd !== null) {
-          errors.push({
-            error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
-            highlightIndex: looseTextStart,
-            errorLength: looseTextEnd - looseTextStart,
-          });
-          looseTextStart = null;
-          looseTextEnd = null;
-          looseTextContent = "";
-        }
+    const isOperator = ["and", "or", "not"].includes(lower);
+    const isParen = /^[()]+$/.test(token);
+    const isField = /^!?[a-zA-Z0-9_.]+(>=|<=|>|<|!=|:|=)/.test(cleanToken);
+
+    if (isOperator || isParen || isField) {
+      if (looseTextStart !== null && looseTextEnd !== null) {
+        errors.push({
+          error: `Texto solto ou sintaxe não reconhecida: "${looseTextContent}" (Termos múltiplos requerem aspas)`,
+          highlightIndex: looseTextStart,
+          errorLength: looseTextEnd - looseTextStart,
+        });
+        looseTextStart = null;
+        looseTextEnd = null;
+        looseTextContent = "";
       }
+    } else {
+      if (looseTextStart === null) {
+        looseTextStart = tokenIndex;
+        looseTextContent = cleanToken;
+      } else {
+        looseTextContent += ` ${cleanToken}`;
+      }
+      looseTextEnd = tokenIndex + token.length;
     }
-    searchIndex = tokenIndex + token.length;
-  });
+  }
 
   if (looseTextStart !== null && looseTextEnd !== null) {
     errors.push({
@@ -145,26 +147,30 @@ const validateDBQL = (query: string): ValidationError[] => {
       if (stack.length > 0) stack.pop();
       else
         errors.push({
-          error: "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
+          error:
+            "Erro de sintaxe: Parêntese fechado sem abertura correspondente.",
           highlightIndex: i,
           errorLength: 1,
         });
     }
   }
-  if (stack.length > 0)
+  if (stack.length > 0) {
     errors.push({
       error: "Erro de sintaxe: Parêntese aberto não foi fechado.",
       highlightIndex: stack[stack.length - 1] || null,
       errorLength: 1,
     });
+  }
 
-  if (/\(\s*\)[\)]*/.test(query)) {
+  if (/\(\s*\)/.test(query)) {
     const match = query.match(/\(\s*\)/);
-    errors.push({
-      error: "Erro de sintaxe: Agrupamento vazio ( ).",
-      highlightIndex: match?.index ?? 0,
-      errorLength: match ? match[0].length : 2,
-    });
+    if (match) {
+      errors.push({
+        error: "Erro de sintaxe: Agrupamento vazio ( ).",
+        highlightIndex: match.index ?? 0,
+        errorLength: match[0].length,
+      });
+    }
   }
 
   let openQuote = false;
@@ -175,20 +181,21 @@ const validateDBQL = (query: string): ValidationError[] => {
       if (openQuote) firstUnclosedQuote = i;
     }
   }
-  if (openQuote)
+  if (openQuote) {
     errors.push({
       error: "Erro de sintaxe: Aspas duplas não fechadas.",
       highlightIndex: firstUnclosedQuote,
       errorLength: 1,
     });
+  }
 
   const chaoticRegex = /\b(and|or|not)\s+(and|or|not)\s+(and|or|not)\b/i;
   const chaoticMatch = chaoticRegex.exec(query);
   if (chaoticMatch) {
-    const randomMeme =
-      MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)];
     errors.push({
-      error: `${randomMeme} (Detectado: '${chaoticMatch[0]}')`,
+      error: `${
+        MEME_QUIPS[Math.floor(Math.random() * MEME_QUIPS.length)]
+      } (Detectado: '${chaoticMatch[0]}')`,
       highlightIndex: chaoticMatch.index ?? 0,
       errorLength: chaoticMatch[0].length,
     });
@@ -226,30 +233,26 @@ export default function DBQLAdvancedSearch({
   onSearch,
   placeholder = 'Buscar... ex: category:"Broken Access Control" and severity:high',
   context: dbqlContext = "observations",
-  userId = "",
+  userSub = "",
   onManageQueries,
   value,
 }: AdvancedSearchProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  
-  // ========== Parâmetros da URL ==========
+  const pathname = usePathname();
+
   const rawUrlQueryId = searchParams.get("q") || "";
   const urlModeParam = searchParams.get("m") || searchParams.get("mode");
 
-  // ========== ESTADOS DE EDIÇÃO (o que o usuário vê/digita) ==========
   const [mode, setMode] = useState<"tags" | "advanced">("tags");
   const [inputValue, setInputValue] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-
-  // ========== ESTADO ATIVO (a query que está efetivamente sendo usada) ==========
   const [activeQueryString, setActiveQueryString] = useState<string>("");
-  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(null);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<ISavedQuery | null>(
+    null,
+  );
   const [originalQueryString, setOriginalQueryString] = useState<string>("");
-
-  // ========== ESTADOS DE UI ==========
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState<boolean>(true);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
@@ -257,233 +260,101 @@ export default function DBQLAdvancedSearch({
   const [saveName, setSaveName] = useState("");
   const [saveVisibility, setSaveVisibility] = useState<Visibility>("private");
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
-  const [savedDropdownStyle, setSavedDropdownStyle] = useState<CSSProperties>({});
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [savedQueries, setSavedQueries] = useState<ISavedQuery[]>([]);
   const [tempQuery, setTempQuery] = useState<ISavedQuery>();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSearchVisible, setIsSearchVisible] = useState(true);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
 
-  // Refs
   const savedButtonRef = useRef<HTMLButtonElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const savedDropdownRef = useRef<HTMLDivElement>(null);
   const saveModalRef = useRef<HTMLDivElement>(null);
   const aiModalRef = useRef<HTMLDivElement>(null);
   const lastValueRef = useRef<string | undefined>(undefined);
-  const lastLoadedIdRef = useRef<string | null>(null);
+  const lastLoadedKeyRef = useRef<string | null>(null);
   const { data: session } = useSession();
 
-  userId = userId ?? session?.user?.id;
+  userSub = userSub ?? session?.user?.sub;
 
   // ============================================================
-  // 1. Computar a query atual (baseada no estado de edição)
+  // Derivados (o compilador memoiza automaticamente)
   // ============================================================
-  const currentEditingQuery = useMemo(() => {
-    if (mode === "advanced") return inputValue;
-    return [...tags, inputValue].filter(Boolean).join(" ");
-  }, [mode, inputValue, tags]);
+  const currentEditingQuery =
+    mode === "advanced"
+      ? inputValue
+      : [...tags, inputValue].filter(Boolean).join(" ");
 
-  // ============================================================
-  // 2. Sincronização com valor externo (evita setState síncrono)
-  // ============================================================
-  useEffect(() => {
-    if (value === undefined || value === lastValueRef.current) return;
-    lastValueRef.current = value;
+  const syntaxErrors = validateDBQL(currentEditingQuery);
 
-    const applyExternalValue = () => {
-      if (!value) {
-        setInputValue("");
-        setTags([]);
-        setMode("tags");
-        return;
-      }
-
-      const targetMode = hasComplexSyntax(value) ? "advanced" : "tags";
-      setMode(targetMode);
-      if (targetMode === "advanced") {
-        setInputValue(value);
-        setTags([]);
-      } else {
-        setTags(parseInputToTags(value));
-        setInputValue("");
-      }
-    };
-
-    Promise.resolve().then(applyExternalValue);
-  }, [value]);
-
-  // ============================================================
-  // 3. Função para selecionar uma query salva manualmente
-  // ============================================================
-  const handleSelectSavedQuery = useCallback(
-    (q: ISavedQuery) => {
-      // Atualiza estados
-      setActiveSavedQuery(q);
-      setOriginalQueryString(q.queryString);
-      setActiveQueryString(q.queryString);
-
-      const targetMode = hasComplexSyntax(q.queryString) ? "advanced" : "tags";
-      setMode(targetMode);
-      if (targetMode === "advanced") {
-        setInputValue(q.queryString);
-        setTags([]);
-      } else {
-        setTags(parseInputToTags(q.queryString));
-        setInputValue("");
-      }
-
-      // Atualiza URL
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("q", q._id.toString());
-      params.set("m", targetMode === "advanced" ? "a" : "t");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-
-      // Notifica o DataTable
-      onSearch?.(q._id.toString());
-
-      // Fecha dropdown
-      setIsSavedDropdownOpen(false);
-    },
-    [
-      searchParams,
-      pathname,
-      router,
-      onSearch,
-      setActiveSavedQuery,
-      setOriginalQueryString,
-      setActiveQueryString,
-      setMode,
-      setInputValue,
-      setTags,
-      setIsSavedDropdownOpen,
-    ]
+  const realSavedQueries = savedQueries.filter(
+    (q) => q.visibility !== "temporary",
   );
 
+  const isQueryModified =
+    !!activeSavedQuery &&
+    activeSavedQuery.visibility !== "temporary" &&
+    currentEditingQuery !== originalQueryString;
 
   // ============================================================
-  // 4. Carregar da URL (efeito principal) - com microtasks
+  // Handlers
   // ============================================================
-  useEffect(() => {
-    const loadFromUrl = async () => {
-      // Evita loop: se já carregou este ID, não recarrega
-      if (lastLoadedIdRef.current === rawUrlQueryId) return;
+  const applyQuery = (query: ISavedQuery, targetMode: "tags" | "advanced") => {
+    setActiveSavedQuery(query);
+    setOriginalQueryString(query.queryString);
+    setActiveQueryString(query.queryString);
+    setMode(targetMode);
+    if (targetMode === "advanced") {
+      setInputValue(query.queryString);
+      setTags([]);
+    } else {
+      setTags(parseInputToTags(query.queryString));
+      setInputValue("");
+    }
+  };
 
-      Promise.resolve().then(() => setIsLoading(true));
+  const handleSelectSavedQuery = (q: ISavedQuery) => {
+    const id = q._id.toString();
+    const targetMode = hasComplexSyntax(q.queryString) ? "advanced" : "tags";
+    applyQuery(q, targetMode);
 
-      try {
-        if (rawUrlQueryId) {
-          // Marca o ID como carregado para evitar loops
-          lastLoadedIdRef.current = rawUrlQueryId;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("q", id);
+    params.set("m", targetMode === "advanced" ? "a" : "t");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setDBQLQueryId(pathname, id);
 
-          const res = await fetch(`/api/saved-query?id=${rawUrlQueryId}`, {
-            cache: "no-store",
-          });
-          if (res.ok) {
-            const json = await res.json();
-            const matched = Array.isArray(json)
-              ? json[0]
-              : Array.isArray(json?.data)
-                ? json.data[0]
-                : json;
+    onSearch?.(id);
+    setIsSavedDropdownOpen(false);
+  };
 
-            if (matched?.queryString) {
-              const query = matched as ISavedQuery;
-              Promise.resolve().then(() => {
-                setActiveSavedQuery(query);
-                setOriginalQueryString(query.queryString);
-                setActiveQueryString(query.queryString);
-                const targetMode = hasComplexSyntax(query.queryString) ? "advanced" : "tags";
-                setMode(targetMode);
-                if (targetMode === "advanced") {
-                  setInputValue(query.queryString);
-                  setTags([]);
-                } else {
-                  setTags(parseInputToTags(query.queryString));
-                  setInputValue("");
-                }
-                // Passa o ID para o DataTable
-                onSearch?.(rawUrlQueryId);
-              });
-              return;
-            }
-          }
-        }
-
-        // Sem ID ou falha: estado vazio
-        lastLoadedIdRef.current = null;
-        Promise.resolve().then(() => {
-          setActiveSavedQuery(null);
-          setOriginalQueryString("");
-          setActiveQueryString("");
-          const initialMode =
-            urlModeParam === "a" || urlModeParam === "advanced"
-              ? "advanced"
-              : urlModeParam === "t" || urlModeParam === "tags"
-                ? "tags"
-                : "tags";
-          setMode(initialMode);
-          setInputValue("");
-          setTags([]);
-          onSearch?.("");
-          const params = new URLSearchParams(searchParams.toString());
-          if (params.has("q") || params.has("m")) {
-            params.delete("q");
-            params.delete("m");
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-          }
-        });
-      } catch (err) {
-        console.error("Erro ao carregar query da URL:", err);
-      } finally {
-        Promise.resolve().then(() => setIsLoading(false));
-      }
-    };
-
-    loadFromUrl();
-  }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, dbqlContext, onSearch]);
-
-  // ============================================================
-  // 5. Função para limpar (usada internamente e no botão)
-  // ============================================================
-  const clearAllInternal = useCallback(() => {
+  const clearAllInternal = () => {
     setTags([]);
     setInputValue("");
     setActiveSavedQuery(null);
     setOriginalQueryString("");
     setActiveQueryString("");
     setMode("tags");
-    lastLoadedIdRef.current = null;
+    lastLoadedKeyRef.current = null;
+
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     params.delete("m");
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    clearDBQLQueryId(pathname);
+
     onSearch?.("");
     setIsSavedDropdownOpen(false);
     setIsOpen(false);
     setTempQuery(undefined);
-  }, [
-    pathname,
-    router,
-    searchParams,
-    onSearch,
-    setTags,
-    setInputValue,
-    setActiveSavedQuery,
-    setOriginalQueryString,
-    setActiveQueryString,
-    setMode,
-    setIsSavedDropdownOpen,
-    setIsOpen,
-    setTempQuery,
-  ]);
+  };
 
-  // ============================================================
-  // 6. Função para executar a busca (clicar em Executar ou Enter)
-  // ============================================================
-  const executeSearch = useCallback(async () => {
+  const executeSearch = async () => {
     const fullQuery = currentEditingQuery;
     const currentMode = mode;
 
@@ -495,7 +366,9 @@ export default function DBQLAdvancedSearch({
     try {
       const id = activeSavedQuery?._id || tempQuery?._id || null;
       const visibility = activeSavedQuery?.visibility || "temporary";
-      const name = activeSavedQuery?.name || `Temporária (${session?.user?.name} - ${dbqlContext})`;
+      const name =
+        activeSavedQuery?.name ||
+        `Temporária (${session?.user?.name} - ${dbqlContext})`;
 
       if (fullQuery === activeQueryString && currentMode === mode) {
         onSearch?.(id ? id.toString() : "");
@@ -505,12 +378,12 @@ export default function DBQLAdvancedSearch({
       if (!id || visibility === "temporary") {
         const payload = {
           id,
-          name: name,
+          name,
           queryString: fullQuery,
           context: dbqlContext,
           visibility: "temporary",
-          userId: session?.user?.id
-        }
+          userSub: session?.user?.sub,
+        };
         const method = id ? "PUT" : "POST";
         const body = id ? { ...payload, id } : payload;
 
@@ -520,122 +393,62 @@ export default function DBQLAdvancedSearch({
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          const saved = await res.json() as ISavedQuery;
-          Promise.resolve().then(() => {
-            setActiveSavedQuery(saved);
-            setOriginalQueryString(saved.queryString);
-            setActiveQueryString(fullQuery);
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("q", saved._id.toString());
-            params.set("m", currentMode === "advanced" ? "a" : "t");
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-            onSearch?.(saved._id.toString());
-          });
+          const saved = (await res.json()) as ISavedQuery;
+          const newId = saved._id.toString();
+          setActiveSavedQuery(saved);
+          setOriginalQueryString(saved.queryString);
+          setActiveQueryString(fullQuery);
+
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("q", newId);
+          params.set("m", currentMode === "advanced" ? "a" : "t");
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          setDBQLQueryId(pathname, newId);
+
+          onSearch?.(newId);
+        }
+      } else if (fullQuery !== originalQueryString) {
+        const res = await fetch("/api/saved-query", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            name: activeSavedQuery?.name,
+            queryString: fullQuery,
+            context: dbqlContext,
+            userSub: session?.user?.sub?.toString() || session?.user?.sub,
+          }),
+        });
+        if (res.ok) {
+          const updated = (await res.json()) as ISavedQuery;
+          const updatedId = updated._id.toString();
+          setActiveSavedQuery(updated);
+          setOriginalQueryString(updated.queryString);
+          setActiveQueryString(fullQuery);
+
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("m", currentMode === "advanced" ? "a" : "t");
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          setDBQLQueryId(pathname, updatedId);
+          if (updated.visibility === "temporary") setTempQuery(updated);
+
+          onSearch?.(updatedId);
         }
       } else {
-        if (fullQuery !== originalQueryString) {
-          const res = await fetch("/api/saved-query", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id,
-              name: activeSavedQuery?.name,
-              queryString: fullQuery,
-              context: dbqlContext,
-              userId: session.user._id,
-            }),
-          });
-          if (res.ok) {
-            const updated = await res.json() as ISavedQuery;
-            Promise.resolve().then(() => {
-              setActiveSavedQuery(updated);
-              setOriginalQueryString(updated.queryString);
-              setActiveQueryString(fullQuery);
-              const params = new URLSearchParams(searchParams.toString());
-              params.set("m", currentMode === "advanced" ? "a" : "t");
-              router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-              onSearch?.(updated._id.toString());
-              if (updated.visibility === 'temporary') {
-                setTempQuery(updated);
-              }
-            });
-          }
-        } else {
-          const params = new URLSearchParams(searchParams.toString());
-          const expectedMode = currentMode === "advanced" ? "a" : "t";
-          if (params.get("m") !== expectedMode) {
-            params.set("m", expectedMode);
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-          }
-          Promise.resolve().then(() => {
-            setActiveQueryString(fullQuery);
-            onSearch?.(activeSavedQuery?._id?.toString() || "");
-          });
+        const params = new URLSearchParams(searchParams.toString());
+        const expectedMode = currentMode === "advanced" ? "a" : "t";
+        if (params.get("m") !== expectedMode) {
+          params.set("m", expectedMode);
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
         }
+        setActiveQueryString(fullQuery);
+        onSearch?.(activeSavedQuery?._id?.toString() || "");
       }
     } catch (err) {
       console.error("Erro ao persistir query:", err);
     }
-  }, [
-    currentEditingQuery,
-    mode,
-    activeSavedQuery,
-    originalQueryString,
-    dbqlContext,
-    searchParams,
-    pathname,
-    router,
-    onSearch,
-    activeQueryString,
-    clearAllInternal,
-    session,
-    tempQuery,
-    setActiveSavedQuery,
-    setOriginalQueryString,
-    setActiveQueryString,
-    setTempQuery,
-  ]);
+  };
 
-  // ============================================================
-  // 7. Carregar lista de queries salvas
-  // ============================================================
-  useEffect(() => {
-    const fetchSavedQueries = async () => {
-      try {
-        const res = await fetch(`/api/saved-query?context=${dbqlContext}`, {
-          cache: "no-store",
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const queries = Array.isArray(json) ? json : json.data || [];
-          setSavedQueries(queries as ISavedQuery[]);
-          
-          // Busca query temporária do usuário
-          let tempQuery = queries.find((tmp: ISavedQuery) => tmp.visibility === 'temporary' && tmp.userId === userId)
-          if (!tempQuery) {
-            tempQuery = {
-              userId: userId,
-              name: `Temporary (${session?.user?.name})`,
-              context: dbqlContext,
-              tenantId: session?.user?.tenantId,
-              visibility: 'temporary',
-              queryString: ''
-            } as ISavedQuery;
-          }
-          setTempQuery(tempQuery);
-        }
-      } catch (err) {
-        console.error("Erro ao buscar saved queries", err);
-        setSavedQueries([]);
-      }
-    };
-    fetchSavedQueries();
-  }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userId]);
-  
-
-  // ============================================================
-  // 8. Handler do botão Executar e Enter
-  // ============================================================
   const handleExecuteSearch = (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) {
       e.preventDefault();
@@ -648,8 +461,7 @@ export default function DBQLAdvancedSearch({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (mode === "tags" && inputValue.trim()) {
-        const newTags = [...tags, inputValue.trim()];
-        setTags(newTags);
+        setTags([...tags, inputValue.trim()]);
         setInputValue("");
         executeSearch();
       } else {
@@ -665,15 +477,11 @@ export default function DBQLAdvancedSearch({
     }
   };
 
-  // ============================================================
-  // 9. Outros handlers
-  // ============================================================
   const removeTag = (indexToRemove: number) => {
     setTags(tags.filter((_, idx) => idx !== indexToRemove));
   };
 
   const toggleMode = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (mode === "tags") {
       const fullQuery = tags.join(" ") + (inputValue ? ` ${inputValue}` : "");
       setInputValue(fullQuery.trim());
@@ -683,11 +491,11 @@ export default function DBQLAdvancedSearch({
         alert("A consulta possui sintaxes avançadas exclusivas.");
         return;
       }
-      const parsed = parseInputToTags(inputValue);
-      setTags(parsed);
+      setTags(parseInputToTags(inputValue));
       setInputValue("");
       setMode("tags");
     }
+    e.preventDefault();
   };
 
   const clearAll = (e?: React.MouseEvent) => {
@@ -695,31 +503,6 @@ export default function DBQLAdvancedSearch({
     clearAllInternal();
   };
 
-  // ============================================================
-  // 10. Carregar lista de queries salvas
-  // ============================================================
-  useEffect(() => {
-    const fetchSavedQueries = async () => {
-      try {
-        const res = await fetch(`/api/saved-query?context=${dbqlContext}`, {
-          cache: "no-store",
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const queries = Array.isArray(json) ? json : json.data || [];
-          setSavedQueries(queries as ISavedQuery[]);
-        }
-      } catch (err) {
-        console.error("Erro ao buscar saved queries", err);
-        setSavedQueries([]);
-      }
-    };
-    fetchSavedQueries();
-  }, [dbqlContext]);
-
-  // ============================================================
-  // 11. Sugestões
-  // ============================================================
   const handleSuggestionSelect = (selectedValue: string) => {
     const tokenData = getEditingToken(inputValue);
     if (!tokenData) return;
@@ -742,6 +525,299 @@ export default function DBQLAdvancedSearch({
     setActiveField(null);
   };
 
+  const handleSaveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saveName.trim() || !currentEditingQuery) return;
+
+    try {
+      const res = await fetch("/api/saved-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saveName.trim(),
+          queryString: currentEditingQuery,
+          context: dbqlContext,
+          visibility: saveVisibility,
+          userSub,
+        }),
+      });
+      if (res.ok) {
+        const saved = (await res.json()) as ISavedQuery;
+        const newId = saved._id.toString();
+        setActiveSavedQuery(saved);
+        setOriginalQueryString(saved.queryString);
+        setActiveQueryString(saved.queryString);
+        setIsSaveModalOpen(false);
+        setSaveName("");
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("q", newId);
+        params.set("m", mode === "advanced" ? "a" : "t");
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        setDBQLQueryId(pathname, newId);
+
+        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
+          cache: "no-store",
+        });
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(Array.isArray(data) ? data : data.data || []);
+        }
+        onSearch?.(newId);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar nova query", err);
+    }
+  };
+
+  const handleUpdateActiveQuery = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!activeSavedQuery || activeSavedQuery.visibility === "temporary")
+      return;
+    try {
+      const res = await fetch("/api/saved-query", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: activeSavedQuery._id,
+          name: activeSavedQuery.name,
+          queryString: currentEditingQuery,
+          context: dbqlContext,
+          userSub,
+        }),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as ISavedQuery;
+        setActiveSavedQuery(updated);
+        setOriginalQueryString(updated.queryString);
+        setActiveQueryString(updated.queryString);
+
+        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
+          cache: "no-store",
+        });
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(Array.isArray(data) ? data : data.data || []);
+        }
+        onSearch?.(updated._id.toString());
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar query salva", err);
+    }
+  };
+
+  const handleDeleteSavedQuery = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Deseja realmente excluir esta consulta salva?")) return;
+    try {
+      const res = await fetch(`/api/saved-query?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (activeSavedQuery?._id.equals(id)) clearAllInternal();
+        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
+          cache: "no-store",
+        });
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setSavedQueries(Array.isArray(data) ? data : data.data || []);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao excluir query salva", err);
+    }
+  };
+
+  const handleToggleSavedDropdown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isSavedDropdownOpen && savedButtonRef.current) {
+      const rect = savedButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setIsSavedDropdownOpen((prev) => !prev);
+  };
+
+  // ============================================================
+  // Effects
+  // ============================================================
+  // Sincronização com valor externo
+  useEffect(() => {
+    if (value === undefined || value === lastValueRef.current) return;
+    lastValueRef.current = value;
+
+    Promise.resolve().then(() => {
+      if (!value) {
+        setInputValue("");
+        setTags([]);
+        setMode("tags");
+        return;
+      }
+      const targetMode = hasComplexSyntax(value) ? "advanced" : "tags";
+      setMode(targetMode);
+      if (targetMode === "advanced") {
+        setInputValue(value);
+        setTags([]);
+      } else {
+        setTags(parseInputToTags(value));
+        setInputValue("");
+      }
+    });
+  }, [value]);
+
+  // Dropdown: resize
+  useEffect(() => {
+    if (!isSavedDropdownOpen || !savedButtonRef.current) return;
+    const handleResize = () => {
+      const rect = savedButtonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const newPos = {
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      };
+      setDropdownPosition((prev) =>
+        prev && prev.top === newPos.top && prev.right === newPos.right
+          ? prev
+          : newPos,
+      );
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isSavedDropdownOpen]);
+
+  // Dropdown: click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (
+        savedDropdownRef.current &&
+        !savedDropdownRef.current.contains(e.target as Node) &&
+        savedButtonRef.current &&
+        !savedButtonRef.current.contains(e.target as Node)
+      ) {
+        setIsSavedDropdownOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () =>
+      document.removeEventListener("pointerdown", handleClickOutside);
+  }, []);
+
+  // Carregamento: URL > local-settings > vazio
+  useEffect(() => {
+    const loadFromUrl = async () => {
+      const storedId = getDBQLQueryId(pathname);
+      const targetId = rawUrlQueryId || storedId || "";
+
+      if (!rawUrlQueryId && storedId) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("q", storedId);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        return;
+      }
+
+      const loadKey = `${pathname}::${targetId}`;
+      if (lastLoadedKeyRef.current === loadKey) return;
+      lastLoadedKeyRef.current = loadKey;
+
+      setIsLoading(true);
+
+      try {
+        if (targetId) {
+          const res = await fetch(`/api/saved-query?id=${targetId}`, {
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const json = await res.json();
+            const matched = Array.isArray(json)
+              ? json[0]
+              : Array.isArray(json?.data)
+                ? json.data[0]
+                : json;
+
+            if (matched?.queryString) {
+              const query = matched as ISavedQuery;
+              const targetMode = hasComplexSyntax(query.queryString)
+                ? "advanced"
+                : "tags";
+              applyQuery(query, targetMode);
+              setDBQLQueryId(pathname, targetId);
+              onSearch?.(targetId);
+              return;
+            }
+          }
+        }
+
+        lastLoadedKeyRef.current = null;
+        setActiveSavedQuery(null);
+        setOriginalQueryString("");
+        setActiveQueryString("");
+        const initialMode =
+          urlModeParam === "a" || urlModeParam === "advanced"
+            ? "advanced"
+            : "tags";
+        setMode(initialMode);
+        setInputValue("");
+        setTags([]);
+        onSearch?.("");
+
+        const params = new URLSearchParams(searchParams.toString());
+        if (params.has("q") || params.has("m")) {
+          params.delete("q");
+          params.delete("m");
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar query da URL:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadFromUrl();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, onSearch]);
+
+  // Lista de queries salvas
+  useEffect(() => {
+    const fetchSavedQueries = async () => {
+      try {
+        const res = await fetch(`/api/saved-query?context=${dbqlContext}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const queries = Array.isArray(json) ? json : json.data || [];
+        setSavedQueries(queries as ISavedQuery[]);
+
+        const existingTemp = queries.find(
+          (q: ISavedQuery) =>
+            q.visibility === "temporary" && q.sub?.toString() === userSub,
+        );
+        if (existingTemp) {
+          setTempQuery(existingTemp);
+        } else {
+          setTempQuery({
+            userSub,
+            name: `Temporary (${session?.user?.name})`,
+            context: dbqlContext,
+            tenantId: session?.user?.tenantId,
+            visibility: "temporary",
+            queryString: "",
+          } as unknown as ISavedQuery);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar saved queries", err);
+        setSavedQueries([]);
+      }
+    };
+    fetchSavedQueries();
+  }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userSub]);
+
+  // Sugestões
   useEffect(() => {
     const tokenData = getEditingToken(inputValue);
     if (!tokenData || !tokenData.fieldKey || tokenData.query?.includes("*")) {
@@ -757,6 +833,7 @@ export default function DBQLAdvancedSearch({
       () => setActiveField(tokenData.fieldKey),
       0,
     );
+
     if (tokenData.fieldKey.toLowerCase() === "severity") {
       const severities = ["critical", "high", "medium", "low", "info"];
       const filtered = severities.filter(
@@ -781,7 +858,11 @@ export default function DBQLAdvancedSearch({
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/observation-filters?field=${encodeURIComponent(tokenData.fieldKey || "")}&query=${encodeURIComponent(tokenData.query || "")}&context=${encodeURIComponent(dbqlContext)}`,
+          `/api/observation-filters?field=${encodeURIComponent(
+            tokenData.fieldKey || "",
+          )}&query=${encodeURIComponent(
+            tokenData.query || "",
+          )}&context=${encodeURIComponent(dbqlContext)}`,
           { signal: controller.signal },
         );
         if (res.ok) {
@@ -790,7 +871,9 @@ export default function DBQLAdvancedSearch({
             new Set(data.suggestions || data.values || []),
           ).filter((item): item is string => typeof item === "string");
           const filtered = list
-            .filter((item) => item.toLowerCase() !== tokenData.query?.toLowerCase())
+            .filter(
+              (item) => item.toLowerCase() !== tokenData.query?.toLowerCase(),
+            )
             .slice(0, 10);
           setSuggestions(filtered);
           setIsOpen(filtered.length > 0);
@@ -807,139 +890,22 @@ export default function DBQLAdvancedSearch({
       clearTimeout(activeFieldTimeout);
       clearTimeout(timeout);
     };
-  }, [inputValue, dbqlContext, setSuggestions, setIsOpen]);
+  }, [inputValue, dbqlContext]);
+
+  // Aviso de saída sem salvar
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isQueryModified) {
+        e.preventDefault();
+        return "Você tem alterações não salvas. Deseja realmente sair?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isQueryModified]);
 
   // ============================================================
-  // 12. Salvamento e gerenciamento de queries salvas
-  // ============================================================
-  const handleSaveSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!saveName.trim() || !currentEditingQuery) return;
-
-    try {
-      if (tempQuery) {
-        setTempQuery({
-          name: saveName.trim(),
-          queryString: currentEditingQuery,
-          context: dbqlContext,
-          visibility: saveVisibility,
-          userId: userId
-        } as ISavedQuery)
-      }
-
-      const res = await fetch("/api/saved-query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: saveName.trim(),
-          queryString: currentEditingQuery,
-          context: dbqlContext,
-          visibility: saveVisibility,
-          userId: userId
-        }),
-      });
-      if (res.ok) {
-        const saved = await res.json() as ISavedQuery;
-        setActiveSavedQuery(saved);
-        setOriginalQueryString(saved.queryString);
-        setActiveQueryString(saved.queryString);
-        setIsSaveModalOpen(false);
-        setSaveName("");
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("q", saved._id.toString());
-        params.set("m", mode === "advanced" ? "a" : "t");
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
-          cache: "no-store",
-        });
-        if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
-          setSavedQueries(data);
-        }
-        
-        onSearch?.(saved._id.toString());
-      }
-    } catch (err) {
-      console.error("Erro ao salvar nova query", err);
-    }
-  };
-
-  const handleUpdateActiveQuery = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!activeSavedQuery || activeSavedQuery.visibility === "temporary") return;
-    try {
-      const res = await fetch("/api/saved-query", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: activeSavedQuery._id,
-          name: activeSavedQuery.name,
-          queryString: currentEditingQuery,
-          context: dbqlContext,
-          userId: userId
-        }),
-      });
-      if (res.ok) {
-        const updated = await res.json() as ISavedQuery;
-        setActiveSavedQuery(updated);
-        setOriginalQueryString(updated.queryString);
-        setActiveQueryString(updated.queryString);
-        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
-          cache: "no-store",
-        });
-        if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
-          setSavedQueries(data);
-        }
-        onSearch?.(updated._id.toString())
-      }
-    } catch (err) {
-      console.error("Erro ao atualizar query salva", err);
-    }
-  };
-
-  const handleDeleteSavedQuery = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm("Deseja realmente excluir esta consulta salva?")) return;
-    try {
-      const res = await fetch(`/api/saved-query?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        if (activeSavedQuery?._id.equals(id)) {
-          clearAllInternal();
-        }
-        const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
-          cache: "no-store",
-        });
-        if (listRes.ok) {
-          const data = await listRes.json() as ISavedQuery[];
-          setSavedQueries(data);
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao excluir query salva", err);
-    }
-  };
-
-  const handleToggleSavedDropdown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!isSavedDropdownOpen && savedButtonRef.current) {
-      const rect = savedButtonRef.current.getBoundingClientRect();
-      setSavedDropdownStyle({
-        position: "fixed",
-        bottom: `${window.innerHeight - (rect.top + 320)}px`,
-        right: `${window.innerWidth - rect.right}px`,
-        width: "320px",
-        zIndex: 9999,
-      });
-    }
-    setIsSavedDropdownOpen(!isSavedDropdownOpen);
-  };
-
-  // ============================================================
-  // 13. Prompt IA
+  // Prompt IA (derivado)
   // ============================================================
   const generatedAiPromptText = `Você é um assistente especialista na Debit Board Query Language (DBQL).
 Contexto atual da interface: ${dbqlContext} (AdvancedQuery - DBQL).
@@ -970,211 +936,187 @@ Solicitação do usuário em linguagem natural:
 
 Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
 
-  // ============================================================
-  // 14. Aviso de saída sem salvar
-  // ============================================================
-  const isModified = useMemo(() => {
-    if (!activeSavedQuery) return false;
-    if (activeSavedQuery.visibility === "temporary") return false;
-    return currentEditingQuery !== originalQueryString;
-  }, [currentEditingQuery, originalQueryString, activeSavedQuery]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isModified) {
-        e.preventDefault();
-        return "Você tem alterações não salvas. Deseja realmente sair?";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isModified]);
+  const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
+    temporary: <TimerReset size={12} className="text-muted" />,
+    private: <HatGlasses size={12} className="text-muted" />,
+    public: <Globe size={12} className="text-muted" />,
+    shared: <Share2 size={12} className="text-muted" />,
+  };
 
   // ============================================================
-  // 15. Renderização
+  // Render
   // ============================================================
-  const syntaxErrors = useMemo(
-    () => validateDBQL(currentEditingQuery),
-    [currentEditingQuery],
-  );
-
-  const realSavedQueries = savedQueries?.filter((q) => q.visibility !== "temporary");
-  const isQueryModified = isModified;
-
   return (
     <div className="relative w-full flex flex-col gap-1.5">
-      <button
-        type="button"
-        onClick={() => setIsSearchVisible(!isSearchVisible)}
-        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark shadow-sm text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors z-20"
-        title={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
-        aria-label={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
+      <div
+        className={`relative flex flex-col bg-elevated border rounded-lg px-4 py-3 shadow-sm hover:drop-shadow-lg transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
+          syntaxErrors.length > 0
+            ? "border-apple-red"
+            : "border-default dark:border-strong"
+        }`}
       >
-        {isSearchVisible ? (
-          <ChevronUp className="w-4 h-4" />
-        ) : (
-          <ChevronDown className="w-4 h-4" />
-        )}
-      </button>
+        <div className="flex items-start gap-2 w-full">
+          <TriangleAlert
+            className={`w-4 h-4 shrink-0 ${
+              syntaxErrors.length > 0 ? "block text-error" : "hidden"
+            }`}
+          />
 
-      {isSearchVisible ? (
-        <div
-          className={`relative flex flex-col bg-white dark:bg-[#1C1C1E] border rounded-xl px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3 ${
-            syntaxErrors.length > 0
-              ? "border-apple-red"
-              : "border-apple-border-light dark:border-apple-border-dark"
-          }`}
-        >
-          <div className="flex items-start gap-3 w-full">
-            <Search
-              className={`w-4 h-4 shrink-0 mt-2.5 ${syntaxErrors.length > 0 ? "text-apple-red" : "text-apple-tertiary-light"}`}
-            />
-
-            <div className="flex flex-col flex-1 gap-1.5 min-w-0">
-              {mode === "tags" && tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  {tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-apple-label-light dark:text-apple-label-dark px-2 py-1 rounded-md border border-apple-border-light dark:border-apple-border-dark shadow-sm font-mono font-medium"
+          <div className="flex flex-col flex-1 gap-1.5 min-w-0">
+            {mode === "tags" && tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                {tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 text-[13px] bg-white dark:bg-[#2C2C2E] text-heading dark:text-heading px-2 py-1 rounded-md border border-default dark:border-strong shadow-sm hover:drop-shadow-lg font-mono font-medium"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(idx)}
+                      className="text-muted hover:text-error transition-colors"
                     >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => removeTag(idx)}
-                        className="text-apple-tertiary-light hover:text-apple-red transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="relative w-full min-h-[44px]">
-                <DBQLRichInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onKeyDown={handleKeyDown}
-                  placeholder={placeholder}
-                  rows={2}
-                  className="!bg-transparent !border-none !p-0 shadow-none py-1.5 px-0 z-10"
-                />
-
-                <DBQLSuggestions
-                  isOpen={isOpen}
-                  suggestions={suggestions}
-                  activeField={activeField}
-                  onSelect={handleSuggestionSelect}
-                  onClose={() => setIsOpen(false)}
-                />
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
               </div>
+            )}
+
+            <div className="relative w-full min-h-[44px]">
+              <DBQLRichInput
+                value={inputValue}
+                onChange={setInputValue}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                rows={2}
+                className="!bg-transparent !border-none !p-0 shadow-none py-1.5 px-0 z-10"
+              />
+
+              <DBQLSuggestions
+                isOpen={isOpen}
+                suggestions={suggestions}
+                activeField={activeField}
+                onSelect={handleSuggestionSelect}
+                onClose={() => setIsOpen(false)}
+              />
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-apple-border-light dark:border-apple-border-dark text-xs">
-            <div className="text-[11px] text-apple-tertiary-light flex items-center gap-2">
-              {(tags.length > 0 || inputValue) && (
-                <div className="flex items-center gap-1.5 mr-5">
-                  <button
-                    type="button"
-                    onClick={handleExecuteSearch}
-                    disabled={syntaxErrors.length > 0}
-                    className="text-apple-tertiary-light hover:text-apple-green transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-apple-tertiary-light"
-                  >
-                    <PlayCircleIcon className="w-3 h-3" />
-                    <span>Executar</span>
-                  </button>
-                </div>
-              )}
-              {(tags.length > 0 || inputValue) && (
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-default dark:border-strong text-xs">
+          <div className="text-[11px] text-muted flex items-center gap-2">
+            {(tags.length > 0 || inputValue) && (
+              <div className="flex items-center gap-1.5 mr-5">
                 <button
                   type="button"
-                  onClick={clearAll}
-                  className="text-apple-tertiary-light hover:text-apple-red transition-colors flex items-center gap-1"
+                  onClick={handleExecuteSearch}
+                  disabled={syntaxErrors.length > 0}
+                  className="hover:!bg-green-500 hover:text-white text-green-500 transition-colors flex items-center gap-1 ml-1 disabled:opacity-40 disabled:hover:text-muted"
                 >
-                  <X className="w-3 h-3" />
-                  <span>Limpar</span>
+                  <PlayCircleIcon className="w-3 h-3" />
+                  <span>Executar</span>
                 </button>
-              )}
-              {activeSavedQuery &&
-                activeSavedQuery.visibility !== "temporary" && (
-                  <div className="flex ml-5 items-center gap-1.5 border-l border-apple-border-light px-7">
-                    <span
-                      className={`w-2 h-2 rounded-full ${isQueryModified ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
-                      title={
-                        isQueryModified
-                          ? "Consulta modificada (alterações não salvas)"
-                          : "Consulta salva e sincronizada"
-                      }
-                    />
-                    <span>
-                      Consulta:{" "}
-                      <strong className="text-apple-label-light dark:text-apple-label-dark">
-                        {activeSavedQuery.name}
-                      </strong>
-                    </span>
-                    {isQueryModified && (
-                      <span className="text-amber-500 font-semibold text-[10px]">
-                        (modificada)
-                      </span>
-                    )}
-                  </div>
-                )}
-            </div>
-
-            <div className="flex items-center gap-2 ml-auto">
-              {activeSavedQuery &&
-                isQueryModified &&
-                activeSavedQuery.visibility !== "temporary" && (
-                  <button
-                    type="button"
-                    onClick={handleUpdateActiveQuery}
-                    className="px-2.5 py-1 rounded-md bg-apple-blue/10 text-apple-blue hover:bg-apple-blue/20 font-medium flex items-center gap-1 transition-colors"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Salvar Alterações</span>
-                  </button>
-                )}
-
+              </div>
+            )}
+            {(tags.length > 0 || inputValue) && (
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsSaveModalOpen(true);
-                }}
-                disabled={!currentEditingQuery || syntaxErrors.length > 0}
-                className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors disabled:opacity-40"
+                onClick={clearAll}
+                className="hover:!bg-red-500 hover:!text-white text-error-500 transition-colors flex items-center gap-1"
               >
-                <BookmarkPlus className="w-3.5 h-3.5" />
-                <span>Salvar</span>
+                <X className="w-3 h-3" />
+                <span>Limpar</span>
               </button>
-
-              <div className="relative">
-                <button
-                  ref={savedButtonRef}
-                  type="button"
-                  onClick={handleToggleSavedDropdown}
-                  className="px-2.5 py-1 rounded-md text-apple-tertiary-light hover:text-apple-label-light dark:hover:text-apple-label-dark hover:bg-apple-border-light/50 font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  <span>Salvas</span>
-                  {realSavedQueries.length > 0 && (
-                    <span className="bg-apple-blue/20 text-apple-blue text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                      {realSavedQueries.length}
+            )}
+            {activeSavedQuery &&
+              activeSavedQuery.visibility !== "temporary" && (
+                <div className="flex ml-5 items-center gap-1.5 border-l border-default px-7">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isQueryModified
+                        ? "bg-amber-500 animate-pulse"
+                        : "bg-emerald-500"
+                    }`}
+                    title={
+                      isQueryModified
+                        ? "Consulta modificada (alterações não salvas)"
+                        : "Consulta salva e sincronizada"
+                    }
+                  />
+                  <span>
+                    Consulta:{" "}
+                    <strong className="text-heading dark:text-heading">
+                      {activeSavedQuery.name}
+                    </strong>
+                  </span>
+                  {isQueryModified && (
+                    <span className="text-amber-500 font-semibold text-[10px]">
+                      (modificada)
                     </span>
                   )}
-                </button>
+                </div>
+              )}
+          </div>
 
-                {!isLoading && isSavedDropdownOpen && (
+          <div className="flex items-center gap-2 ml-auto">
+            {activeSavedQuery &&
+              isQueryModified &&
+              activeSavedQuery.visibility !== "temporary" && (
+                <button
+                  type="button"
+                  onClick={handleUpdateActiveQuery}
+                  className="px-2.5 py-1 rounded-md bg-brand/10 text-success hover:bg-brand/20 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Salvar Alterações</span>
+                </button>
+              )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsSaveModalOpen(true);
+              }}
+              disabled={!currentEditingQuery || syntaxErrors.length > 0}
+              className="px-2.5 py-1 rounded-md flex items-center gap-1 transition-colors disabled:opacity-40"
+            >
+              <BookmarkPlus className="w-3.5 h-3.5" />
+              <span>Salvar</span>
+            </button>
+
+            <div className="relative">
+              <button
+                ref={savedButtonRef}
+                type="button"
+                onClick={handleToggleSavedDropdown}
+                className="px-2.5 py-1 rounded-md flex items-center gap-1 transition-colors"
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                <span>Salvas</span>
+                {realSavedQueries.length > 0 && (
+                  <span className="text-[12px] text-warning-500 px-1.5 py-0.2 rounded-full font-bold">
+                    {realSavedQueries.length}
+                  </span>
+                )}
+              </button>
+
+              {!isLoading &&
+                isSavedDropdownOpen &&
+                dropdownPosition &&
+                createPortal(
                   <div
                     ref={savedDropdownRef}
-                    style={savedDropdownStyle}
-                    className="bg-white dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-lg p-2 z-50 flex flex-col gap-1 max-h-72 overflow-y-auto"
+                    className="fixed z-[9999] w-80 shadow-sm drop-shadow-sm bg-sunken border border-default dark:border-strong rounded-lg shadow-xl"
+                    style={{
+                      top: dropdownPosition.top,
+                      right: dropdownPosition.right,
+                    }}
                   >
-                    <div className="flex items-center justify-between px-2 py-1.5  mb-1">
-                      <span className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
-                        CONSULTAS SALVAS E PÚBLICAS
+                    <div className="flex items-center justify-between px-2 py-3 border-b">
+                      <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">
+                        CONSULTAS SALVAS
                       </span>
                       <button
                         type="button"
@@ -1184,14 +1126,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                           if (onManageQueries) onManageQueries();
                           else router.push("/settings/saved-queries");
                         }}
-                        className="text-xs text-apple-blue hover:underline font-medium"
+                        className="text-xs text-brand dark:text-brand-300 hover:underline font-medium"
                       >
                         gerenciar
                       </button>
                     </div>
 
                     {realSavedQueries.length === 0 ? (
-                      <div className="text-xs text-apple-tertiary-light px-2 py-4 text-center">
+                      <div className="text-xs text-muted px-2 py-4 text-center">
                         Nenhuma consulta salva ainda.
                       </div>
                     ) : (
@@ -1199,90 +1141,105 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                         <div
                           key={q._id.toString()}
                           onClick={() => handleSelectSavedQuery(q)}
-                          className={`group relative text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 hover:bg-apple-border-light/30 transition-colors cursor-pointer ${
+                          className={`group relative text-left px-2.5 py-2 bg-elevated border-b dark:border-b-sunken last:rounded-b-xl last:border-none text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
                             activeSavedQuery?._id === q._id
-                              ? "bg-apple-blue/10 text-apple-blue font-semibold"
-                              : "text-apple-label-light dark:text-apple-label-dark"
+                              ? "bg-sunken dark:text-brand-300 text-brand font-bold border-l-4 dark:border-l-brand-300 border-l-brand"
+                              : "text-muted"
                           }`}
                         >
                           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <span className="font-medium truncate">
-                              {q.name}
-                            </span>
-                            <span className="font-mono text-[10px] text-apple-tertiary-light truncate">
+                            <div className="flex gap-2">
+                              <span className="shrink-0 flex items-center justify-center">
+                                {VISIBILITY_ICONS[q.visibility]}
+                              </span>
+                              <h3
+                                className="font-semibold group-hover:underline text-body dark:text-body truncate flex-1 min-w-0"
+                                title={q.name}
+                              >
+                                {q.name}
+                              </h3>
+                            </div>
+                            <span className="font-mono text-[10px] font-extralight text-muted truncate">
                               {q.queryString}
                             </span>
                           </div>
                           <button
                             type="button"
-                            onClick={(e) => handleDeleteSavedQuery(e, q._id.toString())}
+                            onClick={(e) =>
+                              handleDeleteSavedQuery(e, q._id.toString())
+                            }
                             title="Excluir consulta"
-                            className="opacity-0 group-hover:opacity-100 p-1 text-apple-tertiary-light hover:text-apple-red transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 p-1 text-muted hover:text-error transition-opacity"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ))
                     )}
-                  </div>
+                  </div>,
+                  document.body,
                 )}
-              </div>
-
-              <button
-                type="button"
-                onClick={toggleMode}
-                className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
-                  mode === "advanced"
-                    ? "bg-apple-blue/10 text-apple-blue border-apple-blue/20"
-                    : "text-apple-tertiary-light border-transparent hover:border-apple-border-light"
-                }`}
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>DBQL</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsAiModalOpen(true);
-                }}
-                title="Gerar com IA"
-                className="p-1.5 rounded-md text-apple-tertiary-light hover:text-apple-blue hover:bg-apple-blue/10 transition-colors"
-              >
-                <Bot className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsHelpModalOpen(true);
-                }}
-                className="ml-2 p-2 text-gray-400 hover:text-[#007AFF] transition-colors"
-                title="Ajuda DBQL"
-              >
-                <HelpCircle className="w-5 h-5" />
-              </button>
-
-              <DBQLHelpModal
-                isOpen={isHelpModalOpen}
-                onClose={() => setIsHelpModalOpen(false)}
-                context={dbqlContext}
-              />
             </div>
+
+            <button
+              type="button"
+              onClick={toggleMode}
+              className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
+                mode === "advanced"
+                  ? "bg-brand/10 text-brand dark:text-brand-300 border-brand/20"
+                  : "text-muted border-transparent hover:border-default"
+              }`}
+            >
+              {mode === "advanced" ? (
+                <>
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span>Advanced</span>
+                </>
+              ) : (
+                <>
+                  <TagIcon className="w-3.5 h-3.5" />
+                  <span>Tags</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsAiModalOpen(true);
+              }}
+              title="Gerar com IA"
+              className="p-2 rounded-md transition-colors"
+            >
+              <Bot className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsHelpModalOpen(true);
+              }}
+              className="ml-2 p-2 rounded-md transition-colors"
+              title="Ajuda DBQL"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+
+            <DBQLHelpModal
+              isOpen={isHelpModalOpen}
+              onClose={() => setIsHelpModalOpen(false)}
+              context={dbqlContext}
+            />
           </div>
         </div>
-      ) : (
-        <div className="h-10 items-end pr-10 text-apple-tertiary-light text-[12px] relative flex flex-col  px-4 py-3 shadow-sm transition-none outline-none ring-0 focus-within:ring-0 focus:outline-none gap-3">
-          DBQL Advanced Search
-        </div>
-      )}
+      </div>
 
-      {syntaxErrors.length > 0 && isSearchVisible && (
-        <div className="flex flex-col gap-2 text-[12px] text-apple-red mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
-          <div className="flex items-center gap-1.5 font-bold">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+      {syntaxErrors.length > 0 && (
+        <div className="flex flex-col gap-2 text-[12px] text-error mt-1 ml-1 font-medium bg-apple-red/5 p-3 rounded-lg border border-apple-red/15">
+          <div className="flex items-center gap-1.5 font-bold text-[14px]">
+            <TriangleAlert className="w-5 h-5 shrink-0 animate-pulse text-yellow-500" />
             <span>Erros detectados ({syntaxErrors.length}):</span>
           </div>
           <ol className="list-decimal pl-5 space-y-2">
@@ -1290,14 +1247,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
               <li key={idx}>
                 <div className="mb-1">{err.error}</div>
                 {err.highlightIndex !== null && err.highlightIndex >= 0 && (
-                  <div className="font-mono text-[10px] bg-white dark:bg-[#1C1C1E] px-2 py-1 rounded border border-apple-border-light text-apple-label-light dark:text-apple-label-dark inline-block">
+                  <div className="font-mono text-[10px] bg-white dark:bg-[#1C1C1E] px-2 py-1 rounded border border-default text-heading dark:text-heading inline-block">
                     <span>
                       {currentEditingQuery.substring(
                         Math.max(0, err.highlightIndex - 10),
                         err.highlightIndex,
                       )}
                     </span>
-                    <span className="bg-apple-red/25 text-apple-red px-1 py-0.5 rounded font-bold mx-0.5">
+                    <span className="bg-apple-red/25 text-error px-1 py-0.5 rounded font-bold mx-0.5">
                       {currentEditingQuery.substring(
                         err.highlightIndex,
                         err.highlightIndex + err.errorLength,
@@ -1317,19 +1274,18 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         </div>
       )}
 
-      {/* Modal Salvar */}
       {isSaveModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={saveModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-lg p-6 w-full max-w-md shadow-2xl flex flex-col gap-4"
           >
-            <h3 className="text-base font-bold text-apple-label-light dark:text-apple-label-dark">
+            <h3 className="text-base font-bold text-heading dark:text-heading">
               Salvar Consulta DBQL
             </h3>
             <form onSubmit={handleSaveSubmit} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-apple-tertiary-light">
+                <label className="text-xs font-medium text-muted">
                   Nome da consulta
                 </label>
                 <input
@@ -1337,18 +1293,20 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder="Ex: Observations Críticas de Segurança"
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg text-xs outline-none focus:border-brand text-heading dark:text-heading"
                   autoFocus
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-apple-tertiary-light">
+                <label className="text-xs font-medium text-muted">
                   Visibilidade
                 </label>
                 <select
                   value={saveVisibility}
-                  onChange={(e) => setSaveVisibility(e.target.value as Visibility)}
-                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark"
+                  onChange={(e) =>
+                    setSaveVisibility(e.target.value as Visibility)
+                  }
+                  className="px-3 py-2 bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg text-xs outline-none focus:border-brand text-heading dark:text-heading"
                 >
                   <option value="private">Privada (Apenas você)</option>
                   <option value="shared">Compartilhada (Equipe)</option>
@@ -1359,14 +1317,14 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-apple-tertiary-light hover:bg-apple-border-light/30"
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:bg-apple-border-light/30"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={!saveName.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-apple-blue text-white hover:opacity-90 disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-brand hover:opacity-90 disabled:opacity-40"
                 >
                   Salvar Consulta
                 </button>
@@ -1376,34 +1334,35 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
         </div>
       )}
 
-      {/* Modal IA */}
       {isAiModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div
             ref={aiModalRef}
-            className="bg-white dark:bg-[#1C1C1E] border border-apple-border-light dark:border-apple-border-dark rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-[#1C1C1E] border border-default dark:border-strong rounded-lg p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-apple-label-light dark:text-apple-label-dark flex items-center gap-2">
-                <Bot className="w-4 h-4 text-apple-blue" />
+              <h3 className="text-base font-bold text-heading dark:text-heading flex items-center gap-2">
+                <Bot className="w-4 h-4 text-brand dark:text-brand-300" />
                 <span>Gerar Query com IA (Copiar Prompt)</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsAiModalOpen(false)}
-                className="text-apple-tertiary-light hover:text-apple-label-light"
+                className="text-muted hover:text-heading"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-apple-tertiary-light">
+              <p className="text-xs text-muted">
                 Descreva abaixo o que deseja buscar. O sistema vai gerar um
                 prompt estruturado contendo todas as regras da sintaxe DBQL e o
-                contexto atual (<code className="text-apple-blue">{dbqlContext}</code>) para você colar na sua IA favorita.
+                contexto atual (
+                <code className="text-brand">{dbqlContext}</code>) para você
+                colar na sua IA favorita.
               </p>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                   Sua busca em linguagem natural:
                 </label>
                 <textarea
@@ -1414,19 +1373,19 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                   }}
                   rows={3}
                   placeholder="Ex: Quero todas as observations de severidade crítica ou alta do projeto GEPIN que não sejam do arquivo Auth"
-                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-apple-border-light dark:border-apple-border-dark rounded-xl p-3 text-xs outline-none focus:border-apple-blue text-apple-label-light dark:text-apple-label-dark resize-none font-mono"
+                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-apple-tertiary-light uppercase tracking-wider">
+                  <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                     Prompt gerado com a documentação DBQL:
                   </label>
-                  <span className="text-[10px] text-apple-tertiary-light">
+                  <span className="text-[10px] text-muted">
                     Pronto para envio
                   </span>
                 </div>
-                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-apple-border-light dark:border-apple-border-dark rounded-xl p-3 text-[11px] font-mono text-apple-label-light dark:text-apple-label-dark max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
+                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-lg p-3 text-[11px] font-mono text-heading dark:text-heading max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
                   {generatedAiPromptText}
                 </div>
               </div>
@@ -1434,7 +1393,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-apple-tertiary-light hover:bg-apple-border-light/30"
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted"
                 >
                   Fechar
                 </button>
@@ -1446,7 +1405,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                     setCopiedPrompt(true);
                     setTimeout(() => setCopiedPrompt(false), 3000);
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-apple-blue text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
                 >
                   {copiedPrompt ? (
                     <>

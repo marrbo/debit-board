@@ -9,7 +9,7 @@ export interface ISearchRecord extends Document {
   gerencia?: string;
   nucleo?: string;
   source: 'manual' | 'sast';
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   createdAt: Date;
 }
 
@@ -21,7 +21,7 @@ const SearchRecordSchema = new Schema<ISearchRecord>({
   gerencia: String,
   nucleo: String,
   source: { type: String, enum: ['manual', 'sast'], required: true },
-  tenantId: { type: String, ref: 'Tenant', required: true },
+  tenantId: { type: mongoose.Types.ObjectId, ref: 'Tenant', required: true },
   createdAt: { type: Date, default: Date.now },
 });
 

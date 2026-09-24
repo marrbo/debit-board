@@ -6,6 +6,7 @@ import { Observation } from '@/models/Observation';
 import { Tenant } from '@/models/Tenant';
 import https from 'node:https';
 import { URL } from 'node:url';
+import { getServerSessionIds } from '@/lib/session-server';
 
 async function azureFetch(urlString: string, pat: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -71,14 +72,28 @@ function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, numb
   return offsetToLineMap;
 }
 
-export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+/**
+ * Lista recursos do endpoint /api/observations/{id}/snippet.
+ *
+ * Este endpoint expõe a operação get em /api/observations/{id}/snippet.
+ *
+ * @summary Lista recursos do endpoint /api/observations/{id}/snippet
+ * @tags Observations, Id, Snippet
+ * @route GET /api/observations/{id}/snippet
+ * @async
+ * @function GET
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
+export async function GET(_: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const tenantId = req.headers.get('x-tenant-id');``
+  const sessionIds = await getServerSessionIds();
+  const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
   // 🔥 Popula o padrão para trazer os dados mais atualizados
   const issue = await Observation.findById(params.id).populate('patternId');
-  if (!issue || issue.tenantId !== tenantId) {
+  if (!issue || !issue.tenantId.equals(tenantId)) {
     return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
   }
 
@@ -139,10 +154,24 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   }
 }
 
+/**
+ * Atualiza parcialmente recurso do endpoint /api/observations/{id}/snippet.
+ *
+ * Este endpoint expõe a operação patch em /api/observations/{id}/snippet.
+ *
+ * @summary Atualiza parcialmente recurso do endpoint /api/observations/{id}/snippet
+ * @tags Observations, Id, Snippet
+ * @route PATCH /api/observations/{id}/snippet
+ * @async
+ * @function PATCH
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const sessionIds = await getServerSessionIds();
+    const tenantId = sessionIds.tenantId;
 
     const { id } = params;
     const body = await req.json();

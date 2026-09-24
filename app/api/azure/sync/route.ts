@@ -6,9 +6,25 @@ import { Project } from '@/models/Project';
 import { Repository } from '@/models/Repository';
 import * as azdev from 'azure-devops-node-api';
 import { getPersonalAccessTokenHandler } from 'azure-devops-node-api';
+import { getServerSessionIds } from '@/lib/session-server';
+import { BuildStatus, BuildResult } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
-export async function POST(req: NextRequest) {
-  const tenantId = req.headers.get('x-tenant-id');
+/**
+ * Cria recurso do endpoint /api/azure/sync.
+ *
+ * Este endpoint expõe a operação post em /api/azure/sync.
+ *
+ * @summary Cria recurso do endpoint /api/azure/sync
+ * @tags Azure, Sync
+ * @route POST /api/azure/sync
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
+export async function POST(_: NextRequest) {
+  const sessionIds = await getServerSessionIds();
+  const tenantId = sessionIds.tenantId;
 
   await connectToDatabase();
 
@@ -38,157 +54,105 @@ export async function POST(req: NextRequest) {
 
     let updatedProjects = 0;
     let updatedRepos = 0;
-    // let updatedPipelines = 0;
+
+    // Conjunto de azureProjectIds retornados pelo Azure (para marcar inativos)
+    const azureProjectIds = new Set<string>();
 
     for (const azureProject of projects) {
       const projectName = azureProject.name!;
       const azureProjectId = azureProject.id!;
+      azureProjectIds.add(azureProjectId);
 
-      // 3. Buscar pipelines associadas a este repositório
-      // 3.1 Obter todas as definições de build do projeto
-      const projectDefinitions = await buildApi.getDefinitions(azureProject.name);
+      // Buscar definições de pipelines (clássicas e YAML)
+      const definitions = await buildApi.getDefinitions(projectName);
+      const pipelineCount = definitions.length;
+      const pipelineClassicCount = definitions.filter(def => def.type === 1 || def.type === 2).length; // 1=Build, 2=Release
+      const pipelineYamlCount = definitions.filter(def => def.type !== 1 && def.type !== 2).length;
+      // Contagem de falhas/sucessos: vamos buscar os builds recentes e contar
+      let pipelineFailedCount = 0;
+      let pipelineSuccessCount = 0;
+      const recentBuilds = await buildApi.getBuilds(projectName, undefined, undefined, undefined, undefined, undefined, undefined, undefined, BuildStatus.All);
+      if (recentBuilds && recentBuilds.length > 0) {
+        pipelineFailedCount = recentBuilds.filter(b => b.result !== BuildResult.Canceled && b.result !== BuildResult.Succeeded).length; // 2=failed, 4=partiallySucceeded
+        pipelineSuccessCount = recentBuilds.filter(b => b.result === 0 || b.result === BuildResult.Succeeded).length; // 0=succeeded, 1=partiallySucceeded? Na verdade 0=succeeded, 1=partiallySucceeded, 2=failed, 4=canceled. Vou usar 0 como succeeded.
+      }
 
+      // Obter repositórios do projeto
+      const repos = await gitApi.getRepositories(azureProjectId);
+      const repositoryCount = repos ? repos.length : 0;
+
+      // URL do projeto no web
       let projectWebUrl = undefined;
-
       try {
         const projectDataUrls = await fetch(azureProject.url!);
         const projectUrlsArray = await projectDataUrls.json();
         projectWebUrl = projectUrlsArray._links?.web?.href;
       } catch {
-        console.warn(`Não foi possível obter a URL do projeto ${projectName}.`);
-        projectWebUrl = `${urlWithCollection}${azureProject.name}`;
+        projectWebUrl = `${urlWithCollection}${projectName}`;
       }
 
-      // 1. Upsert Project
+      // 1. Upsert Project - sempre atualiza com os dados mais recentes
       const savedProject = await Project.findOneAndUpdate(
         { tenantId: { $eq: tenantId }, azureProjectId: { $eq: azureProjectId } },
         {
           name: projectName,
           azureProjectId,
           tenantId,
-          azureProjectUrl: projectWebUrl!,
+          azureProjectUrl: projectWebUrl,
           description: azureProject.description,
           defaultTeamImageUrl: azureProject.defaultTeamImageUrl,
           visibility: azureProject.visibility,
-          createdAt: new Date(),
           lastUpdateTime: azureProject.lastUpdateTime ? new Date(azureProject.lastUpdateTime) : new Date(),
           syncDate: new Date(),
-          pipelineCount: projectDefinitions.length,
-          pipelineFailedCount: projectDefinitions.filter(def => def.type === 1 || def.type === 2).length, // Exemplo de contagem de pipelines clássicas
-          pipelineClassicCount: projectDefinitions.filter(def => def.type === 1 || def.type === 2).length,
-          pipelineYamlCount: projectDefinitions.filter(def => def.type !== 1 && def.type !== 2).length,
+          pipelineCount,
+          pipelineFailedCount,
+          pipelineSuccessCount,
+          pipelineClassicCount,
+          pipelineYamlCount,
+          repositoryCount,
+          isActive: true, // sempre ativo
         },
         { upsert: true, new: true }
       );
       updatedProjects++;
 
-      // 2. Buscar repositórios
-      const repos = await gitApi.getRepositories(azureProjectId);
-      if (!repos || repos.length === 0) continue;
-
-      // Mapear repositórios salvos para referência rápida
-      // const savedRepos = await Repository.find({ tenantId, azureProjectId }).lean();
-      // const repoMap = new Map<string, any>();
-      // savedRepos.forEach(r => repoMap.set(r.azureRepoId, r));
-
-      for (const azureRepo of repos) {
-        // 2.1 Upsert Repository
-        await Repository.findOneAndUpdate(
-          { tenantId: { $eq: tenantId }, azureRepoId: azureRepo.id! },
-          {
-            name: azureRepo.name!,
-            projectId: savedProject._id.toString(),
-            azureProjectId,
-            azureRepoId: azureRepo.id!,
-            url: azureRepo.url!,
-            tenantId,
-            syncDate: new Date(),
-          },
-          { upsert: true, new: true }
-        );
-        updatedRepos++;
+      // 2. Upsert Repositories
+      if (repos && repos.length > 0) {
+        for (const azureRepo of repos) {
+          await Repository.findOneAndUpdate(
+            { tenantId: { $eq: tenantId }, azureRepoId: azureRepo.id! },
+            {
+              name: azureRepo.name!,
+              projectId: savedProject._id.toString(),
+              azureProjectId,
+              azureRepoId: azureRepo.id!,
+              url: azureRepo.url!,
+              tenantId,
+              syncDate: new Date(),
+              isActive: true,
+            },
+            { upsert: true, new: true }
+          );
+          updatedRepos++;
+        }
       }
+    }
 
-      // 3. Buscar pipelines associadas a este repositório
-      // 3.1 Obter todas as definições de build do projeto
-      //const definitions = await buildApi.getDefinitions(azureProject.name);
+    // 3. Marcar projetos inativos (não retornados pelo Azure)
+    await Project.updateMany(
+      { tenantId: { $eq: tenantId }, azureProjectId: { $nin: Array.from(azureProjectIds) } },
+      { $set: { isActive: false } }
+    );
 
-      // Filtrar definições que usam este repositório
-      // const projectDefinitions = definitions.filter(def => {
-      //   // Verificar se a definição tem repositório associado
-      //   if (!def.project) return false;
-
-      //   return true;
-      // });
-
-      // for (const def of projectDefinitions) {
-      //   // const definitionId = def.id!;
-      //   // const pipelineType = def.type === 1 || def.type === 2 ? 'classic' : 'yaml';
-
-      //   // // Buscar estatísticas de builds (últimos 100)
-      //   // const builds = await buildApi.getBuilds(azureProject.name);
-
-      //   // const buildCount = builds ? builds.length : 0;
-      //   // let projectAllBuildsFailedCount = 0;
-      //   // let lastBuildStatus: BuildResult | undefined;
-      //   // let lastBuildDate: Date | undefined;
-
-      //   // if (builds && builds.length > 0) {
-      //   //   // Último build (primeiro da lista, pois vem ordenado por data decrescente)
-      //   //   const latest = builds[0];
-      //   //   lastBuildStatus = latest.result; // 'succeeded', 'failed', 'partiallySucceeded', etc.
-      //   //   if (latest.finishTime) {
-      //   //     lastBuildDate = new Date(latest.finishTime);
-      //   //   } else if (latest.queueTime) {
-      //   //     lastBuildDate = new Date(latest.queueTime);
-      //   //   }
-
-      //   //   // Contar falhas (status 'failed' ou 'partiallySucceeded')
-      //   //   projectAllBuildsFailedCount = builds.filter(b => b.result !== BuildResult.Succeeded).length;
-
-      //   //   // Get builds repository and update repository with build count and failed build count
-      //   //   let pipelineCount = 0;
-      //   //   builds.forEach(async (b) => {
-      //   //     if (b.repository && b.repository.id) {
-      //   //       const repo = await Repository.findOne({ tenantId, azureRepoId: b.repository.id });
-      //   //       pipelineCount++;
-      //   //       if (repo) {
-      //   //         repo.buildCount = buildCount;
-      //   //         repo.buildfailedCount = builds.filter(b => b.result !== BuildResult.Succeeded).length;
-      //   //         repo.buildSucceededCount = builds.filter(b => b.result === BuildResult.Succeeded).length;
-      //   //         repo.pipelineCount = pipelineCount;
-      //   //         repo.pipelineFailedCount = projectDefinitions.filter(def => (def.type === 1 || def.type === 2) && def.id === b.definition.id).length;
-      //   //         repo.pipelineClassicCount = projectDefinitions.filter(def => (def.type === 1 || def.type === 2) && def.id === b.definition.id).length;
-      //   //         repo.pipelineYamlCount = projectDefinitions.filter(def => (def.type !== 1 && def.type !== 2) && def.id === b.definition.id).length;
-
-      //   //         await repo.save();
-      //   //       }
-      //   //     }
-      //   //   });
-
-      //   // }
-
-      //     // // Upsert Pipeline
-      //     // await Pipeline.findOneAndUpdate(
-      //     //   { tenantId, azureDefinitionId: definitionId },
-      //     //   {
-      //     //     tenantId,
-      //     //     repositoryId: savedRepo._id.toString(),
-      //     //     name: def.name!,
-      //     //     type: pipelineType,
-      //     //     azureDefinitionId: definitionId,
-      //     //     url: def.url!,
-      //     //     lastBuildStatus,
-      //     //     lastBuildDate,
-      //     //     buildCount,
-      //     //     failedBuildCount: projectAllBuildsFailedCount,
-      //     //     syncDate: new Date(),
-      //     //   },
-      //     //   { upsert: true }
-      //     // );
-      //     // updatedPipelines++;
-      //   }
-      // }
+    // 4. Marcar repositórios inativos associados a projetos inativos
+    // Buscar todos os projetos inativos deste tenant
+    const inactiveProjects = await Project.find({ tenantId, isActive: false }).select('_id').lean();
+    const inactiveProjectIds = inactiveProjects.map(p => p._id.toString());
+    if (inactiveProjectIds.length > 0) {
+      await Repository.updateMany(
+        { tenantId, projectId: { $in: inactiveProjectIds } },
+        { $set: { isActive: false } }
+      );
     }
 
     return NextResponse.json({
@@ -196,16 +160,11 @@ export async function POST(req: NextRequest) {
       details: {
         projectsUpdated: updatedProjects,
         repositoriesUpdated: updatedRepos,
-        // pipelinesUpdated: updatedPipelines,
       }
     });
   } catch (error: unknown) {
     console.error('Erro na sincronização com Azure DevOps:', error);
     const message = error instanceof Error ? error.message : 'Erro interno ao sincronizar';
-
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,13 +1,42 @@
+// components/DataTable.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import DBQLAdvancedSearch from '@/components/dbql/DBQLAdvancedSearch';
-import { SimpleColumnSearch } from '@/components/dbql/SimpleColumnSearch';
-import { ChevronUp, ChevronDown, LoaderCircle, Trash2, FileText, FileSpreadsheet } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
+import type { Types } from "mongoose";
+import {
+  LoaderCircle,
+  Trash2,
+  ListChevronsUpDown,
+  ListSortAscending,
+  ListSortDescending,
+} from "lucide-react";
+import { FaFileExcel, FaFilePdf } from "react-icons/fa";
+import { exportTableToPDF } from "./exportPDF";
+import { exportTableToExcel } from "./exportExcel";
+import { TableToolbar, TablePagination } from "../PaginationInfo";
 
 // ============================================================
 // Tipos
 // ============================================================
+
+/**
+ * Sub-coluna apenas para exportação em Excel. Uma coluna com
+ * `excelSubColumns` é renderizada como 1 coluna no PDF/tela, mas
+ * "explode" em N colunas no Excel (permite filtrar por cada sub-valor).
+ */
+export interface ExcelSubColumn<T> {
+  label: string;
+  /** Largura em px (opcional). Convertida para a unidade do Excel. */
+  width?: number;
+  render: (item: T, extraData?: Record<string, any>) => any;
+  /** Renderizador opcional para rich text / fill / bordas. */
+  excelCellRenderer?: (
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
+}
+
 export interface Column<T> {
   key: keyof T | string;
   label: string;
@@ -17,9 +46,36 @@ export interface Column<T> {
   width?: string;
   minWidth?: string;
   nowrap?: boolean;
-  align?: 'left' | 'center' | 'right';
+  align?: "left" | "center" | "right";
   className?: string | ((item: T) => string);
   headerClassName?: string;
+  exportable?: boolean;
+  /**
+   * Renderizador vetorial para PDF. Recebe `(doc, cell, item, extraData)`
+   * e desenha o conteúdo manualmente (shields, badges, ícones).
+   */
+  pdfCellRenderer?: (
+    doc: any,
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
+  /**
+   * Renderizador de célula no Excel. Recebe o `Cell` do ExcelJS já
+   * posicionado — permite escrever rich text, aplicar fills, borders.
+   */
+  excelCellRenderer?: (
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
+
+  /**
+   * 🔑 Quando presente, o Excel ignora `excelCellRenderer` e expande
+   *    esta coluna em N colunas filhas. O PDF continua renderizando
+   *    como uma única coluna (usando `pdfCellRenderer`).
+   */
+  excelSubColumns?: ExcelSubColumn<T>[];
 }
 
 export interface DataTableAction<T> {
@@ -40,130 +96,271 @@ export interface ExportFilters {
 export interface DataTableProps<T> {
   endpoint: string;
   columns: Column<T | any>[];
-  defaultSort?: { field: string; order: 'asc' | 'desc' };
+  defaultSort?: { field: string; order: "asc" | "desc" };
   defaultLimit?: number;
-  searchPlaceholder?: string;
-  searchContext?: string;
-  userId: string;
   projectId?: string;
   teamId?: string;
   refreshKey?: number;
   onRowClick?: (item: T) => void;
-  // Novos props
-  selectable?: boolean;               // exibir coluna de checkboxes (default true)
-  actions?: DataTableAction<T>[];     // ações customizadas
-  canDelete?: boolean;                // permitir exclusão (default true)
-  onDelete?: (selectedIds: string[]) => void; // callback de exclusão
-  onExportExcel?: (filters: ExportFilters) => void;
+  selectable?: boolean;
+  rowSelectable?: (item: T) => boolean;
+  actions?: DataTableAction<T>[];
+  canDelete?: boolean;
+  onDelete?: (selectedIds: string[], selectedItems: T[]) => void;
+  exportPDF?: boolean;
+  /** Orientação do PDF exportado. Default: "portrait". */
+  exportOrientation?: "portrait" | "landscape";
+  /** Orientação do Excel exportado. Default: "landscape" (A4). */
+  excelOrientation?: "portrait" | "landscape";
+  pdfTitle?: string;
   onExportPDF?: (filters: ExportFilters) => void;
+  onExportExcel?: (filters: ExportFilters) => void;
   onSelectionChange?: (ids: string[]) => void;
-  onSearchChange?: (search: string) => void;
-
-  variant?: 'table' | 'cards';
+  variant?: "table" | "cards";
   renderCard?: (item: T, extraData?: Record<string, any>) => React.ReactNode;
   extraData?: Record<string, any>;
+  searchQuery?: string;
+  filterColumn?: string | null;
+  filterValue?: string;
+  filterFunction?: (item: T) => boolean;
+  /** Chave de persistência da preferência de view. Default: `datatable:viewMode:${endpoint}` */
+  storageKey?: string;
 }
 
 // ============================================================
-// Componente
+// Helpers
 // ============================================================
-export function DataTable<T extends { _id: string }>({
+function toIdString(id: string | Types.ObjectId): string {
+  return typeof id === "string" ? id : id.toString();
+}
+
+function buildEndpointUrl(endpoint: string, params: URLSearchParams): string {
+  const url = new URL(endpoint, window.location.origin);
+  if (
+    url.origin !== window.location.origin ||
+    !["http:", "https:"].includes(url.protocol)
+  ) {
+    throw new Error("Endpoint inválido");
+  }
+  params.forEach((value, key) => url.searchParams.append(key, value));
+  return url.toString();
+}
+
+function matchesFilter<T>(
+  item: T,
+  filterColumn: string | null,
+  filterValue: string,
+): boolean {
+  if (!filterValue) return true;
+  const needle = filterValue.toLowerCase();
+
+  if (!filterColumn) {
+    return Object.entries(item as Record<string, unknown>).some(
+      ([, val]) =>
+        typeof val !== "object" &&
+        val !== null &&
+        String(val).toLowerCase().includes(needle),
+    );
+  }
+
+  const cellValue = (item as unknown as Record<string, unknown>)[filterColumn];
+  return (
+    cellValue !== undefined && String(cellValue).toLowerCase().includes(needle)
+  );
+}
+
+// ============================================================
+// Skeleton
+// ============================================================
+function SkeletonTable({
+  columns,
+  rows,
+}: {
+  columns: Column<any>[];
+  rows: number;
+}) {
+  return (
+    <tbody>
+      {Array.from({ length: rows }).map((_, index) => (
+        <tr key={index} className="border-b border-sunken dark:border-page">
+          {columns.map((col, colIndex) => (
+            <td key={colIndex} className="p-4">
+              <div
+                className="h-4 bg-sunken dark:bg-strong rounded animate-pulse"
+                style={{ minWidth: col.minWidth || "4rem", width: col.width }}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </tbody>
+  );
+}
+
+// ============================================================
+// Componente principal
+// ============================================================
+export function DataTable<T extends { _id: string | Types.ObjectId }>({
   endpoint,
   columns,
-  defaultSort = { field: 'createdAt', order: 'desc' },
+  defaultSort = { field: "createdAt", order: "desc" },
   defaultLimit = 10,
-  searchPlaceholder = 'Buscar...',
-  searchContext = 'none',
-  userId,
   projectId,
   teamId,
   refreshKey = 0,
   onRowClick,
-  selectable = true,
+  selectable = false,
+  rowSelectable,
   actions = [],
   canDelete = true,
   onDelete,
-  onExportExcel,
+  exportPDF = true,
+  exportOrientation = "portrait",
+  excelOrientation = "landscape",
+  pdfTitle,
   onExportPDF,
-  variant = 'table',
+  onExportExcel,
+  variant = "table",
   renderCard,
   extraData,
   onSelectionChange,
-  onSearchChange,
-  
+  searchQuery = "",
+  filterColumn = null,
+  filterValue = "",
+  filterFunction,
+  storageKey,
 }: DataTableProps<T>) {
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(defaultLimit);
-  const [sortField, setSortField] = useState(defaultSort.field);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(defaultSort.order);
-  
-  // Novos estados de seleção
+  const [sortField, setSortField] = useState<string | null>(defaultSort.field);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc" | null>(
+    defaultSort.order,
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
-
-  // Estado da busca (DBQL ou simples)
-  const [currentDbqlId, setCurrentDbqlId] = useState('');
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   // ============================================================
-  // Filtro client-side (para searchContext === 'none')
+  // View mode (tabela ↔ cards)
   // ============================================================
-  const [filterColumn, setFilterColumn] = useState<string | null>(null);
-  const [filterValue, setFilterValue] = useState("");
-  
-  // ✅ Callback memoizado para busca DBQL
-  const handleDbqlSearch = useCallback((id: string) => {
-    setCurrentDbqlId(id);
-    setPage(1);
-    if (onSearchChange) onSearchChange(id); // 🔥 Dispara o filtro
-  }, [onSearchChange]);
+  const [currentVariant, setCurrentVariant] = useState<"table" | "cards">(
+    variant,
+  );
+  const viewModeKey = storageKey ?? `datatable:viewMode:${endpoint}`;
 
-  // ✅ Callback memoizado para busca simples (client-side)
-  const handleSimpleSearch = useCallback((column: string | null, value: string) => {
-    setFilterColumn(column);
-    setFilterValue(value);
-    setPage(1); // reseta página apenas quando o filtro muda de fato
-  }, []);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(viewModeKey);
+      if (stored === "table" || stored === "cards") {
+        setCurrentVariant(stored);
+      }
+    } catch {
+      // localStorage indisponível — ignora
+    }
+  }, [viewModeKey]);
 
-  // Sempre que selectedIds mudar, chame o callback
+  const handleViewModeChange = (mode: "table" | "cards") => {
+    setCurrentVariant(mode);
+    try {
+      window.localStorage.setItem(viewModeKey, mode);
+    } catch {
+      // ignora
+    }
+  };
+
+  // ============================================================
+  // Seleção
+  // ============================================================
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+    setSelectAll(false);
+  };
+
+  // ============================================================
+  // Dados filtrados
+  // ============================================================
+  const filteredData = (() => {
+    let result = data;
+    if (filterValue) {
+      result = result.filter((item) =>
+        matchesFilter(item, filterColumn, filterValue),
+      );
+    }
+    if (filterFunction) {
+      result = result.filter(filterFunction);
+    }
+    return result;
+  })();
+
+  const selectedItems = filteredData.filter((item) =>
+    selectedIds.includes(toIdString(item._id)),
+  );
+
+  const selectableItems = useMemo(
+    () => (rowSelectable ? filteredData.filter(rowSelectable) : filteredData),
+    [filteredData, rowSelectable],
+  );
+
+  const allSelectableChecked =
+    selectableItems.length > 0 &&
+    selectableItems.every((item) => selectedIds.includes(toIdString(item._id)));
+
+  const toggleSelectAll = () => {
+    if (selectableItems.length === 0) return;
+
+    if (allSelectableChecked) {
+      const idsToRemove = new Set(
+        selectableItems.map((item) => toIdString(item._id)),
+      );
+      setSelectedIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
+    } else {
+      const idsToAdd = selectableItems.map((item) => toIdString(item._id));
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // ============================================================
+  // Colunas
+  // ============================================================
+  const renderColumns = useMemo(() => {
+    const cols: Column<T>[] = [];
+    if (selectable) {
+      cols.push({
+        key: "__select",
+        label: "",
+        width: "40px",
+        align: "center",
+        sortable: false,
+      });
+    }
+    return [...cols, ...columns];
+  }, [selectable, columns]);
+
+  // ============================================================
+  // Medir altura do header
+  // ============================================================
+  useLayoutEffect(() => {
+    if (theadRef.current) {
+      setHeaderHeight(theadRef.current.offsetHeight);
+    }
+  }, [columns, selectable]);
+
+  // ============================================================
+  // Callback de seleção
+  // ============================================================
   useEffect(() => {
     onSelectionChange?.(selectedIds);
   }, [selectedIds, onSelectionChange]);
 
-
-  // Exportação com filtros atuais
-  const buildExportFilters = useCallback((): ExportFilters => {
-    return {
-      q: currentDbqlId || undefined,
-      projectId: projectId || undefined,
-    };
-  }, [currentDbqlId, projectId]);
-
-  const exportActions = useMemo(() => {
-    const acts: DataTableAction<T>[] = [];
-    if (onExportPDF) {
-      acts.push({
-        label: "PDF",
-        icon: <FileText className="w-4 h-4" />,
-        onClick: () => onExportPDF(buildExportFilters()),
-        requiresSelection: false,
-      });
-    }
-    if (onExportExcel) {
-      acts.push({
-        label: "Excel",
-        icon: <FileSpreadsheet className="w-4 h-4" />,
-        onClick: () => onExportExcel(buildExportFilters()),
-        requiresSelection: false,
-      });
-    }
-    return acts;
-  }, [onExportPDF, onExportExcel, buildExportFilters]);
-
   // ============================================================
-  // Busca de dados (server-side para DBQL, client-side para simples)
+  // Fetch
   // ============================================================
   useEffect(() => {
     let cancelled = false;
@@ -174,41 +371,36 @@ export function DataTable<T extends { _id: string }>({
         const params = new URLSearchParams({
           page: String(page),
           limit: String(limit),
-          sort: sortField,
-          order: sortOrder,
           ...(projectId && { projectId }),
           ...(teamId && { teamId }),
         });
+        if (sortField) params.set("sort", sortField);
+        if (sortOrder) params.set("order", sortOrder);
+        if (searchQuery) params.set("q", searchQuery);
 
-        if (searchContext !== 'none' && currentDbqlId) {
-          params.set('q', currentDbqlId);
-        }
+        const res = await fetch(buildEndpointUrl(endpoint, params));
+        if (!res.ok) throw new Error("Erro ao buscar dados");
 
-        const res = await fetch(`${endpoint}?${params}`);
-        if (res.ok) {
-          const json = await res.json();
-          if (!cancelled) {
-            // ✅ Extrai os dados e o total geral
-            const items = json.data || [];
-            const totalItems = json.total ?? items.length; // total deve ser o total geral (14)
+        const json = await res.json();
+        const items: T[] = Array.isArray(json) ? json : (json.data ?? []);
+        const totalItems: number = Array.isArray(json)
+          ? json.length
+          : (json.total ?? items.length);
 
-            setData(items);
-            setTotal(totalItems);
+        if (!cancelled) {
+          setData(items);
+          setTotal(totalItems);
 
-            // ✅ Calcula totalPages localmente - nunca confiar em json.totalPages
-            const calculatedTotalPages = Math.ceil(totalItems / limit);
-
-            // ✅ Se a página atual exceder o total de páginas, volta para a última
-            if (page > calculatedTotalPages) {
-              setPage(Math.max(1, calculatedTotalPages));
-            }
-
-            // ✅ Limpa seleção se os itens não estão mais na lista
-            const newIds = items.map((item: T) => item._id);
-            setSelectedIds(prev => prev.filter(id => newIds.includes(id)));
+          const calculatedTotalPages = Math.max(
+            1,
+            Math.ceil(totalItems / limit),
+          );
+          if (page > calculatedTotalPages) {
+            setPage(calculatedTotalPages);
           }
-        } else {
-          console.error('Erro ao buscar dados', res.statusText);
+
+          const newIds = items.map((item) => toIdString(item._id));
+          setSelectedIds((prev) => prev.filter((id) => newIds.includes(id)));
         }
       } catch (error) {
         if (!cancelled) console.error(error);
@@ -218,396 +410,545 @@ export function DataTable<T extends { _id: string }>({
     };
 
     loadData();
-
     return () => {
       cancelled = true;
     };
-  }, [endpoint, page, limit, sortField, sortOrder, teamId, currentDbqlId, projectId, refreshKey, searchContext]);
+  }, [
+    endpoint,
+    page,
+    limit,
+    sortField,
+    sortOrder,
+    teamId,
+    searchQuery,
+    projectId,
+    refreshKey,
+  ]);
 
   // ============================================================
-  // Filtro client-side
+  // Exportação
   // ============================================================
-  const filteredData = useMemo(() => {
-    if (searchContext !== 'none') return data;
-    if (!filterValue) return data;
+  const fetchAllForExport = async (): Promise<T[]> => {
+    try {
+      const params = new URLSearchParams({
+        all: "true",
+        ...(projectId && { projectId }),
+        ...(teamId && { teamId }),
+      });
+      if (sortField) params.set("sort", sortField);
+      if (sortOrder) params.set("order", sortOrder);
+      if (searchQuery) params.set("q", searchQuery);
 
-    return data.filter((item) => {
-      const value = String(filterValue).toLowerCase();
-      if (!filterColumn) {
-        return Object.entries(item).some(([val]) => {
-          if (typeof val === 'object' || val === null) return false;
-          return String(val).toLowerCase().includes(value);
-        });
-      } else {
-        const cellValue = (item as any)[filterColumn];
-        if (cellValue === undefined) return false;
-        return String(cellValue).toLowerCase().includes(value);
+      const res = await fetch(buildEndpointUrl(endpoint, params));
+      if (!res.ok) throw new Error("Falha ao buscar todos os dados");
+
+      const json = await res.json();
+      let items: T[] = Array.isArray(json) ? json : (json.data ?? []);
+
+      if (filterValue) {
+        items = items.filter((item) =>
+          matchesFilter(item, filterColumn, filterValue),
+        );
       }
-    });
-  }, [data, filterColumn, filterValue, searchContext]);
-
-  // ============================================================
-  // Seleção
-  // ============================================================
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-    setSelectAll(false);
-  }, []);
-
-  const toggleSelectAll = () => {
-    if (selectAll) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredData.map(item => item._id));
+      if (filterFunction) {
+        items = items.filter(filterFunction);
+      }
+      return items;
+    } catch (error) {
+      console.error("Erro ao buscar todos os dados para exportação:", error);
+      return [];
     }
-    setSelectAll(!selectAll);
   };
 
-  const selectedItems = useMemo(
-    () => filteredData.filter(item => selectedIds.includes(item._id)),
-    [filteredData, selectedIds]
-  );
-
-  // Ações nativas e customizadas
-  const nativeActions = useMemo(() => {
-    const act: DataTableAction<T>[] = [];
-    if (canDelete && onDelete) {
-      act.push({
-        label: 'Excluir',
-        icon: <Trash2 className="w-4 h-4" />,
-        onClick: (ids) => onDelete(ids),
-        disabled: false,
-      });
-    }
-    return act;
-  }, [canDelete, onDelete]);
-
-  const allActions = [...exportActions, ...nativeActions, ...actions];
-
-  // Renderiza botões na barra de ações, mesmo sem seleção
-  // (se exportActions não estiver vazio, mostra uma barra separada)
-  const showExportBar = exportActions.length > 0 && selectedIds.length === 0;
+  // ============================================================
+  // Colunas para PDF (não expande sub-colunas)
+  // ============================================================
+  const buildPDFColumns = () =>
+    columns
+      .filter((col) => col.key !== "__select" && col.exportable !== false)
+      .filter((col) => {
+        const key = String(col.key).toLowerCase();
+        return key !== "actions" && !key.includes("action");
+      })
+      .map((col) => ({
+        key: String(col.key),
+        label: col.label,
+        width: col.width,
+        render: col.render
+          ? (item: any) => col.render!(item, extraData)
+          : undefined,
+        pdfCellRenderer: col.pdfCellRenderer
+          ? (doc: any, cell: any, item: any) =>
+              col.pdfCellRenderer!(doc, cell, item, extraData)
+          : undefined,
+      }));
 
   // ============================================================
-  // Ordenação e estilos (como antes)
+  // Colunas para Excel (expande `excelSubColumns`)
+  // ============================================================
+  interface BuiltExcelColumn {
+    key: string;
+    label: string;
+    width?: string;
+    render?: (item: any) => any;
+    excelCellRenderer?: (cell: any, item: any) => void;
+  }
+
+  const buildExcelColumns = (): BuiltExcelColumn[] => {
+    const out: BuiltExcelColumn[] = [];
+
+    const baseColumns = columns
+      .filter((col) => col.key !== "__select" && col.exportable !== false)
+      .filter((col) => {
+        const key = String(col.key).toLowerCase();
+        return key !== "actions" && !key.includes("action");
+      });
+
+    baseColumns.forEach((col) => {
+      // 🔑 Expansão em sub-colunas
+      if (col.excelSubColumns && col.excelSubColumns.length > 0) {
+        col.excelSubColumns.forEach((sub, idx) => {
+          out.push({
+            key: `${String(col.key)}.${idx}`,
+            label: sub.label,
+            width: sub.width ? `${sub.width}px` : undefined,
+            render: (item: any) => sub.render(item, extraData),
+            excelCellRenderer: sub.excelCellRenderer
+              ? (cell: any, item: any) =>
+                  sub.excelCellRenderer!(cell, item, extraData)
+              : undefined,
+          });
+        });
+        return;
+      }
+
+      // Coluna normal (1:1)
+      out.push({
+        key: String(col.key),
+        label: col.label,
+        width: col.width,
+        render: col.render
+          ? (item: any) => col.render!(item, extraData)
+          : undefined,
+        excelCellRenderer: col.excelCellRenderer
+          ? (cell: any, item: any) =>
+              col.excelCellRenderer!(cell, item, extraData)
+          : undefined,
+      });
+    });
+
+    return out;
+  };
+
+  const handleNativeExportExcel = async () => {
+    const exportData = await fetchAllForExport();
+    const finalData = exportData.length > 0 ? exportData : filteredData;
+
+    const safeTitle = pdfTitle || "Relatório";
+    const safeFilename =
+      `Debit-Board_Relatorio_${safeTitle}`
+        .replace(/[^a-zA-Z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") + ".xlsx";
+
+    exportTableToExcel({
+      title: safeTitle,
+      subtitle: "Debit Board - Relatório de Dados",
+      columns: buildExcelColumns(),
+      data: finalData,
+      filename: safeFilename,
+      orientation: excelOrientation,
+      extraData,
+    });
+  };
+
+  const handleNativeExportPDF = async () => {
+    const exportData = await fetchAllForExport();
+    const finalData = exportData.length > 0 ? exportData : filteredData;
+
+    const safeTitle = pdfTitle || "Relatório";
+    const safeFilename =
+      `Debit-Board_Relatorio_${safeTitle}`
+        .replace(/[^a-zA-Z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") + ".pdf";
+
+    exportTableToPDF({
+      title: safeTitle,
+      subtitle: "Debit Board - Relatório de Dados",
+      columns: buildPDFColumns(),
+      data: finalData,
+      filename: safeFilename,
+      orientation: exportOrientation,
+      extraData,
+    });
+  };
+
+  // ============================================================
+  // Ações
+  // ============================================================
+  const exportActions: DataTableAction<T>[] = [];
+
+  if (onExportPDF) {
+    exportActions.push({
+      label: "PDF",
+      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600" />,
+      onClick: () => onExportPDF({ projectId }),
+      requiresSelection: false,
+    });
+  } else if (exportPDF !== false) {
+    exportActions.push({
+      label: "PDF",
+      icon: <FaFilePdf className="w-3.5 h-3.5 text-red-600" />,
+      onClick: handleNativeExportPDF,
+      requiresSelection: false,
+    });
+  }
+
+  if (onExportExcel) {
+    exportActions.push({
+      label: "Excel",
+      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500" />,
+      onClick: () => onExportExcel({ projectId }),
+      requiresSelection: false,
+    });
+  } else {
+    exportActions.push({
+      label: "Excel",
+      icon: <FaFileExcel className="w-3.5 h-3.5 text-green-500" />,
+      onClick: handleNativeExportExcel,
+      requiresSelection: false,
+    });
+  }
+
+  const nativeActions: DataTableAction<T>[] = [];
+  if (canDelete && onDelete) {
+    nativeActions.push({
+      label: "Excluir",
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      onClick: (ids, items) => onDelete(ids, items),
+      requiresSelection: true,
+    });
+  }
+
+  const bulkActions: DataTableAction<T>[] = [
+    ...nativeActions,
+    ...actions.map((a) => ({ ...a, requiresSelection: true })),
+  ];
+
+  // ============================================================
+  // Ordenação
   // ============================================================
   const handleSort = (col: Column<T>) => {
     const field = col.sortKey || String(col.key);
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
+
+    if (sortField !== field) {
       setSortField(field);
-      setSortOrder('asc');
+      setSortOrder("asc");
+      return;
     }
+    if (sortOrder === "asc") {
+      setSortOrder("desc");
+      return;
+    }
+    if (sortOrder === "desc") {
+      setSortField(null);
+      setSortOrder(null);
+      return;
+    }
+    setSortOrder("asc");
   };
 
+  // ============================================================
+  // Estilos
+  // ============================================================
   const totalPages = Math.ceil(total / limit);
 
-  const getCellStyle = (col: Column<T>) => {
+  const getCellStyle = (col: Column<T>): React.CSSProperties => {
     const style: React.CSSProperties = {};
     if (col.width) style.width = col.width;
     if (col.minWidth) style.minWidth = col.minWidth;
-    if (col.nowrap) style.whiteSpace = 'nowrap';
+    if (col.nowrap) style.whiteSpace = "nowrap";
     if (col.align) style.textAlign = col.align;
     return style;
   };
 
   const getCellClassName = (col: Column<T>, item: T) => {
     const base = col.className;
-    if (typeof base === 'function') return base(item);
-    return base || '';
+    return typeof base === "function" ? base(item) : base || "";
   };
 
   // ============================================================
-  // Renderização das colunas (incluindo coluna de seleção)
+  // Render — Cards
   // ============================================================
-  const renderColumns = useMemo(() => {
-    const cols: Column<T>[] = [];
-    if (selectable) {
-      cols.push({
-        key: '__select',
-        label: '',
-        width: '40px',
-        align: 'center',
-        sortable: false,
-        render: (item: T) => (
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(item._id)}
-            onChange={() => toggleSelection(item._id)}
-            className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
-          />
-        ),
-        headerClassName: 'w-10',
-      });
-    }
-    // Adiciona colunas originais
-    for (const col of columns) {
-      cols.push(col);
-    }
-    return cols;
-  }, [selectable, columns, selectedIds, toggleSelection]);
-
-    // ============================
-  // RENDER CARDS MODE
-  // ============================
-  if (variant === 'cards') {
+  if (currentVariant === "cards") {
     return (
-      <div className="space-y-4">
-        {searchContext !== 'none' ? (
-          <DBQLAdvancedSearch onSearch={handleDbqlSearch} userId={userId} placeholder={searchPlaceholder} context={searchContext} />
-        ) : (
-          <SimpleColumnSearch columns={columns} onSearch={handleSimpleSearch} placeholder={searchPlaceholder} />
-        )}
+      <div className="space-y-3">
+        <TableToolbar
+          currentPage={page}
+          totalItems={total}
+          pageSize={limit}
+          pageSizeOptions={[5, 10, 25, 50, 100]}
+          onPageSizeChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          exportActions={exportActions}
+          viewMode={currentVariant}
+          onViewModeChange={
+            typeof renderCard === "function" ? handleViewModeChange : undefined
+          }
+        />
 
-        {showExportBar && (
-          <div className="flex justify-end gap-2">
-            {exportActions.map((action, idx) => (
-              <button key={idx} onClick={() => action.onClick([], [])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20">
-                {action.icon}{action.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {selectable && selectedIds.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light rounded-xl shadow-sm">
-            <div className="text-sm">{selectedIds.length} selecionado(s)</div>
-            <div className="flex gap-2">
-              {allActions.map((action, idx) => (
-                <button key={idx} onClick={() => action.onClick(selectedIds, selectedItems)} disabled={action.disabled} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 disabled:opacity-40">
-                  {action.label}
-                </button>
+        <div className="relative">
+          {loading && data.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+                />
               ))}
             </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {loading ? (
-            <div className="col-span-full p-4 text-center">
-              <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-apple-tertiary-light" />
-            </div>
-          ) : filteredData.length === 0 ? (
-            <div className="col-span-full p-4 text-center text-apple-tertiary-light">Nenhum registro encontrado.</div>
           ) : (
-            filteredData.map((item) => (
-              <div key={item._id} onClick={() => onRowClick?.(item)} className="cursor-pointer">
-                {renderCard ? renderCard(item, extraData) : <div>Card</div>}
+            <>
+              <div
+                className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 ${
+                  loading ? "blur-sm opacity-60" : ""
+                }`}
+              >
+                {filteredData.length === 0 && !loading ? (
+                  <div className="col-span-full p-4 text-center text-muted">
+                    Nenhum registro encontrado.
+                  </div>
+                ) : (
+                  filteredData.map((item) => (
+                    <div
+                      key={toIdString(item._id)}
+                      onClick={() => onRowClick?.(item)}
+                      className="cursor-pointer"
+                    >
+                      {renderCard ? (
+                        renderCard(item, extraData)
+                      ) : (
+                        <div>Card</div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-            ))
+              {loading && data.length > 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+                  <LoaderCircle className="w-10 h-10 animate-spin text-brand" />
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {!loading && total > 0 && (
-          <div className="flex items-center justify-between text-sm">
-            <div>Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}</div>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1 rounded border disabled:opacity-50">Anterior</button>
-              <span>Página {page} de {totalPages}</span>
-              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-3 py-1 rounded border disabled:opacity-50">Próxima</button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          currentPage={page}
+          totalPages={totalPages}
+          pageSize={limit}
+          onPageChange={setPage}
+          selectable={selectable}
+          selectedIds={selectedIds}
+          selectedItems={selectedItems}
+          onClearSelection={() => {
+            setSelectedIds([]);
+            setSelectAll(false);
+          }}
+          bulkActions={bulkActions}
+        />
       </div>
     );
   }
 
   // ============================================================
-  // JSX
+  // Render — Tabela
   // ============================================================
   return (
-    <div className="space-y-4">
-      {/* Barra de busca */}
-      {searchContext !== 'none' ? (
-        <DBQLAdvancedSearch
-          onSearch={handleDbqlSearch}
-          userId={userId}
-          placeholder={searchPlaceholder}
-          context={searchContext}
-        />
-      ) : (
-        <SimpleColumnSearch
-          columns={columns}
-          onSearch={handleSimpleSearch}
-          placeholder={searchPlaceholder}
-        />
-      )}
+    <div className="space-y-3">
+      <TableToolbar
+        currentPage={page}
+        totalItems={total}
+        pageSize={limit}
+        pageSizeOptions={[5, 10, 25, 50, 100]}
+        onPageSizeChange={(newLimit) => {
+          setLimit(newLimit);
+          setPage(1);
+        }}
+        exportActions={exportActions}
+        viewMode={currentVariant}
+        onViewModeChange={
+          typeof renderCard === "function" ? handleViewModeChange : undefined
+        }
+      />
 
-      {/* Barra de exportação (sem seleção) */}
-      {showExportBar && (
-        <div className="flex justify-end gap-2">
-          {exportActions.map((action, idx) => (
-            <button
-              key={idx}
-              onClick={() => action.onClick([], [])}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20"
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Barra de ações (aparece quando há seleção) */}
-      {selectable && selectedIds.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2 bg-apple-bg-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-xl shadow-sm">
-          <div className="flex items-center gap-2 text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
-            <span className="font-semibold">{selectedIds.length} selecionado(s)</span>
-            <button
-              onClick={() => {
-                setSelectedIds([]);
-                setSelectAll(false);
-              }}
-              className="text-apple-blue hover:underline"
-            >
-              Limpar
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            {allActions.map((action, idx) => (
-              <button
-                key={idx}
-                onClick={() => action.onClick(selectedIds, selectedItems)}
-                disabled={action.disabled || (action.requiresSelection && selectedIds.length === 0)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  action.label === 'Excluir'
-                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                    : 'bg-apple-tertiary-light/10 text-apple-label-light dark:text-apple-label-dark hover:bg-apple-tertiary-light/20'
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {action.icon}
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tabela */}
-      <div className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-sm text-left" style={{ tableLayout: renderColumns.some(c => c.width) ? 'fixed' : 'auto' }}>
-          <thead className="bg-apple-tertiary-light/10 dark:bg-apple-tertiary-dark/20 text-apple-tertiary-light dark:text-apple-tertiary-dark border-b border-apple-border-light dark:border-apple-border-dark">
+      <div className="relative bg-page border border-sunken dark:border-page rounded-lg overflow-hidden shadow-sm hover:drop-shadow-lg">
+        <table
+          className="w-full text-sm text-left"
+          style={{
+            tableLayout: renderColumns.some((c) => c.width) ? "fixed" : "auto",
+          }}
+        >
+          <thead
+            ref={theadRef}
+            className="bg-elevated dark:bg-sunken text-subtle border-b border-sunken dark:border-page"
+          >
             <tr>
-              {/* Checkbox para selecionar todos */}
               {selectable && (
-                <th className="p-4 w-10 text-center">
+                <th
+                  className="p-4 w-10 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
-                    checked={selectAll && filteredData.length > 0}
+                    checked={allSelectableChecked}
                     onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+                    disabled={selectableItems.length === 0}
+                    title={
+                      selectableItems.length === 0
+                        ? "Nenhum item selecionável nesta página"
+                        : allSelectableChecked
+                          ? "Desmarcar todos"
+                          : "Selecionar todos os itens editáveis"
+                    }
+                    className="w-4 h-4 rounded border border-sunken dark:border-strong text-brand disabled:opacity-30 disabled:cursor-not-allowed"
                   />
                 </th>
               )}
               {renderColumns
-                .filter(col => col.key !== '__select')
+                .filter((col) => col.key !== "__select")
                 .map((col) => (
                   <th
                     key={String(col.key)}
-                    className={`p-4 ${col.sortable ? 'cursor-pointer' : ''} font-medium ${col.headerClassName || ''}`}
+                    className={`group p-4 border-r border-sunken dark:border-page hover:text-link last:border-none ${
+                      col.sortable !== false ? "cursor-pointer" : ""
+                    } font-medium ${col.headerClassName || ""}`}
                     style={getCellStyle(col)}
                     onClick={() => col.sortable !== false && handleSort(col)}
                   >
-                    <span className="flex items-center gap-1">
-                      {col.label}
-                      {col.sortable !== false && sortField === String(col.key) && (
-                        sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
+                    <span className="grid-cols-2 flex">
+                      <span
+                        className={`flex-1 grid-flow-col-dense ${
+                          col.headerClassName || ""
+                        }`}
+                      >
+                        {col.label}
+                      </span>
+                      <span className="w-4">
+                        {col.sortable !== false &&
+                        sortField === String(col.key) ? (
+                          sortOrder === "asc" ? (
+                            <ListSortAscending className="w-4 h-4" />
+                          ) : (
+                            <ListSortDescending className="w-4 h-4" />
+                          )
+                        ) : (
+                          col.sortable && (
+                            <span className="min-w-4 h-4 opacity-40 group-hover:opacity-100">
+                              <ListChevronsUpDown className="w-4 h-4 text-muted" />
+                            </span>
+                          )
+                        )}
+                      </span>
                     </span>
                   </th>
                 ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-apple-border-light dark:divide-apple-border-dark">
-            {loading ? (
-              <tr>
-                <td colSpan={renderColumns.length} className="p-4 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
-                  <LoaderCircle className="w-10 h-10 mx-auto animate-spin text-apple-tertiary-light dark:text-apple-tertiary-dark" />
-                  Carregando...
-                </td>
-              </tr>
-            ) : filteredData.length === 0 ? (
-              <tr>
-                <td colSpan={renderColumns.length} className="p-4 text-center text-apple-tertiary-light dark:text-apple-tertiary-dark">
-                  Nenhum registro encontrado.
-                </td>
-              </tr>
-            ) : (
-              filteredData.map((item) => (
-                <tr
-                  key={item._id}
-                  onClick={() => onRowClick?.(item)}
-                  className={`hover:bg-apple-bg-light dark:hover:bg-apple-card-dark/80 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
-                >
-                  {/* Coluna de seleção */}
-                  {selectable && (
-                    <td className="p-4 text-center" style={getCellStyle(renderColumns[0])}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(item._id)}
-                        onChange={() => toggleSelection(item._id)}
-                        className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
-                      />
-                    </td>
-                  )}
-                  {renderColumns
-                    .filter(col => col.key !== '__select')
-                    .map((col) => (
-                      <td
-                        key={String(col.key)}
-                        className={`p-4 ${getCellClassName(col, item)}`}
-                        style={getCellStyle(col)}
-                      >
-                        {col.render ? col.render(item, extraData) : (item as any)[col.key] as React.ReactNode}
-                      </td>
-                    ))}
+
+          {loading && data.length === 0 ? (
+            <SkeletonTable columns={renderColumns} rows={limit} />
+          ) : (
+            <tbody
+              className={`divide-y ${loading ? "blur-sm opacity-60" : ""}`}
+            >
+              {filteredData.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={renderColumns.length}
+                    className="p-4 text-center text-muted dark:text-muted"
+                  >
+                    Nenhum registro encontrado.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
+              ) : (
+                filteredData.map((item, index) => (
+                  <tr
+                    key={toIdString(item._id)}
+                    onClick={() => onRowClick?.(item)}
+                    className={`hover:bg-sunken border-b border-page dark:border-strong transition-colors ${
+                      index % 2 === 0 ? "bg-surface" : "bg-elevated"
+                    } ${onRowClick ? "cursor-pointer" : ""}`}
+                  >
+                    {selectable && (
+                      <td
+                        className="p-4 text-center"
+                        style={getCellStyle(renderColumns[0])}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(toIdString(item._id))}
+                          onChange={() => toggleSelection(toIdString(item._id))}
+                          disabled={
+                            rowSelectable ? !rowSelectable(item) : false
+                          }
+                          title={
+                            rowSelectable && !rowSelectable(item)
+                              ? "Você só pode selecionar itens criados por você"
+                              : undefined
+                          }
+                          className="w-4 h-4 rounded border-sunken dark:border-strong text-brand focus:ring-brand disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
+                      </td>
+                    )}
+                    {renderColumns
+                      .filter((col) => col.key !== "__select")
+                      .map((col) => (
+                        <td
+                          key={String(col.key)}
+                          className={`p-4 ${getCellClassName(col, item)}`}
+                          style={getCellStyle(col)}
+                        >
+                          {col.render
+                            ? col.render(item, extraData)
+                            : ((item as any)[col.key] as React.ReactNode)}
+                        </td>
+                      ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          )}
         </table>
+
+        {loading && data.length > 0 && (
+          <div
+            className="absolute inset-x-0 bg-white/50 backdrop-blur-sm flex items-center justify-center"
+            style={{ top: headerHeight, bottom: 0 }}
+          >
+            <LoaderCircle className="w-10 h-10 animate-spin text-brand" />
+          </div>
+        )}
       </div>
 
-      {/* Paginação */}
-      {!loading && total > 0 && (
-        <div className="flex items-center justify-between text-sm text-apple-tertiary-light dark:text-apple-tertiary-dark">
-          <div>
-            Mostrando {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} de {total}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-3 py-1 rounded border border-apple-border-light dark:border-apple-border-dark disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <span>Página {page} de {totalPages}</span>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1 rounded border border-apple-border-light dark:border-apple-border-dark disabled:opacity-50"
-            >
-              Próxima
-            </button>
-          </div>
-          <div>
-            <select
-              value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              className="border border-apple-border-light dark:border-apple-border-dark rounded px-2 py-1 bg-transparent"
-            >
-              {[5, 10, 25, 50].map((l) => (
-                <option key={l} value={l}>{l} por página</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={page}
+        totalPages={totalPages}
+        pageSize={limit}
+        onPageChange={setPage}
+        selectable={selectable}
+        selectedIds={selectedIds}
+        selectedItems={selectedItems}
+        onClearSelection={() => {
+          setSelectedIds([]);
+          setSelectAll(false);
+        }}
+        bulkActions={bulkActions}
+      />
     </div>
   );
 }

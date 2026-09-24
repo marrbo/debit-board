@@ -4,9 +4,23 @@ import { Project } from '@/models/Project';
 import { Team } from '@/models/Team';
 import { getServerSessionIds } from '@/lib/session-server';
 
+/**
+ * Cria recurso do endpoint /api/projects/bulk-assign-team.
+ *
+ * Este endpoint expõe a operação post em /api/projects/bulk-assign-team.
+ *
+ * @summary Cria recurso do endpoint /api/projects/bulk-assign-team
+ * @tags Projects, Bulk Assign Team
+ * @route POST /api/projects/bulk-assign-team
+ * @async
+ * @function POST
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
 export async function POST(req: NextRequest) {
   const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId;
+  
   await connectToDatabase();
 
   const body = await req.json();

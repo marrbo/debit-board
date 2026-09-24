@@ -1,64 +1,72 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+"use client";
 
-export default function WikiEditor({ slug }: { slug: string }) {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
+
+interface WikiEditorProps {
+  slug: string;
+  initialContent: string;
+}
+
+export default function WikiEditor({ slug, initialContent }: WikiEditorProps) {
   const router = useRouter();
-  const [content, setContent] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
-
-  // Carrega o conteúdo da API
-  useEffect(() => {
-    fetch(`/api/wiki/${slug}`)
-      .then((res) => res.json())
-      .then((data) => setContent(data.content || ''))
-      .finally(() => setIsLoading(false));
-  }, [slug]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
-    const res = await fetch(`/api/wiki/${slug}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      router.push(`/wiki/${slug}`); // Volta para a visualização (sem o ?edit)
-    } else {
-      alert('Erro ao salvar a página.');
+    setError(null);
+    try {
+      const res = await fetch(`/api/wiki/${slug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) {
+        let msg = "Erro ao salvar a página.";
+        try {
+          const data = await res.json();
+          if (data?.error) msg = data.error;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      router.push(`/wiki/${slug}`);
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+      setSaving(false);
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center">Carregando...</div>;
-
   return (
     <div className="h-full flex flex-col bg-zinc-50 dark:bg-zinc-900">
-      {/* Barra de Ferramentas */}
       <div className="h-14 border-b bg-white dark:bg-zinc-800 px-6 flex items-center justify-between shrink-0">
-        <h2 className="text-sm font-medium text-zinc-500">Editando: <span className="text-zinc-900 dark:text-gray-900 dark:text-white">{slug}</span></h2>
+        <h2 className="text-sm px-2 font-medium text-zinc-500">
+          Editando:{" "}
+          <span className="text-zinc-900 dark:text-white">{slug}</span>
+        </h2>
         <div className="flex gap-3">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 border border-apple-border-light dark:border-apple-border-dark text-apple-label-light dark:text-apple-label-dark px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-tertiary-light/30"
+            className="inline-flex items-center gap-1.5 border border-default dark:border-strong text-heading dark:text-heading px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 border border-apple-blue text-apple-blue px-3 py-1.5 rounded-2xl text-xs font-medium transition-colors outline-none focus:ring-2 focus:ring-apple-blue/30"
+            className="inline-flex items-center gap-1.5 border border-brand text-brand px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
           >
-            {saving ? 'Salvando...' : 'Salvar'}
+            {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
 
-      {/* Área Split */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden px-2">
         <div className="w-1/2 border-r border-zinc-200 dark:border-zinc-700 flex flex-col bg-[#fafafa] dark:bg-[#1e1e1e]">
           <textarea
             value={content}
@@ -69,10 +77,16 @@ export default function WikiEditor({ slug }: { slug: string }) {
         </div>
         <div className="w-1/2 overflow-y-auto p-8 bg-white dark:bg-zinc-900">
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+            <MarkdownRenderer content={content} />
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-lg text-sm shadow-sm">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

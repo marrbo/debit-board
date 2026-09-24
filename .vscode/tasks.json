@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: reiniciar servidor",
+      "type": "shell",
+      "command": "pkill -f 'next dev' || true; sleep 1; npm run dev:docker",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "db: sincronizar secrets do Keycloak",
+      "type": "shell",
+      "command": "bash scripts/keycloak-sync-secrets.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: restore dump (último)",
+      "type": "shell",
+      "command": "ls -t /var/lib/debit-board/dumps | head -1 | xargs -I {} echo 'Run restore manualmente pelo /settings/admin/db-tools: {}'",
+      "problemMatcher": []
+    },
+    {
+      "label": "build: type check",
+      "type": "shell",
+      "command": "npx tsc --noEmit",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "test: watch",
+      "type": "shell",
+      "command": "npm run test:watch",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

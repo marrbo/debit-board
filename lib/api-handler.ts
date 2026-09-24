@@ -1,9 +1,10 @@
 // lib/api-handler.ts
-import { type NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { getServerSessionIds } from '@/lib/session-server';
-import { parseDBQL } from '@/lib/parseDBQL';
-import type { Model, PipelineStage } from 'mongoose';
+import { type NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { parseDBQL } from "@/lib/parseDBQL";
+import type { Model, PipelineStage } from "mongoose";
+import { requireSession } from "./api-auth";
+import { toObjectId } from "./mongo-id";
 
 interface ProjectionObject {
   [key: string]: ProjectionValue;
@@ -22,41 +23,45 @@ interface GenericGetOptions<T> {
   customPipeline?: PipelineStage[];
   additionalMatch?: Record<string, unknown>;
   overrideSearchQuery?: string;
-  all?: boolean; // ✅ suporta exportação de todos os dados
+  all?: boolean;
+  /** 🔥 Recursos globais (ex.: VulnerabilityPattern) não possuem tenantId. */
+  skipTenantFilter?: boolean;
 }
 
 export async function handleGenericGet<T>(
   req: NextRequest,
-  options: GenericGetOptions<T>
+  options: GenericGetOptions<T>,
 ) {
   const {
     model,
-    defaultSort = 'createdAt',
+    defaultSort = "createdAt",
     projection = {},
     customPipeline = [],
     additionalMatch = {},
     overrideSearchQuery,
     all = false,
+    skipTenantFilter = false, // 🔥 default: comportamento atual
   } = options;
 
-  const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantId = toObjectId(auth.user.tenantId);
 
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
 
-  // Prioridade: override (banco) -> URL param -> vazio
-  const searchQuery = overrideSearchQuery || searchParams.get('search') || '';
+  const searchQuery = overrideSearchQuery || searchParams.get("search") || "";
 
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '10', 10);
-  const sortField = searchParams.get('sort') || defaultSort;
-  const sortOrder = searchParams.get('order') === 'asc' ? 1 : -1;
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "10", 10);
+  const sortField = searchParams.get("sort") || defaultSort;
+  const sortOrder = searchParams.get("order") === "asc" ? 1 : -1;
 
-  // Monta o match base
+  // Match base
   const baseMatch: Record<string, unknown> = { ...additionalMatch };
-  if (tenantId) {
+  if (tenantId && !skipTenantFilter) {
     baseMatch.tenantId = tenantId;
   }
 
@@ -67,20 +72,23 @@ export async function handleGenericGet<T>(
       const parsedMatch = parseDBQL(searchQuery);
       if (parsedMatch && Object.keys(parsedMatch).length > 0) {
         const combinedMatch: Record<string, unknown> = { ...baseMatch };
-        combinedMatch['$and'] = [baseMatch, parsedMatch];
+        combinedMatch["$and"] = [baseMatch, parsedMatch];
         finalMatch = combinedMatch;
       } else {
         finalMatch = baseMatch;
       }
     } catch (err) {
-      console.error('Erro ao parsear DBQL:', err);
-      return NextResponse.json({ error: 'Invalid DBQL query' }, { status: 400 });
+      console.error("Erro ao parsear DBQL:", err);
+      return NextResponse.json(
+        { error: "Invalid DBQL query" },
+        { status: 400 },
+      );
     }
   } else {
     finalMatch = baseMatch;
   }
 
-  // Se all=true, ignora paginação e retorna todos os documentos
+  // all=true → ignora paginação
   if (all) {
     const pipeline: PipelineStage[] = [
       { $match: finalMatch },
@@ -99,7 +107,7 @@ export async function handleGenericGet<T>(
     });
   }
 
-  // Pipeline com paginação (facet)
+  // Pipeline com paginação
   const pipeline: PipelineStage[] = [
     { $match: finalMatch },
     ...customPipeline,
@@ -111,7 +119,7 @@ export async function handleGenericGet<T>(
           { $limit: limit },
           { $project: projection },
         ],
-        total: [{ $count: 'count' }],
+        total: [{ $count: "count" }],
       },
     },
   ];
@@ -119,13 +127,20 @@ export async function handleGenericGet<T>(
   const results = await model.aggregate<FacetResult<T>>(pipeline);
 
   if (!results || results.length === 0) {
-    return NextResponse.json({ data: [], total: 0, page, limit, totalPages: 0 });
+    return NextResponse.json({
+      data: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+    });
   }
 
   const result = results[0];
   const data = result.data ?? [];
   const totalArray = result.total;
-  const totalCount = (totalArray && totalArray.length > 0) ? totalArray[0].count : 0;
+  const totalCount =
+    totalArray && totalArray.length > 0 ? totalArray[0].count : 0;
 
   return NextResponse.json({
     data,

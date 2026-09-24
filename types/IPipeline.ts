@@ -1,8 +1,9 @@
 // types/IPipeline.ts
+import type mongoose from 'mongoose';
 import type { Document } from 'mongoose';
 
 export interface IPipeline extends Document {
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   repositoryId: string; // referência ao _id do Repository
   name: string;
   type: 'yaml' | 'classic'; // tipo de pipeline

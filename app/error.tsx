@@ -1,12 +1,20 @@
 // app/error.tsx
-'use client';
+"use client";
 
-export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   console.log(error);
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-8 max-w-lg shadow-sm">
-        <h2 className="text-xl font-bold text-red-400 mb-2">Algo deu errado!</h2>
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-8 max-w-lg shadow-sm hover:drop-shadow-lg">
+        <h2 className="text-xl font-bold text-red-400 mb-2">
+          Algo deu errado!
+        </h2>
         <p className="text-sm text-slate-300 mb-4">
           Ocorreu um erro inesperado ao carregar esta página.
         </p>

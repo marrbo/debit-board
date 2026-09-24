@@ -1,62 +1,172 @@
-// components/PageHeader.tsx
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
+import { SearchCode, SearchX } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import DBQLAdvancedSearch from "@/components/dbql/DBQLAdvancedSearch";
+import { SimpleColumnSearch } from "@/components/dbql/SimpleColumnSearch";
+import { useSearchVisible } from "@/hooks/useLocalSettings";
+import AIChatButton from "./ai/AIChatbutton";
+
+export type PageSearchConfig =
+  | {
+      type: "advanced";
+      onSearch: (value: any) => void;
+      userSub: string;
+      context?: string;
+      placeholder?: string;
+    }
+  | {
+      type: "simple";
+      onSearch: (column: string | null, value: string) => void;
+      userSub: string;
+      columns: {
+        key: string | number | symbol;
+        label: string;
+        sortable?: boolean;
+      }[];
+      placeholder?: string;
+    };
 
 interface PageHeaderProps {
   title: string;
   icon?: React.ReactNode;
   subtitle?: string;
-  filters?: React.ReactNode;
   actions?: React.ReactNode;
-  searchBar?: React.ReactNode;
+  filters?: React.ReactNode;
+  search?: PageSearchConfig;
 }
 
-export default function PageHeader({ 
-  title, 
+export default function PageHeader({
+  title,
   icon,
-  subtitle, 
+  subtitle,
+  actions,
   filters,
-  actions, 
-  searchBar 
+  search,
 }: PageHeaderProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { visible, toggle } = useSearchVisible(pathname);
+
+  const hasSearch = !!search;
+
+  // URL manda: se ?q= existe, a busca é forçada visível no primeiro render.
+  // Depois disso o usuário pode ocultar via toggle — a URL continua válida.
+  // const [hasUserToggled, setHasUserToggled] = React.useState(false);
+  const urlHasQuery = !!searchParams.get("q");
+
+  const isSearchVisible = visible;
+  // hasUserToggled
+  //   ? visible
+  //   : urlHasQuery || visible;
+
+  const handleToggle = () => {
+    // setHasUserToggled(true);
+    toggle();
+  };
+
   return (
-    <div className="border-b border-apple-border-light dark:border-apple-border-dark pb-4 mb-4 transition-colors">
-      {/* Linha Principal: Bloco Esquerdo (Ícone + Título/Subtítulo) e Ações (Direita) */}
+    <div className="border-b border-default dark:border-strong pb-4 mb-4 transition-colors">
+      {/* Linha principal */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        
-        {/* Esquerda: Ícone centralizado verticalmente com o bloco de texto */}
         <div className="flex items-center gap-3.5 min-w-0">
           {icon && (
-            <div className="flex items-center text-apple-blue shrink-0">
+            <div className="flex items-center text-brand -mt-2 shrink-0 animate-[bounce_1s_linear_0.5]">
               {icon}
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-xl -mt-2 font-bold text-apple-label-light dark:text-apple-label-dark truncate">
+            <h1 className="text-xl -mt-2 font-bold text-heading dark:text-heading truncate">
               {title}
             </h1>
             {subtitle && (
-              <p className="min-w-full text-xs font-mono text-apple-tertiary-light dark:text-apple-tertiary-light mt-1">
+              <p className="min-w-full text-xs font-mono text-muted dark:text-muted mt-1">
                 {subtitle}
               </p>
             )}
           </div>
         </div>
 
-        {/* Direita: Ações */}
-        {actions && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <AIChatButton
+          context="observations"
+          title={`Assistente IA — ${title}`}
+        />
+
+        {(actions || hasSearch) && (
+          <div className="flex flex-wrap items-center gap-2 p-2 shrink-0 rounded-lg">
+            {hasSearch && (
+              <button
+                type="button"
+                onClick={handleToggle}
+                className={`flex items-center gap-2 group btn-ghost`}
+                title={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
+                aria-label={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
+                aria-pressed={isSearchVisible}
+              >
+                <span className="hidden group-hover:inline whitespace-nowrap">
+                  {isSearchVisible ? "Ocultar " : "Mostrar "}Busca
+                  {urlHasQuery && !isSearchVisible ? (
+                    <span className="font-mono text-[8px] align-super"></span>
+                  ) : null}
+                </span>
+                {isSearchVisible ? (
+                  <>
+                    <SearchX className="w-5 h-5 text-error" />
+                  </>
+                ) : (
+                  <>
+                    <SearchCode className="w-5 h-5" />
+
+                    <span
+                      className={`absolute z-9 ml-5 group-hover:hidden -mt-6 w-3 h-3 bg-green-300 rounded-full ${
+                        urlHasQuery && !isSearchVisible
+                          ? "block animate-ping"
+                          : "hidden"
+                      }`}
+                    ></span>
+                    <span
+                      className={`absolute ml-[22px] group-hover:hidden -mt-6 w-2 h-2 z-8 bg-green-500 rounded-full ${
+                        urlHasQuery && !isSearchVisible ? "block" : "hidden"
+                      }`}
+                    ></span>
+                  </>
+                )}
+              </button>
+            )}
             {actions}
           </div>
         )}
       </div>
 
-      {/* Seção Opcional: Barra de Pesquisa e Filtros */}
-      {(searchBar || filters) && (
+      {/* Barra de busca + filtros
+          - O DBQLAdvancedSearch fica SEMPRE montado (mesmo escondido).
+          - Ocultamos com `hidden` (display: none) — os efeitos continuam rodando,
+            então a leitura de `?q=` da URL e o callback `onSearch` continuam vivos.
+          - Filtros independentes continuam visíveis. */}
+      {(search || filters) && (
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mt-4">
-          {searchBar && <div className="flex-1">{searchBar}</div>}
-          {filters && <div className="flex flex-wrap items-center gap-2">{filters}</div>}
+          {search && (
+            <div className={isSearchVisible ? "flex-1" : "hidden"}>
+              {search.type === "advanced" ? (
+                <DBQLAdvancedSearch
+                  onSearch={search.onSearch}
+                  userSub={search.userSub}
+                  placeholder={search.placeholder}
+                  context={search.context}
+                />
+              ) : (
+                <SimpleColumnSearch
+                  columns={search.columns || []}
+                  onSearch={search.onSearch}
+                  placeholder={search.placeholder}
+                />
+              )}
+            </div>
+          )}
+          {filters && (
+            <div className="flex flex-wrap items-center gap-2">{filters}</div>
+          )}
         </div>
       )}
     </div>

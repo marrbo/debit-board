@@ -1,12 +1,18 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# devcontainer
+.devcontainer/dev_node_modules/
+.vscode/.debug/
+
+*.pem
+
 # dependencies
 /node_modules
 /.pnp
 .pnp.js
 
 #dump
-/dumps
+dumps/
 
 # testing
 /coverage
@@ -29,6 +35,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env.docker
 .env
 
 # vercel
@@ -41,3 +48,6 @@ next-env.d.ts
 certificates
 # Sentry Config File
 .env.sentry-build-plugin
+.env.local
+.env.production.local
+.devcontainer/env.development.local

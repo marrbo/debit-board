@@ -1,34 +1,53 @@
-import fs from 'fs';
-import path from 'path';
-import WikiViewer from './_WikiViewer';
-import WikiEditor from './_WikiEditor';
-import { getServerAuthSession } from '@/lib/auth-server';
+// app/wiki/[...slug]/page.tsx
+import fs from "fs/promises";
+import path from "path";
+import { notFound } from "next/navigation";
+import { requireSession } from "@/lib/api-auth";
+import WikiViewer from "./_WikiViewer";
+import WikiEditor from "./_WikiEditor";
 
-export default async function WikiPage(
-  props: { 
-    params: Promise<{ slug: string[] }>, 
-    searchParams: Promise<{ edit?: string }> 
+const WIKI_DIR = path.join(process.cwd(), "content", "wiki");
+
+interface PageProps {
+  params: Promise<{ slug: string[] }>;
+  searchParams: Promise<{ edit?: string }>;
+}
+
+export default async function WikiPage({ params, searchParams }: PageProps) {
+  const { slug: slugParts } = await params;
+  const { edit } = await searchParams;
+
+  const slug = slugParts.join("/");
+
+  const auth = await requireSession();
+  if (auth.ok === false) notFound();
+
+  const isAdmin = auth.user.isAdmin === true;
+
+  if (slug === "admin" || slug.startsWith("admin/")) {
+    if (!isAdmin) notFound();
   }
-) {
-  const searchParams = await props.searchParams;
-  const params = await props.params;
-  const session = await getServerAuthSession();
-  const isAdmin: boolean = session?.user?.isAdmin || false;
 
-  // 🔍 DEBUG: Se você não estiver vendo o botão, olhe no terminal do servidor para ver o que está vindo na sessão
-  console.log('🔍 Sessão detectada pelo Servidor:', session?.user?.email, 'Role:', session?.user?.tenantId);
-
-  const slugPath = params.slug.join('/');
-  const filePath = path.join(process.cwd(), 'content', 'wiki', `${slugPath}.md`);
-
-  if (!fs.existsSync(filePath)) {
-    return <div className="p-8 text-red-500 text-center">Página não encontrada.</div>;
+  if (slug === "_dev" || slug.startsWith("_dev/")) {
+    if (!isAdmin) notFound();
+    if (process.env.NODE_ENV !== "development") notFound();
   }
 
-  if (searchParams.edit === 'true' && isAdmin) {
-    return <WikiEditor slug={slugPath} />;
+  const fullPath = path.resolve(WIKI_DIR, `${slug}.md`);
+  if (!fullPath.startsWith(path.resolve(WIKI_DIR) + path.sep)) notFound();
+
+  let content: string;
+  try {
+    content = await fs.readFile(fullPath, "utf-8");
+  } catch {
+    notFound();
   }
 
-  const content = fs.readFileSync(filePath, 'utf8');
-  return <WikiViewer slug={slugPath} content={content} isAdmin={isAdmin} />;
+  const editing = isAdmin && edit === "true";
+
+  return editing ? (
+    <WikiEditor slug={slug} initialContent={content} />
+  ) : (
+    <WikiViewer slug={slug} content={content} isAdmin={isAdmin} />
+  );
 }

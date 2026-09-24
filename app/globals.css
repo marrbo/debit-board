@@ -3,118 +3,677 @@
 @tailwind utilities;
 
 /* ==============================================================
-   APLICAÇÃO GLOBAL DO TEMA
+   VARIÁVEIS CSS – TEMA CLARO (:root)
    ============================================================== */
+:root {
+  /* BRAND & ACCENT */
+  --brand-default: #0056b3;
+  --brand-dark: #0056b3;
+  --brand-light: #0056b3;
+  --brand-subtle: rgba(0, 86, 179, 0.08);
+  --brand-foreground: #ffffff;
 
+  --accent-default: #735100;
+  --accent-dark: #523a00;
+  --accent-light: #8c6300;
+  --accent-subtle: rgba(115, 81, 0, 0.08);
+
+  /* NEUTRALS & TYPOGRAPHY */
+  --text-heading: #0f172a;
+  --text-body: #1e293b;
+  --text-muted: #8f8f8f;
+  --text-disabled: #94a3b8;
+
+  /* STATUS SHADES – SUCCESS */
+  --success-50: #ecfdf5;
+  --success-100: #d1fae5;
+  --success-200: #a7f3d0;
+  --success-300: #6ee7b7;
+  --success-400: #34d399;
+  --success-500: #10b981;
+  --success-600: #059669;
+  --success-700: #046c3c;
+  --success-800: #065f46;
+  --success-900: #064e3b;
+  --success-default: var(--success-700);
+
+  /* STATUS SHADES – WARNING */
+  --warning-50: #fffbeb;
+  --warning-100: #fef3c7;
+  --warning-200: #fde68a;
+  --warning-300: #fde047;
+  --warning-400: #fbbf24;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+  --warning-700: #8a4b00;
+  --warning-800: #92400e;
+  --warning-900: #78350f;
+  --warning-default: var(--warning-700);
+
+  /* STATUS SHADES – ERROR */
+  --error-50: #fef2f2;
+  --error-100: #fee2e2;
+  --error-200: #fecaca;
+  --error-300: #fca5a5;
+  --error-400: #f87171;
+  --error-500: #ef4444;
+  --error-600: #dc2626;
+  --error-700: #b91c1c;
+  --error-800: #991b1b;
+  --error-900: #7f1d1d;
+  --error-default: var(--error-700);
+
+  /* STATUS SHADES – INFO */
+  --info-50: #eff6ff;
+  --info-100: #dbeafe;
+  --info-200: #bfdbfe;
+  --info-300: #93c5fd;
+  --info-400: #60a5fa;
+  --info-500: #3b82f6;
+  --info-600: #2563eb;
+  --info-700: #1d4ed8;
+  --info-800: #1e40af;
+  --info-900: #1e3a8a;
+  --info-default: var(--info-700);
+
+  /* BACKGROUNDS & GLASS */
+  --bg-page: #ececec;
+  --bg-surface: #f2f2f2;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #cacaca;
+
+  --bg-hover: rgba(15, 23, 42, 0.06);
+  --bg-active: rgba(15, 23, 42, 0.12);
+  --bg-disabled: rgba(226, 232, 240, 0.6);
+
+  --glass-blur: blur(12px);
+  --glass-border: rgba(15, 23, 42, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 4px 20px 0 rgba(15, 23, 42, 0.05);
+
+  /* BORDERS & RINGS */
+  --border-default: rgba(100, 116, 139, 0.3);
+  --border-strong: #64748b;
+  --border-subtle: rgba(148, 163, 184, 0.2);
+  --border-focus: #0056b3;
+  --ring: rgba(0, 86, 179, 0.3);
+
+  /* LINK TOKENS */
+  --text-link: #0056b3;
+  --link-hover: #003d80;
+  --link-active: #002952;
+  --link-disabled: #94a3b8;
+
+  /* BUTTON SPECIFIC TOKENS */
+  --button-primary-bg: #0056b3;
+  --button-primary-hover: #003d80;
+  --button-primary-active: #002952;
+  --button-primary-text: #ffffff;
+  --button-primary-disabled: #cbd5e1;
+  --button-primary-disabled-text: #64748b;
+
+  --button-cancel-bg: #b30000;
+  --button-cancel-hover: #800000;
+  --button-cancel-active: #520000;
+  --button-cancel-text: #ffffff;
+  --button-cancel-disabled: #cbd5e1;
+  --button-cancel-disabled-text: #64748b;
+
+  /* RADIUS & SHADOWS */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* ==============================================================
+   VARIÁVEIS CSS – TEMA ESCURO (.dark)
+   ============================================================== */
+.dark {
+  --bg-page: #191c20;
+  --bg-surface: #323843;
+  --bg-elevated: #2b303b;
+  --bg-sunken: #202630;
+
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-active: rgba(255, 255, 255, 0.15);
+  --bg-disabled: rgba(255, 255, 255, 0.05);
+
+  --text-heading: #ffffff;
+  --text-body: #f1f5f9;
+  --text-muted: #cbd5e1;
+  --text-disabled: rgba(255, 255, 255, 0.38);
+
+  /* REDEFINIÇÃO DE DEFAULTS PARA ALTA LEGISBILIDADE NO TEMA ESCURO */
+  --success-default: var(--success-300);
+  --warning-default: var(--warning-300);
+  --error-default: var(--error-300);
+  --info-default: var(--info-300);
+
+  --brand-default: #3b82f6;
+  --brand-dark: #1d4ed8;
+  --brand-light: #60a5fa;
+
+  --glass-blur: blur(16px);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-bg: rgba(26, 28, 33, 0.7);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+
+  --border-default: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.25);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: #60a5fa;
+  --ring: rgba(96, 165, 250, 0.4);
+
+  --text-link: #60a5fa;
+  --link-hover: #2563eb;
+  --link-active: #3b82f6;
+  --link-disabled: rgba(255, 255, 255, 0.38);
+
+  --button-primary-bg: #3b82f6;
+  --button-primary-hover: #2563eb;
+  --button-primary-active: #1d4ed8;
+  --button-primary-text: #ffffff;
+  --button-primary-disabled: rgba(255, 255, 255, 0.1);
+  --button-primary-disabled-text: rgba(255, 255, 255, 0.35);
+
+  --button-cancel-bg: #b30000;
+  --button-cancel-hover: #800000;
+  --button-cancel-active: #520000;
+  --button-cancel-text: #ffffff;
+  --button-cancel-disabled: #cbd5e1;
+  --button-cancel-disabled-text: #64748b;
+}
+
+/* ==============================================================
+   RESETS BASE SEGUROS
+   ============================================================== */
 @layer base {
-  /* Aplicação no Body (Modo Claro) */
+  * {
+    border-color: var(--border-default);
+  }
+
   body {
-    /* Usamos a cor off-white que você passou */
-    @apply bg-[oklch(98.6%_0.031_120.757)] text-[--color-label] antialiased;
-    font-family: var(--font-sans);
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    background-color: var(--bg-page);
+    color: var(--text-body);
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Aplicação no Body (Modo Escuro) */
-  .dark body {
-    @apply bg-[#000000] text-apple-label-dark; /* Preto verdadeiro no Dark, texto levemente off-white */
+  a {
+    color: var(--text-link);
+    text-decoration: none;
+    transition:
+      color 0.15s ease,
+      opacity 0.15s ease;
   }
 
-  /* Estilização global de Inputs para terem o visual clean da Apple */
-  input, select, textarea {
-    @apply bg-[--color-apple-input] border-[--color-apple-border] text-[--color-label] rounded-xl px-4 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-colors;
+  a:hover {
+    color: var(--link-hover);
   }
-  
-  .dark input, .dark select, .dark textarea {
-    @apply bg-apple-card-dark border-apple-border-dark text-apple-label-dark shadow-none;
+
+  a:active {
+    color: var(--link-active);
+  }
+
+  a:disabled,
+  a[aria-disabled="true"] {
+    color: var(--link-disabled) !important;
+    pointer-events: none;
+    cursor: not-allowed;
+  }
+
+  button,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"] {
+    background: transparent;
+    color: inherit;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+  }
+
+  button:disabled,
+  [role="button"]:disabled,
+  button[aria-disabled="true"] {
+    cursor: not-allowed !important;
+    opacity: 0.5;
+  }
+
+  button:hover,
+  [role="button"]:hover {
+    cursor: pointer !important;
+    background-color: var(--link-hover) !important;
+    color: var(--button-primary-text) !important;
   }
 }
 
 /* ==============================================================
-   CORREÇÃO DA PÁGINA DE Observations (LEGIBILIDADE NO TEMA CLARO)
+   CLASSES COMPONENTES
    ============================================================== */
+@layer components {
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--button-primary-bg);
+    color: var(--button-primary-text);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition:
+      background-color 0.15s ease,
+      transform 0.1s ease,
+      box-shadow 0.15s ease;
+  }
 
-/* 1. Corrigindo o fundo da "Barra de Busca Avançada" */
-/* Se o seu componente AdvancedSearch não tiver a classe ".advanced-search-container",
-   envolva ele em uma div com essa classe. */
-.advanced-search-container {
-  @apply bg-white dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-2xl shadow-sm;
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--button-primary-hover);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    background-color: var(--button-primary-active);
+    transform: translateY(1px);
+  }
+
+  .btn-primary:disabled {
+    background-color: var(--button-primary-disabled) !important;
+    color: var(--button-primary-disabled-text) !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .btn-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--button-cancel-bg);
+    color: var(--button-cancel-text);
+    border-radius: var(--radius-md);
+    padding: 0.7rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition:
+      background-color 0.15s ease,
+      transform 0.1s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .btn-cancel:hover:not(:disabled) {
+    background-color: var(--button-cancel-hover) !important;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn-cancel:active:not(:disabled) {
+    background-color: var(--button-cancel-active);
+    transform: translateY(1px);
+  }
+
+  .btn-cancel:disabled {
+    background-color: var(--button-cancel-disabled) !important;
+    color: var(--button-cancel-disabled-text) !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .btn-glass,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-surface);
+    color: var(--text-body);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .btn-glass:hover:not(:disabled),
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    border-color: var(--border-strong);
+    color: var(--text-heading);
+  }
+
+  .btn-glass:active:not(:disabled),
+  .btn-secondary:active:not(:disabled) {
+    background-color: var(--bg-active);
+  }
+
+  .btn-glass:disabled,
+  .btn-secondary:disabled {
+    background-color: var(--bg-disabled) !important;
+    color: var(--text-disabled) !important;
+    border-color: var(--border-subtle) !important;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    color: var(--text-body);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    color: var(--text-heading);
+  }
+
+  .btn-ghost:active:not(:disabled) {
+    background-color: var(--bg-active);
+  }
+
+  .btn-ghost:disabled {
+    color: var(--text-disabled) !important;
+    background-color: transparent !important;
+  }
+
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-lg);
+  }
 }
 
-/* Mantém o fundo escuro apenas no modo Dark */
-.dark .advanced-search-container {
-  background-color: #0f172a !important;
-  border-color: #1e293b !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
-}
+/* ==============================================================
+   UTILITÁRIAS DE TEXTO (SHADES 50 A 900)
+   ============================================================== */
+@layer utilities {
+  /* DEFAULTS */
+  .text-success {
+    color: var(--success-default) !important;
+  }
+  .text-warning {
+    color: var(--warning-default) !important;
+  }
+  .text-error {
+    color: var(--error-default) !important;
+  }
+  .text-info {
+    color: var(--info-default) !important;
+  }
 
-/* 2. Ajuste do Cabeçalho e Linhas da Grid das Observations */
-.issue-grid-header {
-  @apply bg-[#F2F2F7] dark:bg-apple-card-dark/60 text-[--color-tertiary-label] dark:text-[--color-tertiary-label] font-semibold text-[11px] uppercase tracking-wider border-b border-apple-border-light dark:border-apple-border-dark px-4 py-3 transition-colors;
-}
+  /* SUCCESS SHADES */
+  .text-success-50 {
+    color: var(--success-50) !important;
+  }
+  .text-success-100 {
+    color: var(--success-100) !important;
+  }
+  .text-success-200 {
+    color: var(--success-200) !important;
+  }
+  .text-success-300 {
+    color: var(--success-300) !important;
+  }
+  .text-success-400 {
+    color: var(--success-400) !important;
+  }
+  .text-success-500 {
+    color: var(--success-500) !important;
+  }
+  .text-success-600 {
+    color: var(--success-600) !important;
+  }
+  .text-success-700 {
+    color: var(--success-700) !important;
+  }
+  .text-success-800 {
+    color: var(--success-800) !important;
+  }
+  .text-success-900 {
+    color: var(--success-900) !important;
+  }
 
-.issue-grid-row {
-  @apply bg-white dark:bg-apple-card-dark border-b border-[#E5E5EA] dark:border-apple-border-dark hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] transition-colors duration-150 ease-in-out;
-}
+  /* WARNING SHADES */
+  .text-warning-50 {
+    color: var(--warning-50) !important;
+  }
+  .text-warning-100 {
+    color: var(--warning-100) !important;
+  }
+  .text-warning-200 {
+    color: var(--warning-200) !important;
+  }
+  .text-warning-300 {
+    color: var(--warning-300) !important;
+  }
+  .text-warning-400 {
+    color: var(--warning-400) !important;
+  }
+  .text-warning-500 {
+    color: var(--warning-500) !important;
+  }
+  .text-warning-600 {
+    color: var(--warning-600) !important;
+  }
+  .text-warning-700 {
+    color: var(--warning-700) !important;
+  }
+  .text-warning-800 {
+    color: var(--warning-800) !important;
+  }
+  .text-warning-900 {
+    color: var(--warning-900) !important;
+  }
 
-/* 3. Textos da Grid com hierarquia visual */
-.issue-grid-title {
-  @apply text-[--color-label] dark:text-apple-label-dark font-medium text-sm hover:text-blue-500 transition-colors truncate;
-}
+  /* ERROR SHADES */
+  .text-error-50 {
+    color: var(--error-50) !important;
+  }
+  .text-error-100 {
+    color: var(--error-100) !important;
+  }
+  .text-error-200 {
+    color: var(--error-200) !important;
+  }
+  .text-error-300 {
+    color: var(--error-300) !important;
+  }
+  .text-error-400 {
+    color: var(--error-400) !important;
+  }
+  .text-error-500 {
+    color: var(--error-500) !important;
+  }
+  .text-error-600 {
+    color: var(--error-600) !important;
+  }
+  .text-error-700 {
+    color: var(--error-700) !important;
+  }
+  .text-error-800 {
+    color: var(--error-800) !important;
+  }
+  .text-error-900 {
+    color: var(--error-900) !important;
+  }
 
-.issue-grid-subtitle {
-  @apply text-[--color-tertiary-label] dark:text-apple-tertiary-light text-[10px] font-mono truncate;
-}
-
-/* 4. Removendo fundos escuros desnecessários e ajustando Pills (Badges) */
-.issue-pill-branch {
-  @apply bg-[#F2F2F7] dark:bg-[#38383A] text-[--color-secondary-label] dark:text-[#E5E5EA] px-2 py-0.5 rounded text-[10px] font-medium border border-[#E5E5EA] dark:border-transparent;
-}
-
-.issue-pill-severity-high {
-  @apply bg-[#FFD1D1] dark:bg-[#FF453A]/40 text-[#FF453A] dark:text-[#FF453A];
-}
-.issue-pill-severity-critical {
-  @apply bg-[#FF3B30]/20 text-apple-red dark:bg-[#FF3B30]/40;
-}
-.issue-pill-severity-medium {
-  @apply bg-[#FF9F0A]/20 text-[#FF9F0A] dark:bg-[#FF9F0A]/40;
+  /* INFO SHADES */
+  .text-info-50 {
+    color: var(--info-50) !important;
+  }
+  .text-info-100 {
+    color: var(--info-100) !important;
+  }
+  .text-info-200 {
+    color: var(--info-200) !important;
+  }
+  .text-info-300 {
+    color: var(--info-300) !important;
+  }
+  .text-info-400 {
+    color: var(--info-400) !important;
+  }
+  .text-info-500 {
+    color: var(--info-500) !important;
+  }
+  .text-info-600 {
+    color: var(--info-600) !important;
+  }
+  .text-info-700 {
+    color: var(--info-700) !important;
+  }
+  .text-info-800 {
+    color: var(--info-800) !important;
+  }
+  .text-info-900 {
+    color: var(--info-900) !important;
+  }
 }
 
 /* ============================================================
-   ESTILOS PARA LINHAS DA TABELA DE OBSERVAÇÕES
+   Login — animação de fundo (3 camadas suaves)
    ============================================================ */
-/* Classe base para as linhas */
-.observation-row {
-  position: relative;
-  transition: background-color 150ms ease-in-out;
+
+/*
+ * Movimento principal: sobe e desce + oscila horizontalmente +
+ * rotaciona levemente em torno do --rot base + respira em escala.
+ * Tudo em transform para rodar na GPU sem repaint.
+ */
+@keyframes login-float-slow {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
+  25% {
+    transform: translate3d(6px, -12px, 0) rotate(calc(var(--rot, 0deg) + 2deg))
+      scale(1.02);
+  }
+  50% {
+    transform: translate3d(0, -22px, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
+  75% {
+    transform: translate3d(-6px, -12px, 0) rotate(calc(var(--rot, 0deg) - 2deg))
+      scale(0.98);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
 }
 
-/* Zebra sutil nas linhas pares */
-.observation-row:nth-child(even) {
-  background-color: rgba(59, 130, 246, 0.03);
+@keyframes login-float-fast {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
+  25% {
+    transform: translate3d(4px, -8px, 0) rotate(calc(var(--rot, 0deg) + 3deg))
+      scale(1.03);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
+  75% {
+    transform: translate3d(-4px, -8px, 0) rotate(calc(var(--rot, 0deg) - 3deg))
+      scale(0.97);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)) scale(1);
+  }
 }
 
-/* Hover State - fundo slate-100 */
-.observation-row:hover {
-  background-color: #f1f5f9;
+/*
+ * Pulso de brilho — anima opacidade e intensidade do glow.
+ * Roda em paralelo ao float, criando um efeito de "respiração".
+ */
+@keyframes login-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.22;
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.25))
+      drop-shadow(0 0 3px rgba(56, 189, 248, 0.2));
+  }
+  50% {
+    opacity: 0.32;
+    filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.55))
+      drop-shadow(0 0 6px rgba(56, 189, 248, 0.35));
+  }
 }
 
-/* Garante que as células não mudem de tamanho no hover */
-.observation-row td {
-  transition: background-color 150ms ease-in-out;
+/* Grid de fundo */
+@keyframes login-grid-drift {
+  0% {
+    background-position:
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      48px 48px,
+      48px 48px;
+  }
 }
 
-/* Remove qualquer mudança de border no hover que possa causar shift */
-.observation-row:hover td {
-  background-color: transparent; /* O fundo da linha é aplicado no tr, não no td */
+@media (prefers-reduced-motion: reduce) {
+  .login-anim,
+  .login-glow,
+  .login-grid {
+    animation: none !important;
+  }
 }
 
-/* Ajustes no modo escuro */
-.dark .observation-row:nth-child(even) {
-  background-color: rgba(59, 130, 246, 0.05);
+/* ============================================================
+   Prose — tabelas, código e hr
+   ============================================================
+   Os snapshots do assistente de IA contêm tabelas de 6-8 colunas
+   e blocos de código que podem estourar o container. Aqui:
+   - tabelas ganham scroll horizontal próprio (não empurram o layout)
+   - blocos <pre> ganham scroll horizontal próprio
+   - <hr> tem margem reduzida para não quebrar o ritmo vertical
+   ============================================================ */
+
+.prose table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
 }
 
-.dark .observation-row:hover {
-  background-color: rgba(30, 41, 59, 0.5);
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.prose hr {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prose :is(p, ul, ol, table, pre, blockquote):first-child {
+  margin-top: 0;
+}
+
+.prose :is(p, ul, ol, table, pre, blockquote):last-child {
+  margin-bottom: 0;
 }

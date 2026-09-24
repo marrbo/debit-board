@@ -1,17 +1,19 @@
 // types/IUser.ts
 import type { Document } from 'mongoose';
 import type { IAzureSettings } from './IAzureSettings';
+import type mongoose from 'mongoose';
 
 export type IUser = Document & {
   id: string;
   sub: string;
   email: string;
   name?: string;
+  firstName?: string;
   avatar?: string;
   company?: string;
   jobTitle?: string;
   phone?: string;
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   onboardingCompleted: boolean;
   isActive: boolean;
   roles?: string[];

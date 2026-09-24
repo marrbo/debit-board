@@ -1,86 +1,239 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { Team } from '@/models/Team';
-import { Project } from '@/models/Project';
-import { getServerSessionIds } from '@/lib/session-server';
-import { Types } from 'mongoose';
+import { type NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Team } from "@/models/Team";
+import { Project } from "@/models/Project";
+import { toObjectId, toObjectIds } from "@/lib/mongo-id";
+import { toNonEmptyString } from "@/lib/validators";
+import { requireSession } from "@/lib/api-auth";
 
-// Ajuste na tipagem dos params para Promise
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
-
-  await connectToDatabase();
-
-  // Aguarda a resolução dos params
-  const { id } = await params;
-
-  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) {
-    return NextResponse.json({ error: 'ID de team inválido' }, { status: 400 });
-  }
-
-  const body = await req.json();
-  const { name, description, projectIds } = body;
-
-  if (
-    projectIds !== undefined &&
-    (!Array.isArray(projectIds) ||
-      projectIds.some((projectId) => typeof projectId !== 'string' || !/^[a-f\d]{24}$/i.test(projectId)))
-  ) {
-    return NextResponse.json({ error: 'IDs de projeto inválidos' }, { status: 400 });
-  }
-
-  const team = await Team.findOne({ _id: { $eq: id }, tenantId: { $eq: tenantId } });
-  if (!team) return NextResponse.json({ error: 'Team não encontrado' }, { status: 404 });
-
-  // Remove teamId dos projetos antigos
-  await Project.updateMany(
-    { teamId: team._id, tenantId: { $eq: tenantId } },
-    { $unset: { teamId: 1 } }
-  );
-
-  // Atualiza o Team
-  team.name = name || team.name;
-  team.description = description || team.description;
-  team.projectIds = projectIds || [];
-  await team.save();
-
-  // Atribui teamId aos novos projetos
-  await Project.updateMany(
-    {
-      _id: {
-        $in: (projectIds || []).map((projectId: string) => new Types.ObjectId(projectId)),
-      },
-      tenantId: { $eq: tenantId },
-    },
-    { $set: { teamId: team._id } }
-  );
-
-  return NextResponse.json(team);
+// ============================================================
+// Helpers locais
+// ============================================================
+function parseIdParam(id: string | undefined) {
+  return toObjectId(id);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const sessionIds = await getServerSessionIds();
-  const tenantId = req.headers.get('x-tenant-id') || sessionIds.tenantId;
+function toOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+// ============================================================
+// PUT
+// ============================================================
+/**
+ * Atualiza recurso do endpoint /api/teams/{id}.
+ *
+ * Este endpoint expõe a operação put em /api/teams/{id}.
+ *
+ * @summary Atualiza recurso do endpoint /api/teams/{id}
+ * @tags Teams, Id
+ * @route PUT /api/teams/{id}
+ * @async
+ * @function PUT
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantObjectId = auth.user.tenantId;
 
   await connectToDatabase();
 
-  // Aguarda a resolução dos params
   const { id } = await params;
-
-  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) {
-    return NextResponse.json({ error: 'ID de team inválido' }, { status: 400 });
+  const teamObjectId = parseIdParam(id);
+  if (!teamObjectId) {
+    return NextResponse.json({ error: "ID de team inválido" }, { status: 400 });
   }
 
-  const team = await Team.findOne({ _id: { $eq: id }, tenantId: { $eq: tenantId } });
-  if (!team) return NextResponse.json({ error: 'Team não encontrado' }, { status: 404 });
+  const body = (await req.json()) as Record<string, unknown>;
 
-  await Project.updateMany(
-    { teamId: team._id, tenantId: { $eq: tenantId } },
-    { $unset: { teamId: 1 } }
-  );
+  const name = toNonEmptyString(body.name);
+  const description = toOptionalString(body.description);
+  const hasProjectIds = body.projectIds !== undefined;
+  const incomingProjectIds = hasProjectIds
+    ? toObjectIds(body.projectIds)
+    : undefined;
 
-  await team.deleteOne();
+  // ============================================================
+  // Transação — consistência entre Team e Project
+  // ============================================================
+  const dbSession = await Team.startSession();
 
-  return NextResponse.json({ message: 'Team deletado' });
+  try {
+    let result: unknown = null;
+
+    await dbSession.withTransaction(async () => {
+      const team = await Team.findOne({
+        _id: { $eq: teamObjectId },
+        tenantId: { $eq: tenantObjectId },
+      }).session(dbSession);
+
+      if (!team) {
+        throw new NotFoundError("Team não encontrado");
+      }
+
+      // ============================================================
+      // Reconciliação de projectIds
+      // ============================================================
+      if (incomingProjectIds !== undefined) {
+        const existingProjects = await Project.find({
+          _id: { $in: incomingProjectIds },
+          tenantId: { $eq: tenantObjectId },
+        })
+          .select("_id")
+          .session(dbSession)
+          .lean();
+
+        const allowedIds = new Set(existingProjects.map((p) => String(p._id)));
+        const finalProjectIds = incomingProjectIds.filter((pid) =>
+          allowedIds.has(String(pid)),
+        );
+
+        const currentIds = new Set(team.projectIds.map((pid) => String(pid)));
+        const finalIds = new Set(finalProjectIds.map((pid) => String(pid)));
+
+        const toRemove = team.projectIds.filter(
+          (pid) => !finalIds.has(String(pid)),
+        );
+        const toAdd = finalProjectIds.filter(
+          (pid) => !currentIds.has(String(pid)),
+        );
+
+        if (toRemove.length > 0) {
+          await Project.updateMany(
+            {
+              _id: { $in: toRemove },
+              tenantId: { $eq: tenantObjectId },
+            },
+            { $unset: { teamId: 1 } },
+            { session: dbSession },
+          );
+        }
+
+        if (toAdd.length > 0) {
+          await Project.updateMany(
+            {
+              _id: { $in: toAdd },
+              tenantId: { $eq: tenantObjectId },
+            },
+            { $set: { teamId: team._id } },
+            { session: dbSession },
+          );
+        }
+
+        team.projectIds = finalProjectIds;
+      }
+
+      if (name) team.name = name;
+      if (description !== undefined) team.description = description;
+
+      await team.save({ session: dbSession });
+
+      result = team.toObject();
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    console.error("Erro ao atualizar team:", error);
+    return NextResponse.json(
+      { error: "Erro ao atualizar team" },
+      { status: 500 },
+    );
+  } finally {
+    await dbSession.endSession();
+  }
+}
+
+// ============================================================
+// DELETE
+// ============================================================
+/**
+ * Remove recurso do endpoint /api/teams/{id}.
+ *
+ * Este endpoint expõe a operação delete em /api/teams/{id}.
+ *
+ * @summary Remove recurso do endpoint /api/teams/{id}
+ * @tags Teams, Id
+ * @route DELETE /api/teams/{id}
+ * @async
+ * @function DELETE
+ * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
+ * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ */
+export async function DELETE(
+  _: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantObjectId = auth.user.tenantId;
+
+  await connectToDatabase();
+
+  const { id } = await params;
+  const teamObjectId = parseIdParam(id);
+  if (!teamObjectId) {
+    return NextResponse.json({ error: "ID de team inválido" }, { status: 400 });
+  }
+
+  // ============================================================
+  // Transação — desvincular projetos + deletar team
+  // ============================================================
+  const dbSession = await Team.startSession();
+
+  try {
+    await dbSession.withTransaction(async () => {
+      const team = await Team.findOne({
+        _id: { $eq: teamObjectId },
+        tenantId: { $eq: tenantObjectId },
+      }).session(dbSession);
+
+      if (!team) {
+        throw new NotFoundError("Team não encontrado");
+      }
+
+      await Project.updateMany(
+        {
+          teamId: { $eq: team._id },
+          tenantId: { $eq: tenantObjectId },
+        },
+        { $unset: { teamId: 1 } },
+        { session: dbSession },
+      );
+
+      await team.deleteOne({ session: dbSession });
+    });
+
+    return NextResponse.json({ message: "Team deletado" });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    console.error("Erro ao deletar team:", error);
+    return NextResponse.json(
+      { error: "Erro ao deletar team" },
+      { status: 500 },
+    );
+  } finally {
+    await dbSession.endSession();
+  }
+}
+
+// ============================================================
+// Erro de domínio — permite distinguir 404 de 500 sem checar string
+// ============================================================
+class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
 }

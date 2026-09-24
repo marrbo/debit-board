@@ -1,144 +1,129 @@
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from "@sentry/nextjs/config";
 import { codecovWebpackPlugin } from "@codecov/webpack-plugin";
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pkg = require('./package.json');
+import { createRequire } from "module";
 
+const require = createRequire(import.meta.url);
+const pkg = require("./package.json");
+
+const isCI = Boolean(process.env.CI);
+const hasCodecov = Boolean(process.env.CODECOV_TOKEN);
 
 function sanitizeDeploymentId(value) {
-  if (!value) return 'default-deployment';
+  if (!value) return "default-deployment";
   return value
-    .replace(/[^a-zA-Z0-9_-]/g, '-') // substitui qualquer caractere inválido por '-'
-    .replace(/-+/g, '-')              // remove hífens duplicados
-    .replace(/^-|-$/g, '');           // remove hífens do início e fim
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
-const versionFromPackage = pkg.version || '0.0.0';
-const deploymentId = sanitizeDeploymentId(`v${versionFromPackage}`);
+const deploymentId = sanitizeDeploymentId(`v${pkg.version || "0.0.0"}`);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  
   deploymentId,
 
-  // 🔹 Ative strict mode para detectar problemas de renderização
   reactStrictMode: true,
-
-  // 🔹 Remova o header X-Powered-By (segurança)
   poweredByHeader: false,
+  output: "standalone",
 
-  // 🔹 Otimização de builds standalone (recomendado para Docker)
-  output: 'standalone',
+  // ✅ Next 15+: pacotes que NÃO devem passar pelo bundler no server.
+  //    mongoose/mongodb usam binários nativos e dependem de módulos Node
+  //    que quebram quando empacotados. Antes, isso vivia em
+  //    `experimental.serverComponentsExternalPackages` — depreciado.
+  serverExternalPackages: [
+    "mongoose",
+    "mongodb",
+    "fsevents",
+    "nextjs-auto-swagger-gen",
+  ],
 
-  // Cache para arquivos estáticos (mantido)
+  experimental: {
+    // HMR cache do React Server Components causava o bug dos source maps
+    // duplicados no DevTools (chunks velhos apontando para /app e novos
+    // para /src). Desligar elimina o cache entre recompilações.
+    serverComponentsHmrCache: false,
+
+    optimizePackageImports: [
+      "lucide-react",
+      "@chakra-ui/react",
+      "@mantine/core",
+    ],
+  },
+
   async headers() {
-    if (process.env.NODE_ENV === 'production') {
-      return [
-        {
-          source: '/_next/static/:path*',
-          headers: [
-            { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-          ],
-        },
-      ];
-    }
-    return [];
+    if (process.env.NODE_ENV !== "production") return [];
+    return [
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
   },
 
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'ui-avatars.com',
-      },
-      // Adicione também o domínio do Azure DevOps se as imagens vierem de lá
-      {
-        protocol: 'https',
-        hostname: 'dev.azure.com',
-      },
+      { protocol: "https", hostname: "ui-avatars.com" },
+      { protocol: "https", hostname: "dev.azure.com" },
     ],
   },
 
   webpack: (config, { dev }) => {
-    // 🔹 NÃO sobrescreva o devtool em desenvolvimento – isso causa
-    //    regressões de performance. O Next.js já usa 'eval-source-map'
-    //    automaticamente para melhorar o HMR.
-
-    // Se não estiver em modo de desenvolvimento, desativa o cache persistente
-    if (!dev && config.cache) {
-      config.cache = Object.freeze({
-        type: 'memory',
-      });
+    // Não sobrescreve devtool — o Next já escolhe `eval-source-map` em dev
+    // e um mapa de produção adequado em build.
+    if (dev) {
+      // 🔥 Troca `eval-source-map` (embutido em eval) por `source-map`
+      //    (arquivo .map separado). Custa ~30% mais lento no rebuild,
+      //    mas é o ÚNICO devtool que o VSCode consegue mapear sem falhas.
+      config.devtool = "source-map";
     }
 
-    // 🔹 Mantenha o fallback de módulos apenas se realmente necessário
-    //    (ex.: se você tiver problemas ao importar módulos Node no cliente)
-    //    Caso não tenha problemas, pode remover esse bloco inteiro.
-    // config.resolve.fallback = {
-    //   ...config.resolve.fallback,
-    //   net: false,
-    //   tls: false,
-    //   fs: false,
-    //   'node:diagnostics_channel': false,
-    // };
+    // Em produção, cache em memória (evita ~GB de .cache em monorepos
+    // dentro do Docker).
+    if (!dev && config.cache) {
+      config.cache = Object.freeze({ type: "memory" });
+    }
 
-    // Plugin do Codecov (mantido)
-    config.plugins.push(
-      codecovWebpackPlugin({
-        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
-        bundleName: "debit-board-webpack-bundle",
-        uploadToken: process.env.CODECOV_TOKEN,
-        telemetry: false,
-      })
-    );
+    // Codecov só roda em CI. Em dev, `bundle analysis` e `upload`
+    // adicionam latência a cada HMR sem trazer benefício.
+    if (!dev && hasCodecov) {
+      config.plugins.push(
+        codecovWebpackPlugin({
+          enableBundleAnalysis: true,
+          bundleName: "debit-board-webpack-bundle",
+          uploadToken: process.env.CODECOV_TOKEN,
+          telemetry: false,
+        }),
+      );
+    }
 
     return config;
   },
 };
 
 export default withSentryConfig(nextConfig, {
-  // For all available options, see:
-  // https://www.npmjs.com/package/@sentry/webpack-plugin#options
-
   org: "marrbotecnologia",
-
   project: "debit-board",
 
-  // Only print logs for uploading source maps in CI
-  silent: !process.env.CI,
+  // Silencia em dev, mostra upload de source maps em CI.
+  silent: !isCI,
 
-  // For all available options, see:
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+  // ⚠️ '/monitoring' é uma página real da sua app. O Sentry interceptava
+  //    essa rota e quebrava a página. '/__sentry' não colide com nada.
+  tunnelRoute: "/__sentry",
 
-  // Upload a larger set of source maps for prettier stack traces (increases build time)
-  widenClientFileUpload: true,
-
-  // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
-  // This can increase your server load as well as your hosting bill.
-  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-  // side errors will fail.
-  tunnelRoute: "/monitoring",
+  // Upload completo de source maps custa tempo de build. Só em CI.
+  widenClientFileUpload: isCI,
 
   telemetry: false,
 
   webpack: {
-    // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
-    automaticVercelMonitors: true,
-
-    // Tree-shaking options for reducing bundle size
     treeshake: {
-      // Automatically tree-shake Sentry logger statements to reduce bundle size
       removeDebugLogging: true,
     },
-  },
-
-  experimental: {
-    // Desativa o cache de fetch entre atualizações HMR
-    serverComponentsHmrCache: false, 
-    serverComponentsExternalPackages: ['mongoose', 'mongodb'],
-    optimizePackageImports: ['lucide-react', '@chakra-ui/react', '@mantine/core'],
   },
 });

@@ -1,11 +1,16 @@
-// app/api/admin/unimpersonate/route.ts
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
+/**
+ * Encerra a impersonação removendo os cookies.
+ * Não exige requireAdmin(), pois quando impersonado o role é do usuário alvo.
+ */
 export async function POST() {
-  // Remove o cookie de impersonação
   const cookieStore = await cookies();
-  cookieStore.delete('impersonating_user');
+
+  cookieStore.delete("impersonating_user");
+  cookieStore.delete("impersonating_admin_id");
+  cookieStore.delete("impersonation_window");
 
   return NextResponse.json({ success: true });
 }

@@ -1,205 +1,274 @@
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { useState } from 'react';
+// components/PaginationInfo.tsx
+"use client";
 
-interface PaginationInfoProps {
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+  LayoutGrid,
+  Table as TableIcon,
+} from "lucide-react";
+import type { DataTableAction } from "./DataTable";
+import ExportSplitButton, {
+  type ExportOption,
+} from "./DataTable/ExportSplitButton";
+
+// ============================================================
+// Tipos compartilhados
+// ============================================================
+interface TableToolbarProps<T> {
   currentPage: number;
-  totalPages: number;
   totalItems: number;
   pageSize: number;
+  pageSizeOptions: number[];
+  onPageSizeChange: (size: number) => void;
+  exportActions?: DataTableAction<T>[];
+  viewMode?: "table" | "cards";
+  onViewModeChange?: (mode: "table" | "cards") => void;
+}
+
+interface TablePaginationProps<T> {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
   onPageChange: (page: number) => void;
-  onPageSizeChange?: (size: number) => void;
-  className?: string;
+  selectable?: boolean;
+  selectedIds?: string[];
+  selectedItems?: T[];
+  onClearSelection?: () => void;
+  bulkActions?: DataTableAction<T>[];
 }
 
-// Gera a lista de páginas (números e reticências) sem duplicações
-function getPaginationItems(currentPage: number, totalPages: number): (number | '...')[] {
-  if (totalPages <= 0) return [1];
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-
-  const items: (number | '...')[] = [1];
-
-  // Intervalo de 3 páginas ao redor da atual
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  // Adiciona reticências se houver gap entre 1 e start
-  if (start > 2) {
-    items.push('...');
-  }
-
-  // Adiciona as páginas do intervalo
-  for (let i = start; i <= end; i++) {
-    items.push(i);
-  }
-
-  // Adiciona reticências se houver gap entre end e totalPages
-  if (end < totalPages - 1) {
-    items.push('...');
-  }
-
-  // Sempre inclui a última página
-  items.push(totalPages);
-
-  // Remove duplicatas (caso algum número se repita)
-  const unique: (number | '...')[] = [];
-  for (const item of items) {
-    if (unique.length > 0 && unique[unique.length - 1] === item) continue;
-    unique.push(item);
-  }
-
-  return unique;
-}
-
-export function PaginationInfo({
+// ============================================================
+// Toolbar (topo)
+// ============================================================
+export function TableToolbar<T>({
   currentPage,
-  totalPages,
   totalItems,
   pageSize,
-  onPageChange,
+  pageSizeOptions,
   onPageSizeChange,
-  className = '',
-}: PaginationInfoProps) {
-  const [inputPage, setInputPage] = useState({ page: currentPage, value: '' });
-  const inputValue = inputPage.page === currentPage ? inputPage.value : '';
+  exportActions = [],
+  viewMode = "table",
+  onViewModeChange,
+}: TableToolbarProps<T>) {
+  const firstItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastItem = Math.min(currentPage * pageSize, totalItems);
 
-  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const end = Math.min(currentPage * pageSize, totalItems);
+  // Converte `DataTableAction<T>[]` em `ExportOption[]` para o split button
+  const exportOptions: ExportOption[] = exportActions.map((action) => ({
+    label: action.label,
+    icon: action.icon ?? null,
+    disabled: action.disabled,
+    onClick: () => action.onClick([], []),
+  }));
 
-  const handlePageInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const parsed = parseInt(inputValue, 10);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= totalPages) {
-        onPageChange(parsed);
-      }
-      setInputPage({ page: currentPage, value: '' });
-    }
-  };
-
-  // Itens reais da paginação
-  const paginationItems = getPaginationItems(currentPage, totalPages);
-
-  // Preenche com itens vazios até ter 7 posições (para largura fixa)
-  const items: (number | '...' | null)[] = [...paginationItems];
-  while (items.length < 7) {
-    items.push(null);
-  }
+  const hasExports = exportOptions.length > 0;
 
   return (
-    <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-xs text-apple-tertiary-light ${className}`}>
-      <span className="whitespace-nowrap">
-        Exibindo {start} – {end} de {totalItems}
-      </span>
+    <div className="flex items-center justify-between gap-4 px-4 py-2 bg-elevated dark:bg-sunken border border-sunken rounded-lg">
+      {/* Esquerda: contagem + itens por página */}
+      <div className="flex items-center gap-3 text-sm text-muted">
+        <span className="whitespace-nowrap">
+          Exibindo{" "}
+          <span className="font-medium text-heading">
+            {firstItem}–{lastItem}
+          </span>{" "}
+          de <span className="font-medium text-heading">{totalItems}</span>
+        </span>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Seletor de itens por página */}
-        {onPageSizeChange && (
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg px-2 py-1 text-xs"
-            aria-label="Itens por página"
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          className="bg-surface border border-strong rounded-md px-2 py-1 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+          aria-label="Itens por página"
+        >
+          {pageSizeOptions.map((n) => (
+            <option key={n} value={n}>
+              {n} / pág
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Direita: toggle + exports (split button) */}
+      <div className="flex items-center gap-2">
+        {onViewModeChange && (
+          <button
+            type="button"
+            onClick={() =>
+              onViewModeChange(viewMode === "table" ? "cards" : "table")
+            }
+            className="flex items-center justify-center p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 transition-colors"
+            title={viewMode === "table" ? "Ver como cards" : "Ver como tabela"}
+            aria-label={
+              viewMode === "table" ? "Ver como cards" : "Ver como tabela"
+            }
           >
-            {[10, 20, 50, 100].map((size) => (
-              <option key={size} value={size}>
-                {size} / página
-              </option>
-            ))}
-          </select>
+            {viewMode === "table" ? (
+              <LayoutGrid className="w-4 h-4" />
+            ) : (
+              <TableIcon className="w-4 h-4" />
+            )}
+          </button>
         )}
 
-        {/* Navegação com larguras fixas */}
-        <div className="flex items-center gap-1">
-          {/* Primeira página */}
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
-            aria-label="Primeira página"
-          >
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
+        {hasExports && (
+          <>
+            {onViewModeChange && (
+              <span
+                aria-hidden
+                className="w-px h-5 bg-strong/50 dark:bg-strong/40"
+              />
+            )}
+            <ExportSplitButton options={exportOptions} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
-          {/* Anterior */}
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
-            aria-label="Página anterior"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+// ============================================================
+// Pagination (base) — INALTERADO
+// ============================================================
+export function TablePagination<T>({
+  currentPage,
+  totalPages,
+  onPageChange,
+  selectable,
+  selectedIds = [],
+  selectedItems = [],
+  onClearSelection,
+  bulkActions = [],
+}: TablePaginationProps<T>) {
+  const hasSelection = selectable && selectedIds.length > 0;
 
-          {/* Números - sempre 7 posições com largura fixa */}
-          <div className="flex items-center">
-            {items.map((item, index) => {
-              if (item === null) {
-                return <div key={`empty-${index}`} className="w-10 h-8" />;
-              }
-              if (item === '...') {
-                return (
-                  <span
-                    key={`dots-${index}`}
-                    className="w-10 h-8 flex items-center justify-center text-sm select-none"
-                  >
-                    …
-                  </span>
-                );
-              }
-              return (
-                <button
-                  key={`page-${item}`}
-                  onClick={() => onPageChange(item)}
-                  className={`w-10 h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-colors ${
-                    currentPage === item
-                      ? 'bg-apple-blue/10 text-apple-blue font-bold'
-                      : 'hover:bg-apple-border-light/30 text-apple-tertiary-light'
-                  }`}
-                  aria-current={currentPage === item ? 'page' : undefined}
-                >
-                  {item}
-                </button>
-              );
-            })}
-          </div>
+  const handleAction = (action: DataTableAction<T>) => {
+    if (action.disabled) return;
+    if (action.requiresSelection && selectedIds.length === 0) return;
+    action.onClick(selectedIds, selectedItems);
+  };
 
-          {/* Próxima */}
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
-            aria-label="Próxima página"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+  const isDangerAction = (label: string) =>
+    /excluir|remover|deletar/i.test(label);
 
-          {/* Última página */}
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-apple-border-light/30 transition-colors disabled:opacity-50"
-            aria-label="Última página"
-          >
-            <ChevronsRight className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-2 bg-elevated dark:bg-sunken border border-sunken rounded-lg">
+      {/* Esquerda: seleção + bulk actions */}
+      <div className="flex items-center gap-3 min-h-[32px]">
+        {hasSelection && (
+          <>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="font-medium text-brand whitespace-nowrap">
+                {selectedIds.length}{" "}
+                {selectedIds.length === 1
+                  ? "item selecionado"
+                  : "itens selecionados"}
+              </span>
+              <button
+                type="button"
+                onClick={onClearSelection}
+                className="flex items-center justify-center p-0.5 rounded-full text-brand hover:bg-brand/20 transition-colors"
+                title="Limpar seleção"
+                aria-label="Limpar seleção"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-        {/* Input para digitar a página */}
-        <div className="flex items-center gap-1">
+            {bulkActions.length > 0 && (
+              <div className="flex items-center gap-1 pl-3 border-l border-strong">
+                {bulkActions.map((action) => {
+                  const danger = isDangerAction(action.label);
+                  return (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={() => handleAction(action)}
+                      disabled={action.disabled}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                        danger
+                          ? "text-error hover:bg-apple-red/10"
+                          : "text-muted hover:text-brand hover:bg-brand/10"
+                      }`}
+                    >
+                      {action.icon}
+                      <span>{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Direita: navegação — INALTERADO */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Primeira página"
+          aria-label="Primeira página"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Página anterior"
+          aria-label="Página anterior"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-1 mx-2">
           <input
             type="number"
             min={1}
-            max={totalPages}
-            value={inputValue}
-            onChange={(e) => setInputPage({ page: currentPage, value: e.target.value })}
-            onKeyDown={handlePageInput}
-            placeholder={String(currentPage)}
-            className="w-14 bg-apple-card-light dark:bg-apple-card-dark border border-apple-border-light dark:border-apple-border-dark rounded-lg px-2 py-1 text-xs text-center"
-            aria-label="Ir para página"
+            max={Math.max(1, totalPages)}
+            value={currentPage}
+            onChange={(e) => {
+              const p = parseInt(e.target.value, 10);
+              if (!Number.isNaN(p) && p >= 1 && p <= totalPages) {
+                onPageChange(p);
+              }
+            }}
+            className="w-12 text-center bg-surface border border-strong rounded-md px-2 py-1 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-brand/30"
+            aria-label="Página atual"
           />
-          <span>/ {totalPages}</span>
+          <span className="text-sm text-muted whitespace-nowrap">
+            / {totalPages || 1}
+          </span>
         </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Próxima página"
+          aria-label="Próxima página"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage >= totalPages}
+          className="p-1.5 rounded-md text-muted hover:text-brand hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Última página"
+          aria-label="Última página"
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

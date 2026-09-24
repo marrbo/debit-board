@@ -1,31 +1,42 @@
-// app/api/admin/impersonate/route.ts
-import { type NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { getServerAuthSession } from '@/lib/auth-server';
+import { type NextRequest, NextResponse } from "next/server";
+import { SignJWT } from "jose";
+import { requireAdmin } from "@/lib/api-auth";
+import { connectToDatabase } from "@/lib/mongodb";
+import { User } from "@/models/User";
 
+const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
+
+/**
+ * Gera um token de impersonação (JWT, 15min) para o usuário alvo.
+ * O frontend abre uma nova janela consumindo esse token.
+ */
 export async function POST(req: NextRequest) {
-  // Verifica se quem está fazendo a requisição é o Admin
-  const adminSession = await getServerAuthSession();
-  if (adminSession?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAdmin();
+  if (auth.ok === false) return auth.response;
+
+  const { userId } = await req.json();
+  if (!userId) {
+    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
   }
 
-  // Pega o ID do usuário alvo enviado no corpo da requisição
-  const body = await req.json();
-  const targetUserId = body.userId;
-
-  if (!targetUserId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+  await connectToDatabase();
+  const targetUser = await User.findOne({ sub: userId }).lean();
+  if (!targetUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Cria o cookie seguro de impersonação
-  const cookieStore = await cookies();
-  cookieStore.set('impersonating_user', targetUserId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 15, // 15 minutos de sessão
-    path: '/',
+  const token = await new SignJWT({
+    sub: targetUser.sub,
+    impersonatedBy: auth.user?.sub ?? auth.user?._id,
+    type: "impersonation",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(secret);
+
+  return NextResponse.json({
+    success: true,
+    url: `/api/admin/impersonate/consume?token=${token}`,
   });
-
-  return NextResponse.json({ success: true });
 }
