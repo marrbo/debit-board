@@ -35,7 +35,7 @@ export default function TeamSelector({ teams, className }: TeamSelectorProps) {
     <div className={`relative ${className ?? ""}`} ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-between min-w-32 gap-2 bg-sunken border border-default dark:border-strong text-heading dark:text-heading px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none"
+        className="flex items-center justify-between min-w-32 gap-2 btn-ghost"
       >
         {selected?.isGlobal ? (
           <Globe className="w-3 h-3" />

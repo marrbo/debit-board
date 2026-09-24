@@ -18,6 +18,25 @@ import { TableToolbar, TablePagination } from "../PaginationInfo";
 // ============================================================
 // Tipos
 // ============================================================
+
+/**
+ * Sub-coluna apenas para exportação em Excel. Uma coluna com
+ * `excelSubColumns` é renderizada como 1 coluna no PDF/tela, mas
+ * "explode" em N colunas no Excel (permite filtrar por cada sub-valor).
+ */
+export interface ExcelSubColumn<T> {
+  label: string;
+  /** Largura em px (opcional). Convertida para a unidade do Excel. */
+  width?: number;
+  render: (item: T, extraData?: Record<string, any>) => any;
+  /** Renderizador opcional para rich text / fill / bordas. */
+  excelCellRenderer?: (
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
+}
+
 export interface Column<T> {
   key: keyof T | string;
   label: string;
@@ -41,6 +60,22 @@ export interface Column<T> {
     item: T,
     extraData?: Record<string, any>,
   ) => void;
+  /**
+   * Renderizador de célula no Excel. Recebe o `Cell` do ExcelJS já
+   * posicionado — permite escrever rich text, aplicar fills, borders.
+   */
+  excelCellRenderer?: (
+    cell: any,
+    item: T,
+    extraData?: Record<string, any>,
+  ) => void;
+
+  /**
+   * 🔑 Quando presente, o Excel ignora `excelCellRenderer` e expande
+   *    esta coluna em N colunas filhas. O PDF continua renderizando
+   *    como uma única coluna (usando `pdfCellRenderer`).
+   */
+  excelSubColumns?: ExcelSubColumn<T>[];
 }
 
 export interface DataTableAction<T> {
@@ -73,7 +108,10 @@ export interface DataTableProps<T> {
   canDelete?: boolean;
   onDelete?: (selectedIds: string[], selectedItems: T[]) => void;
   exportPDF?: boolean;
+  /** Orientação do PDF exportado. Default: "portrait". */
   exportOrientation?: "portrait" | "landscape";
+  /** Orientação do Excel exportado. Default: "landscape" (A4). */
+  excelOrientation?: "portrait" | "landscape";
   pdfTitle?: string;
   onExportPDF?: (filters: ExportFilters) => void;
   onExportExcel?: (filters: ExportFilters) => void;
@@ -178,6 +216,7 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   onDelete,
   exportPDF = true,
   exportOrientation = "portrait",
+  excelOrientation = "landscape",
   pdfTitle,
   onExportPDF,
   onExportExcel,
@@ -421,8 +460,10 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     }
   };
 
-  // components/DataTable.tsx — dentro do componente
-  const buildExportColumns = () =>
+  // ============================================================
+  // Colunas para PDF (não expande sub-colunas)
+  // ============================================================
+  const buildPDFColumns = () =>
     columns
       .filter((col) => col.key !== "__select" && col.exportable !== false)
       .filter((col) => {
@@ -442,6 +483,63 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
           : undefined,
       }));
 
+  // ============================================================
+  // Colunas para Excel (expande `excelSubColumns`)
+  // ============================================================
+  interface BuiltExcelColumn {
+    key: string;
+    label: string;
+    width?: string;
+    render?: (item: any) => any;
+    excelCellRenderer?: (cell: any, item: any) => void;
+  }
+
+  const buildExcelColumns = (): BuiltExcelColumn[] => {
+    const out: BuiltExcelColumn[] = [];
+
+    const baseColumns = columns
+      .filter((col) => col.key !== "__select" && col.exportable !== false)
+      .filter((col) => {
+        const key = String(col.key).toLowerCase();
+        return key !== "actions" && !key.includes("action");
+      });
+
+    baseColumns.forEach((col) => {
+      // 🔑 Expansão em sub-colunas
+      if (col.excelSubColumns && col.excelSubColumns.length > 0) {
+        col.excelSubColumns.forEach((sub, idx) => {
+          out.push({
+            key: `${String(col.key)}.${idx}`,
+            label: sub.label,
+            width: sub.width ? `${sub.width}px` : undefined,
+            render: (item: any) => sub.render(item, extraData),
+            excelCellRenderer: sub.excelCellRenderer
+              ? (cell: any, item: any) =>
+                  sub.excelCellRenderer!(cell, item, extraData)
+              : undefined,
+          });
+        });
+        return;
+      }
+
+      // Coluna normal (1:1)
+      out.push({
+        key: String(col.key),
+        label: col.label,
+        width: col.width,
+        render: col.render
+          ? (item: any) => col.render!(item, extraData)
+          : undefined,
+        excelCellRenderer: col.excelCellRenderer
+          ? (cell: any, item: any) =>
+              col.excelCellRenderer!(cell, item, extraData)
+          : undefined,
+      });
+    });
+
+    return out;
+  };
+
   const handleNativeExportExcel = async () => {
     const exportData = await fetchAllForExport();
     const finalData = exportData.length > 0 ? exportData : filteredData;
@@ -456,9 +554,11 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     exportTableToExcel({
       title: safeTitle,
       subtitle: "Debit Board - Relatório de Dados",
-      columns: buildExportColumns(),
+      columns: buildExcelColumns(),
       data: finalData,
       filename: safeFilename,
+      orientation: excelOrientation,
+      extraData,
     });
   };
 
@@ -476,11 +576,11 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     exportTableToPDF({
       title: safeTitle,
       subtitle: "Debit Board - Relatório de Dados",
-      columns: buildExportColumns(),
+      columns: buildPDFColumns(),
       data: finalData,
       filename: safeFilename,
       orientation: exportOrientation,
-      extraData, // 🔑 repassa para os pdfCellRenderer
+      extraData,
     });
   };
 
@@ -746,9 +846,11 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
                             <ListSortDescending className="w-4 h-4" />
                           )
                         ) : (
-                          <span className="min-w-4 h-4 opacity-40 group-hover:opacity-100">
-                            <ListChevronsUpDown className="w-4 h-4 text-muted" />
-                          </span>
+                          col.sortable && (
+                            <span className="min-w-4 h-4 opacity-40 group-hover:opacity-100">
+                              <ListChevronsUpDown className="w-4 h-4 text-muted" />
+                            </span>
+                          )
                         )}
                       </span>
                     </span>

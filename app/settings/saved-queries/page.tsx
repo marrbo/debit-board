@@ -406,9 +406,10 @@ function SavedQueriesContent() {
         actions={
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 bg-brand hover:bg-brand/80 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+            className="flex group items-center gap-2 btn-primary"
           >
-            <Plus className="w-4 h-4" /> Nova Consulta
+            <Plus className="w-4 h-4 group-hover:animate-[spin_0.5s_linear_0.5]" />{" "}
+            Nova Consulta
           </button>
         }
       />

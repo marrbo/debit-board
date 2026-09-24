@@ -3,19 +3,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  DoorOpen,
-  ShieldKeyhole,
-  User2,
-  UserCog2,
-  UserMinus,
-} from "lucide-react";
+import { DoorOpen, ShieldKeyhole, UserCog2, UserMinus } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
-import Image from "next/image";
 
 import { topNavItems, bottomNavItems } from "@/lib/mainMenuItems";
 import ThemeToggle from "./ThemeToggle";
+import UserAvatar from "./UserAvatar";
 import { useConfirm } from "@/hooks/useConfirm";
 
 export default function Sidebar() {
@@ -25,37 +19,6 @@ export default function Sidebar() {
 
   const [isAccountOpen, setIsAccountOpen] = useState(false);
 
-  const getAvatar = () => {
-    let url = session?.user?.avatar;
-    const name = session?.user?.name;
-
-    if (name) {
-      url = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        name,
-      )}&rounded=false&length=2&background=0056b3&color=fff&bold=true&uppercase=true&width=48&height=48`;
-    } else {
-      return (
-        <>
-          <User2 className="w-6 h-6" />
-        </>
-      );
-    }
-
-    return (
-      <>
-        <Image
-          src={url}
-          width={38}
-          height={38}
-          loading="eager"
-          className="w-10 h-10 rounded-md object-cover mb-2"
-          alt={`${session?.user?.name || "avatar"}`}
-        />
-      </>
-    );
-  };
-
-  // Verifica se o Admin está impersonando
   const isImpersonating = session?.user?.impersonating === true;
 
   const handleUnimpersonate = async () => {
@@ -129,9 +92,8 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* 🔽 Bloco da Base (Wiki, Settings, Theme e Account) */}
+      {/* Bloco da Base (Wiki, Settings, Theme e Account) */}
       <div className="w-full flex flex-col items-center gap-0 m-0 relative">
-        {/* Items da Base (Wiki e Settings) */}
         {bottomNavItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -162,10 +124,8 @@ export default function Sidebar() {
 
         <span className="divide-x-2 border-b border-subtle w-full mb-3" />
 
-        {/* 🌗 Theme Toggle */}
         <ThemeToggle />
 
-        {/* Divisória Cinza Escura */}
         <span className="divide-x-2 border-b border-subtle w-full mt-3" />
 
         {/* Usuário */}
@@ -174,17 +134,16 @@ export default function Sidebar() {
             onClick={() => setIsAccountOpen(!isAccountOpen)}
             className="flex flex-col p-0 pt-2 items-center group justify-center text-[9px] font-medium transition-colors w-16"
           >
-            {getAvatar()}
+            <UserAvatar size={40} className="mb-2" />
           </button>
 
-          {/* Popover Flutuante (Fora do fluxo da Sidebar) */}
           {isAccountOpen && (
             <div
               className="fixed bottom-4 left-16 z-[200] w-80 bg-elevated border border-subtle rounded-lg p-4 flex flex-col gap-2 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 pb-3 border-b border-subtle">
-                {getAvatar()}
+                <UserAvatar size={40} />
                 <div className="px-2 overflow-hidden">
                   <p className="text-sm font-semibold truncate">
                     {session?.user?.name || "Usuário"}

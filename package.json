@@ -1,7 +1,7 @@
 {
   "name": "debit-board",
   "description": "[db] Debit-Board API",
-  "version": "2026.9.14",
+  "version": "2026.9.30",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,7 +22,10 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
-    "@mui/x-charts": "^9.13.0",
+    "@nivo/bar": "^0.99.0",
+    "@nivo/core": "^0.99.0",
+    "@nivo/line": "^0.99.0",
+    "@nivo/pie": "^0.99.0",
     "@scalar/api-reference-react": "^0.9.69",
     "@sentry/nextjs": "^10.75.0",
     "ajv": "^8.20.0",

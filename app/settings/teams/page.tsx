@@ -154,9 +154,10 @@ function TeamsContent() {
         actions={
           <button
             onClick={() => setSelectedTeam({} as ITeam)}
-            className="flex items-center gap-2 btn-primary"
+            className="flex group items-center gap-2 btn-primary"
           >
-            <Plus className="w-4 h-4" /> Novo Time
+            <Plus className="w-4 h-4 group-hover:animate-[spin_0.5s_linear_0.5]" />{" "}
+            Novo Time
           </button>
         }
         search={{

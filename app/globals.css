@@ -21,7 +21,7 @@
   /* NEUTRALS & TYPOGRAPHY */
   --text-heading: #0f172a;
   --text-body: #1e293b;
-  --text-muted: #758eb0;
+  --text-muted: #8f8f8f;
   --text-disabled: #94a3b8;
 
   /* STATUS SHADES – SUCCESS */
@@ -79,7 +79,7 @@
   /* BACKGROUNDS & GLASS */
   --bg-page: #ececec;
   --bg-surface: #f2f2f2;
-  --bg-elevated: #e5e5e5;
+  --bg-elevated: #ffffff;
   --bg-sunken: #cacaca;
 
   --bg-hover: rgba(15, 23, 42, 0.06);
@@ -302,7 +302,7 @@
     background-color: var(--button-cancel-bg);
     color: var(--button-cancel-text);
     border-radius: var(--radius-md);
-    padding: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
     font-size: 0.875rem;
     font-weight: 500;
     transition:
@@ -313,6 +313,7 @@
 
   .btn-cancel:hover:not(:disabled) {
     background-color: var(--button-cancel-hover) !important;
+    padding: 0.5rem 1rem;
   }
 
   .btn-cancel:active:not(:disabled) {
@@ -637,4 +638,42 @@
   .login-grid {
     animation: none !important;
   }
+}
+
+/* ============================================================
+   Prose — tabelas, código e hr
+   ============================================================
+   Os snapshots do assistente de IA contêm tabelas de 6-8 colunas
+   e blocos de código que podem estourar o container. Aqui:
+   - tabelas ganham scroll horizontal próprio (não empurram o layout)
+   - blocos <pre> ganham scroll horizontal próprio
+   - <hr> tem margem reduzida para não quebrar o ritmo vertical
+   ============================================================ */
+
+.prose table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.prose hr {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prose :is(p, ul, ol, table, pre, blockquote):first-child {
+  margin-top: 0;
+}
+
+.prose :is(p, ul, ol, table, pre, blockquote):last-child {
+  margin-bottom: 0;
 }

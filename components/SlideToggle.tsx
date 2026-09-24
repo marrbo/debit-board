@@ -52,7 +52,7 @@ export default function SlideToggle<T extends string = string>({
 
   return (
     <div
-      className={`relative flex font-mono rounded-full border bg-page dark:bg-surface shadow-inner ${className}`}
+      className={`relative flex font-mono rounded-full border bg-page dark:bg-page shadow-inner ${className}`}
       style={{
         width: containerWidth,
         height: containerHeight,
@@ -62,7 +62,7 @@ export default function SlideToggle<T extends string = string>({
     >
       {/* Knob deslizante */}
       <span
-        className="absolute rounded-full bg-sunken drop-shadow-sm transition-transform duration-300 ease-out pointer-events-none"
+        className="absolute !rounded-full bg-elevated hover:!bg-green-500 hover:!rounded-full drop-shadow-sm transition-transform duration-300 ease-out pointer-events-none"
         style={{
           width: `${knobWidth}px`,
           height: `${innerHeight}px`,

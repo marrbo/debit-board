@@ -188,5 +188,7 @@ export async function proxy(request: NextRequest) {
 // Matcher — o middleware não roda em assets estáticos
 // ---------------------------------------------------------------------------
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!api/auth|api/cron|api/webhooks|api/openapi\\.json|_next/static|_next/image|favicon.ico|login).*)",
+  ],
 };

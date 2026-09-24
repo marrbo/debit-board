@@ -11,6 +11,9 @@ import {
   Table as TableIcon,
 } from "lucide-react";
 import type { DataTableAction } from "./DataTable";
+import ExportSplitButton, {
+  type ExportOption,
+} from "./DataTable/ExportSplitButton";
 
 // ============================================================
 // Tipos compartilhados
@@ -54,6 +57,16 @@ export function TableToolbar<T>({
   const firstItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const lastItem = Math.min(currentPage * pageSize, totalItems);
 
+  // Converte `DataTableAction<T>[]` em `ExportOption[]` para o split button
+  const exportOptions: ExportOption[] = exportActions.map((action) => ({
+    label: action.label,
+    icon: action.icon ?? null,
+    disabled: action.disabled,
+    onClick: () => action.onClick([], []),
+  }));
+
+  const hasExports = exportOptions.length > 0;
+
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-2 bg-elevated dark:bg-sunken border border-sunken rounded-lg">
       {/* Esquerda: contagem + itens por página */}
@@ -80,7 +93,7 @@ export function TableToolbar<T>({
         </select>
       </div>
 
-      {/* Direita: toggle + exports */}
+      {/* Direita: toggle + exports (split button) */}
       <div className="flex items-center gap-2">
         {onViewModeChange && (
           <button
@@ -102,25 +115,16 @@ export function TableToolbar<T>({
           </button>
         )}
 
-        {exportActions.length > 0 && (
-          <div
-            className={`flex items-center gap-1 ${
-              onViewModeChange ? "pl-2 border-l border-strong" : ""
-            }`}
-          >
-            {exportActions.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={() => action.onClick([], [])}
-                disabled={action.disabled}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-muted hover:text-brand hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                {action.icon}
-                <span>{action.label}</span>
-              </button>
-            ))}
-          </div>
+        {hasExports && (
+          <>
+            {onViewModeChange && (
+              <span
+                aria-hidden
+                className="w-px h-5 bg-strong/50 dark:bg-strong/40"
+              />
+            )}
+            <ExportSplitButton options={exportOptions} />
+          </>
         )}
       </div>
     </div>
@@ -128,7 +132,7 @@ export function TableToolbar<T>({
 }
 
 // ============================================================
-// Pagination (base)
+// Pagination (base) — INALTERADO
 // ============================================================
 export function TablePagination<T>({
   currentPage,
@@ -202,7 +206,7 @@ export function TablePagination<T>({
         )}
       </div>
 
-      {/* Direita: navegação */}
+      {/* Direita: navegação — INALTERADO */}
       <div className="flex items-center gap-1">
         <button
           type="button"

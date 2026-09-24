@@ -99,14 +99,14 @@ function ProjectsContent() {
             <button
               onClick={() => setShowAssignModal(true)}
               disabled={selectedProjectIds.length === 0}
-              className="flex items-center gap-2 bg-apple-tertiary-light/10 hover:bg-apple-tertiary-light/20 disabled:opacity-50 text-heading dark:text-heading px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg border border-default dark:border-strong"
+              className="flex items-center gap-2 btn-secondary"
             >
               <FolderPlus className="w-4 h-4" /> Atribuir a Time
             </button>
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              className="flex items-center group gap-2 btn-primary"
             >
               {syncing ? (
                 <>
@@ -115,7 +115,8 @@ function ProjectsContent() {
                 </>
               ) : (
                 <>
-                  <RefreshCw className="w-4 h-4" /> Sincronizar
+                  <RefreshCw className="w-4 h-4 group-hover:animate-[spin_0.5s_linear_1]" />{" "}
+                  Sincronizar
                 </>
               )}
             </button>
@@ -130,6 +131,7 @@ function ProjectsContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Projetos"
+        selectable={true}
         onRowClick={(project: unknown) =>
           setSelectedProject(project as IProject)
         }

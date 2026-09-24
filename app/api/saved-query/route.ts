@@ -78,6 +78,109 @@ function buildVisibilityConditions(
 // ============================================================
 // GET
 // ============================================================
+/**
+ * @openapi
+ * /api/saved-query:
+ *   get:
+ *     summary: Lista consultas DBQL salvas visíveis ao usuário
+ *     description: |
+ *       Retorna as `SavedQuery` visíveis ao usuário autenticado, com
+ *       filtros opcionais e paginação.
+ *
+ *       **Modos de uso:**
+ *
+ *       - **`?id=<ObjectId>`** — busca uma única query pelo `_id`. Ignora
+ *         paginação e demais filtros. Retorna 404 se a query não existir
+ *         ou não for visível ao usuário.
+ *       - **`?q=<ObjectId>`** — resolve uma query por ID e usa seu
+ *         `queryString` como filtro de busca textual. Útil para o
+ *         `DBQLAdvancedSearch` reaproveitar uma query salva.
+ *       - **`?search=<texto>`** — busca textual no campo `queryString`
+ *         (aplicada se `?q=` não foi informado).
+ *       - **`?visibility=<enum>`** — restringe ao tipo indicado
+ *         (`public`, `shared`, `private`, `temporary`). Se o usuário não
+ *         pode ver o tipo, retorna lista vazia sem tocar o banco.
+ *       - **`?context=<enum>`** — filtra por contexto
+ *         (`observations`, `projects`, `repositories`, `stats`).
+ *       - **`?page` / `?limit`** — paginação (default `1` / `10`).
+ *
+ *       **Regras de visibilidade** (aplicadas como `$or`):
+ *
+ *       | Tipo | Requisito |
+ *       |---|---|
+ *       | `public` | Qualquer tenant |
+ *       | `shared` | Mesmo tenant |
+ *       | `private` | Mesmo tenant **e** mesmo usuário |
+ *       | `temporary` | Mesmo tenant **e** mesmo usuário |
+ *
+ *       Quando `?id=` é informado, o endpoint **não aplica paginação** e
+ *       devolve o objeto direto (sem envelope `{ data, total, ... }`).
+ *     tags:
+ *       - Saved Query
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: id
+ *         schema: { type: string }
+ *         description: ObjectId de uma query específica. Quando presente, ignora paginação.
+ *         example: 6a9ac08f7c1cd60351d1a818
+ *       - in: query
+ *         name: q
+ *         schema: { type: string }
+ *         description: ObjectId de uma SavedQuery usada para resolver o `search` a partir do `queryString`.
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Texto livre para filtrar no `queryString`.
+ *       - in: query
+ *         name: visibility
+ *         schema:
+ *           type: string
+ *           enum: [public, shared, private, temporary]
+ *         description: Restringe o resultado a um único tipo de visibilidade.
+ *       - in: query
+ *         name: context
+ *         schema:
+ *           type: string
+ *           enum: [observations, projects, repositories, stats]
+ *         description: Filtra pelo contexto da query.
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, default: 10 }
+ *     responses:
+ *       200:
+ *         description: |
+ *           Lista paginada de queries (envelope `{ data, total, page, limit, totalPages }`)
+ *           ou objeto único quando `?id=` foi informado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/SavedQuery'
+ *                 - $ref: '#/components/schemas/PaginatedSavedQueries'
+ *       401:
+ *         description: Sessão ausente ou inválida.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       404:
+ *         description: Query não encontrada quando `?id=` foi informado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       423:
+ *         description: Sessão válida, mas usuário sem tenant associado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ */
 export async function GET(req: NextRequest) {
   const auth = await requireSession();
   if (auth.ok === false) return auth.response;
@@ -182,17 +285,85 @@ export async function GET(req: NextRequest) {
 // POST
 // ============================================================
 /**
- * Cria recurso do endpoint /api/saved-query.
+ * @openapi
+ * /api/saved-query:
+ *   post:
+ *     summary: Cria uma nova consulta DBQL salva
+ *     description: |
+ *       Cria uma `SavedQuery` no tenant do usuário autenticado.
  *
- * Este endpoint expõe a operação post em /api/saved-query.
+ *       **Fluxo especial para `temporary`:** se já existir uma query
+ *       temporária do usuário (identificada por `tenantId + sub` +
+ *       `visibility: "temporary"`), ela é **atualizada** em vez de criar
+ *       uma nova — a plataforma mantém no máximo **uma** temporary por
+ *       usuário. O `status` da resposta é `201` em ambos os casos.
  *
- * @summary Cria recurso do endpoint /api/saved-query
- * @tags Saved Query
- * @route POST /api/saved-query
- * @async
- * @function POST
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ *       **Backfill defensivo:** o `userId` (ObjectId do `User`) é
+ *       resolvido via `User.findBySub()` e sobrescrito no documento.
+ *       Isso corrige dados legados que possam não ter esse campo.
+ *     tags:
+ *       - Saved Query
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, queryString]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Nome legível da consulta.
+ *                 example: AllowAnonymous - GERAL
+ *               queryString:
+ *                 type: string
+ *                 description: Consulta DBQL em `propriedade:valor`.
+ *                 example: 'category:"Broken Access Control" AND status:open'
+ *               context:
+ *                 type: string
+ *                 enum: [observations, projects, repositories, stats]
+ *                 default: observations
+ *               visibility:
+ *                 type: string
+ *                 enum: [private, shared, public, temporary]
+ *                 default: private
+ *     responses:
+ *       201:
+ *         description: Query criada ou atualizada (temporary).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SavedQuery'
+ *       400:
+ *         description: Campos obrigatórios ausentes (`name` ou `queryString`).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *             example:
+ *               error: Nome e Query são obrigatórios
+ *       401:
+ *         description: Sessão ausente ou inválida.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       423:
+ *         description: Sessão válida, mas usuário sem tenant associado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       500:
+ *         description: Erro interno ao salvar (ex.: usuário não encontrado).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *             example:
+ *               error: Erro ao salvar query
  */
 export async function POST(req: NextRequest) {
   try {
@@ -271,17 +442,91 @@ export async function POST(req: NextRequest) {
 // PUT
 // ============================================================
 /**
- * Atualiza recurso do endpoint /api/saved-query.
+ * @openapi
+ * /api/saved-query:
+ *   put:
+ *     summary: Atualiza uma consulta DBQL salva
+ *     description: |
+ *       Atualiza campos de uma `SavedQuery` existente. Apenas o **dono**
+ *       (mesmo `tenantId` **e** mesmo `sub`) pode editar — admin que
+ *       precisar editar a query de outro usuário deve primeiro
+ *       **impersonar** o dono.
  *
- * Este endpoint expõe a operação put em /api/saved-query.
+ *       Apenas os campos enviados no body são alterados. Campos com
+ *       valores inválidos ou ausentes são ignorados.
  *
- * @summary Atualiza recurso do endpoint /api/saved-query
- * @tags Saved Query
- * @route PUT /api/saved-query
- * @async
- * @function PUT
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ *       **Retorno 404 mascarado:** quando o `id` existe mas pertence a
+ *       outro usuário, o endpoint devolve **404** (não 403) para não
+ *       vazar a existência do recurso.
+ *     tags:
+ *       - Saved Query
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id]
+ *             properties:
+ *               id:
+ *                 type: string
+ *                 description: ObjectId da SavedQuery.
+ *               name: { type: string }
+ *               queryString: { type: string }
+ *               context:
+ *                 type: string
+ *                 enum: [observations, projects, repositories, stats]
+ *               visibility:
+ *                 type: string
+ *                 enum: [private, shared, public, temporary]
+ *           examples:
+ *             renameOnly:
+ *               summary: Apenas renomear
+ *               value: { id: "6a9ac08f...", name: "Novo nome" }
+ *             changeQuery:
+ *               summary: Alterar a query
+ *               value:
+ *                 id: "6a9ac08f..."
+ *                 queryString: 'severity:critical AND status:open'
+ *     responses:
+ *       200:
+ *         description: Query atualizada.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SavedQuery'
+ *       400:
+ *         description: ID inválido ou nenhum campo válido para atualizar.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       401:
+ *         description: Sessão ausente ou inválida.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       404:
+ *         description: Query não encontrada ou pertence a outro usuário.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       423:
+ *         description: Sessão válida, mas usuário sem tenant associado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       500:
+ *         description: Erro interno ao atualizar.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
  */
 export async function PUT(req: NextRequest) {
   try {
@@ -352,17 +597,72 @@ export async function PUT(req: NextRequest) {
 // DELETE
 // ============================================================
 /**
- * Remove recurso do endpoint /api/saved-query.
+ * @openapi
+ * /api/saved-query:
+ *   delete:
+ *     summary: Remove uma ou várias consultas DBQL salvas
+ *     description: |
+ *       Remove `SavedQuery` por `id` único (`?id=`) ou em lote
+ *       (`?ids=id1,id2,...`). Apenas queries **do próprio usuário**
+ *       (mesmo `tenantId` **e** mesmo `sub`) são removidas.
  *
- * Este endpoint expõe a operação delete em /api/saved-query.
+ *       IDs de outros usuários são **silenciosamente ignorados** — o
+ *       endpoint retorna o número de documentos efetivamente deletados
+ *       em `deleted`, sem erro para os que não casaram.
  *
- * @summary Remove recurso do endpoint /api/saved-query
- * @tags Saved Query
- * @route DELETE /api/saved-query
- * @async
- * @function DELETE
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ *       **Idempotente:** chamar com um `id` já inexistente devolve
+ *       `{ success: true, deleted: 0 }`.
+ *     tags:
+ *       - Saved Query
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: id
+ *         schema: { type: string }
+ *         description: ID único para deletar.
+ *         example: 6a9ac08f7c1cd60351d1a818
+ *       - in: query
+ *         name: ids
+ *         schema: { type: string }
+ *         description: Lista de IDs separados por vírgula.
+ *         example: 6a9ac08f...,6a9ac09f...
+ *     responses:
+ *       200:
+ *         description: Resultado da operação.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [success, deleted]
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 deleted:
+ *                   type: integer
+ *                   description: Número de documentos efetivamente removidos.
+ *                   example: 2
+ *       400:
+ *         description: Nenhum ID válido informado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *             example:
+ *               error: ID inválido
+ *       401:
+ *         description: Sessão ausente ou inválida.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
+ *       423:
+ *         description: Sessão válida, mas usuário sem tenant associado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthError'
  */
 export async function DELETE(req: NextRequest) {
   const auth = await requireSession();

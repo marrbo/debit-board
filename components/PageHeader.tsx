@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import DBQLAdvancedSearch from "@/components/dbql/DBQLAdvancedSearch";
 import { SimpleColumnSearch } from "@/components/dbql/SimpleColumnSearch";
 import { useSearchVisible } from "@/hooks/useLocalSettings";
+import AIChatButton from "./ai/AIChatbutton";
 
 export type PageSearchConfig =
   | {
@@ -87,18 +88,23 @@ export default function PageHeader({
           </div>
         </div>
 
+        <AIChatButton
+          context="observations"
+          title={`Assistente IA — ${title}`}
+        />
+
         {(actions || hasSearch) && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0 p-1 rounded-lg">
+          <div className="flex flex-wrap items-center gap-2 p-2 shrink-0 rounded-lg">
             {hasSearch && (
               <button
                 type="button"
                 onClick={handleToggle}
-                className={`flex items-center group btn-secondary`}
+                className={`flex items-center gap-2 group btn-ghost`}
                 title={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
                 aria-label={isSearchVisible ? "Ocultar busca" : "Mostrar busca"}
                 aria-pressed={isSearchVisible}
               >
-                <span className="hidden group-hover:inline text-xs whitespace-nowrap mr-2">
+                <span className="hidden group-hover:inline whitespace-nowrap">
                   {isSearchVisible ? "Ocultar " : "Mostrar "}Busca
                   {urlHasQuery && !isSearchVisible ? (
                     <span className="font-mono text-[8px] align-super"></span>
@@ -106,11 +112,11 @@ export default function PageHeader({
                 </span>
                 {isSearchVisible ? (
                   <>
-                    <SearchX className="w-4 h-4 text-error" />
+                    <SearchX className="w-5 h-5 text-error" />
                   </>
                 ) : (
                   <>
-                    <SearchCode className="w-4 h-4" />
+                    <SearchCode className="w-5 h-5" />
 
                     <span
                       className={`absolute z-9 ml-5 group-hover:hidden -mt-6 w-3 h-3 bg-green-300 rounded-full ${

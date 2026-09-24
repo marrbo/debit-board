@@ -93,9 +93,9 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; icon: React.ElementType; color: string; bg: string }
 > = {
-  open: { label: "Novo", icon: BadgePlus, color: "#007AFF", bg: "#dbeafe" },
+  open: { label: "Aberta", icon: BadgePlus, color: "#007AFF", bg: "#dbeafe" },
   resolved: {
-    label: "Corrigido",
+    label: "Corrigida",
     icon: CheckCircle2,
     color: "#10b981",
     bg: "#d1fae5",

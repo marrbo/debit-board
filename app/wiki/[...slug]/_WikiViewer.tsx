@@ -19,16 +19,17 @@ export default function WikiViewer({
         <div className="flex justify-end mb-4">
           <Link
             href={`/wiki/${slug}?edit=true`}
-            className="text-muted hover:text-brand rounded-lg text-xs font-medium transition-colors outline-none focus:ring-brand/30"
+            className="text-muted fixed hover:text-brand rounded-lg text-xs font-medium transition-colors"
+            title="Editar página"
+            aria-label="Editar página"
           >
             <SquarePen className="w-6 h-6" />
           </Link>
         </div>
       )}
 
-      {/* ⚡ Correção do Preview: prose padrão e dark:prose-invert */}
       <div className="prose prose-slate dark:prose-invert max-w-none">
-        <MarkdownRenderer content={content}></MarkdownRenderer>
+        <MarkdownRenderer content={content} />
       </div>
     </div>
   );

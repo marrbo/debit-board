@@ -21,6 +21,9 @@ services:
       KEYCLOAK_ISSUER: "http://debitboard-keycloak:8080/realms/debit-board"
       NEXTAUTH_URL: "http://localhost:3001"
       DB_DUMPS_DIR: "/var/lib/debit-board/dumps"
+      OLLAMA_BASE_URL: "http://debitboard-ollama:11434"
+      OLLAMA_CHAT_MODEL: "llama3.2"
+      OLLAMA_EMBED_MODEL: "nomic-embed-text"
     volumes:
       - dumps_data:/var/lib/debit-board/dumps
     depends_on:
@@ -28,6 +31,8 @@ services:
         condition: service_healthy
       debitboard-keycloak:
         condition: service_started
+      debitboard-ollama:
+        condition: service_healthy
     networks:
       - debitboard-network
 
@@ -119,6 +124,57 @@ services:
       - debitboard-network
 
   # ============================================================
+  # Ollama — LLM e embeddings locais
+  # ============================================================
+  debitboard-ollama:
+    image: ollama/ollama:latest
+    container_name: debitboard-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "2h"
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - debitboard-network
+
+  # ============================================================
+  # Init container — baixa os modelos necessários (executa uma vez)
+  # ============================================================
+  ollama-model-pull:
+    image: ollama/ollama:latest
+    container_name: debitboard-ollama-pull
+    restart: "no"
+    depends_on:
+      debitboard-ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama pull qwen2.5:3b
+        ollama pull nomic-embed-text
+        echo "Modelos baixados com sucesso."
+    environment:
+      OLLAMA_HOST: "http://debitboard-ollama:11434"
+      OLLAMA_CHAT_MODEL: "qwen2.5:3b"
+    networks:
+      - debitboard-network
+
+  # ============================================================
   # Backup scheduler — chama /api/cron/backup a cada minuto
   # ============================================================
   backup-cron:
@@ -142,6 +198,7 @@ volumes:
   mongo_data:
   postgres_data:
   dumps_data:
+  ollama_models:
 
 networks:
   debitboard-network:

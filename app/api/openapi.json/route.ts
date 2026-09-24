@@ -1,7 +1,11 @@
-// app/api-docs/openapi.json/route.ts
+// app/api/openapi.json/route.ts
 import { NextResponse } from "next/server";
 import { generate } from "nextjs-auto-swagger-gen";
 import type { AutoSwaggerConfig } from "nextjs-auto-swagger-gen";
+import {
+  OPENAPI_SECURITY_SCHEMES,
+  OPENAPI_SCHEMAS,
+} from "@/lib/openapi-schemas";
 
 const config: AutoSwaggerConfig = {
   scanner: {
@@ -12,7 +16,7 @@ const config: AutoSwaggerConfig = {
       "**/app/api/auth/**",
       "**/app/api/cron/**",
       "**/app/api/v2/**",
-      "**/app/api/openapi/**",
+      "**/app/api/openapi.json/**",
       "**/app/api-docs/**",
     ],
   },
@@ -39,12 +43,15 @@ const HTTP_METHODS = [
 ] as const;
 
 function isPublicRoute(path: string): boolean {
-  // Rotas que o próprio app trata como públicas
   return (
     path.startsWith("/api/auth") ||
     path.startsWith("/api/cron") ||
     path.startsWith("/api/webhooks")
   );
+}
+
+function hasExplicitSecurity(operation: Record<string, unknown>): boolean {
+  return Array.isArray(operation.security);
 }
 
 async function buildSpec(): Promise<string> {
@@ -53,50 +60,30 @@ async function buildSpec(): Promise<string> {
 
   const { spec } = await generate({ rootDir: process.cwd(), config });
 
-  // 1) Declara os esquemas de segurança
   spec.components ??= {};
+
   spec.components.securitySchemes = {
-    KeycloakOAuth2: {
-      type: "openIdConnect",
-      description: "Keycloak — Realm debit-board",
-      flows: {
-        authorizationCode: {
-          authorizationUrl:
-            "http://debitboard-keycloak:8080/realms/debit-board/protocol/openid-connect/auth",
-          tokenUrl:
-            "http://debitboard-keycloak:8080/realms/debit-board/protocol/openid-connect/token",
-          scopes: {
-            openid: "OpenID",
-            profile: "Profile",
-            email: "Email",
-            groups: "Groups",
-            organization: "Organization",
-          },
-        },
-      },
-    },
-    BearerAuth: {
-      type: "http",
-      scheme: "bearer",
-      bearerFormat: "JWT",
-      description: "JWT do Keycloak (Bearer Token).",
-    },
+    ...(spec.components.securitySchemes ?? {}),
+    ...OPENAPI_SECURITY_SCHEMES,
+  };
+  spec.components.schemas = {
+    ...(spec.components.schemas ?? {}),
+    ...OPENAPI_SCHEMAS,
   };
 
-  // 2) Aplica security no root (default para quem respeitar)
   spec.security = [{ BearerAuth: [] }];
 
-  // 3) Garante security em CADA operation — é o que o Akto lê
   for (const [path, pathItem] of Object.entries(spec.paths ?? {})) {
     if (!pathItem || isPublicRoute(path)) continue;
 
     for (const method of HTTP_METHODS) {
-      const operation = pathItem[method];
+      const operation = (pathItem as Record<string, unknown>)[method] as
+        | Record<string, unknown>
+        | undefined;
       if (!operation) continue;
+      if (hasExplicitSecurity(operation)) continue;
 
       operation.security = [{ BearerAuth: [] }];
-      // Respeita JSDoc @auth none ou @auth public, se o gerador emitir
-      if (operation.security && operation.security.length > 0) continue;
     }
   }
 
@@ -111,24 +98,89 @@ const headers = {
   "Cache-Control": "no-store",
 };
 
+/**
+ * @openapi
+ * /api/openapi.json:
+ *   get:
+ *     summary: Retorna o documento OpenAPI da API do Debit-Board
+ *     description: |
+ *       Gera em runtime o spec OpenAPI 3 a partir dos JSDoc `@openapi`
+ *       presentes em cada `route.ts` sob `app/api/`.
+ *
+ *       **Cache:** o spec é memoizado por 5 segundos.
+ *
+ *       **Ambiente:** a rota existe apenas em desenvolvimento. Em produção
+ *       retorna 404.
+ *
+ *       **Pós-processamento:**
+ *       1. Mescla `securitySchemes` e `schemas` compartilhados de
+ *          `lib/openapi-schemas.ts`.
+ *       2. Define `security: [{ BearerAuth: [] }]` no root.
+ *       3. Reforça `security` em cada operation autenticada (exceto
+ *          `/api/auth`, `/api/cron`, `/api/webhooks`).
+ *     tags:
+ *       - Meta
+ *     responses:
+ *       200:
+ *         description: Documento OpenAPI 3 completo.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 openapi:
+ *                   type: string
+ *                   example: 3.0.0
+ *                 info:
+ *                   type: object
+ *                 servers:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 paths:
+ *                   type: object
+ *                   additionalProperties: true
+ *                 components:
+ *                   type: object
+ *                   additionalProperties: true
+ *       404:
+ *         description: Restrita a desenvolvimento.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Not Found
+ *       500:
+ *         description: Falha ao gerar o spec.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                 details:
+ *                   type: string
+ */
 export async function GET() {
   if (process.env.NODE_ENV === "production") {
     return new NextResponse(JSON.stringify({ error: "Not Found" }), {
       status: 404,
-      headers: headers,
+      headers,
     });
   }
 
   try {
     const json = await buildSpec();
-    return new NextResponse(json, {
-      headers: headers,
-    });
+    return new NextResponse(json, { headers });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     return new NextResponse(
       JSON.stringify({ error: "Failed to build spec", details: msg }),
-      { status: 500, headers: headers },
+      { status: 500, headers },
     );
   }
 }

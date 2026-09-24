@@ -17,6 +17,49 @@ import { drawSeverityShields } from "@/components/DataTable/pdfShared";
 // ============================================================
 // Colunas do grid
 // ============================================================
+/**
+ * Aplica cor de fundo suave + fonte bold colorida a uma célula
+ * de severidade. Quando o valor é 0, deixa neutro para o olho
+ * bater nas células com contagem > 0.
+ */
+function applySeverityCellStyle(
+  cell: any,
+  value: number,
+  palette: { fill: string; font: string },
+) {
+  cell.value = value;
+  cell.alignment = {
+    vertical: "middle",
+    horizontal: "center",
+  };
+
+  if (value > 0) {
+    cell.font = {
+      name: "Arial",
+      size: 10,
+      bold: true,
+      color: { argb: palette.font },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: palette.fill },
+    };
+  } else {
+    // Zero: cinza neutro, sem fill — não compete visualmente
+    cell.font = {
+      name: "Arial",
+      size: 10,
+      color: { argb: "FF94A3B8" }, // slate-400
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFFFF" },
+    };
+  }
+}
+
 const columns: Column<any>[] = [
   { key: "name", width: "250px", label: "Projeto", sortable: true },
   {
@@ -42,6 +85,73 @@ const columns: Column<any>[] = [
         cell.cell.height,
       );
     },
+    // 🔑 Excel: 4 colunas separadas (Crítico, Alto, Médio, Baixo)
+    excelSubColumns: [
+      {
+        label: "Crítico",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.critical || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.critical || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFEE2E2", // red-100
+            font: "FF991B1B", // red-800
+          });
+        },
+      },
+      {
+        label: "Alto",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.high || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.high || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFED7AA", // orange-200
+            font: "FF9A3412", // orange-800
+          });
+        },
+      },
+      {
+        label: "Médio",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.medium || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.medium || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFFEF3C7", // amber-100
+            font: "FF92400E", // amber-800
+          });
+        },
+      },
+      {
+        label: "Baixo",
+        width: 80,
+        render: (item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          return sev.low || 0;
+        },
+        excelCellRenderer: (cell, item, extraData) => {
+          const sev = extraData?.[item.name]?.severity || {};
+          const value = sev.low || 0;
+          applySeverityCellStyle(cell, value, {
+            fill: "FFDCFCE7", // green-100
+            font: "FF166534", // green-800
+          });
+        },
+      },
+    ],
     render: (item: any, extraData?: Record<string, any>) => {
       const stats = extraData?.[item.name] || {};
       const sev = stats.severity || {};
@@ -318,12 +428,12 @@ function DashboardContent() {
             <button
               onClick={handleExportPDF}
               disabled={projects.length === 0}
-              className="flex items-center group gap-2 px-4 py-2.5 hover:py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:!bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group btn-ghost !text-red-500 hover:!bg-red-600"
             >
-              <span className="hidden group-hover:block transition-transform">
-                Relatório PDF
+              <span className="hidden group-hover:block transition-transform mr-2">
+                Resumo Executivo{" "}
               </span>
-              <FaFilePdf className="w-4 h-4" />
+              <FaFilePdf className="w-5 h-5" />
             </button>
 
             <TeamSelector teams={teams} />

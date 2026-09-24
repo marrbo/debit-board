@@ -499,7 +499,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
               </button>
             </div>
           </div>
-          <div className="h-64">
+          <div style={{ height: 280 }}>
             <Charts
               datasets={evolutionData.datasets}
               labels={evolutionData.labels}
@@ -515,11 +515,13 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
           onExpand={setExpandedChart}
         >
           {categoryTotals.length > 0 ? (
-            <Charts
-              data={categoryTotals}
-              type="pie"
-              onSliceClick={handleSliceClick}
-            />
+            <div style={{ height: 280 }}>
+              <Charts
+                data={categoryTotals}
+                type="pie"
+                onSliceClick={handleSliceClick}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted text-sm">
               Nenhuma categoria encontrada.
@@ -579,7 +581,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
               </button>
             </div>
           </div>
-          <div className="h-64">
+          <div style={{ height: 280 }}>
             {projectStackedData.datasets.length > 0 ? (
               <Charts
                 datasets={projectStackedData.datasets}
