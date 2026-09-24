@@ -16,14 +16,27 @@ import {
   Brain,
   Cpu,
   CircuitBoard,
+  Lightbulb,
   Maximize2,
   Minimize2,
+  RadioTower,
+  SatelliteDish,
 } from "lucide-react";
 import { consumeSSE } from "@/lib/ai/ai-stream";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import UserAvatar from "@/components/UserAvatar";
 
-const THINKING_ICONS = [Atom, Bot, Sparkles, Brain, Cpu, CircuitBoard] as const;
+const THINKING_ICONS = [
+  Atom,
+  Bot,
+  Sparkles,
+  RadioTower,
+  SatelliteDish,
+  Brain,
+  Cpu,
+  Lightbulb,
+  CircuitBoard,
+] as const;
 
 const MAX_HISTORY = 6;
 

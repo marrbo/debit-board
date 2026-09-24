@@ -72,6 +72,7 @@ export default function ApiDocsPage() {
           telemetry: false,
           hideDarkModeToggle: true,
           slug: "debit-board-openapi",
+          agent: { disabled: true },
         }}
       />
     </div>
