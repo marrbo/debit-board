@@ -20,6 +20,9 @@ import {
   Globe,
   TimerReset,
   HatGlasses,
+  Loader2,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 import DBQLRichInput from "./DBQLRichInput";
 import DBQLHelpModal from "./DBQLHelpModal";
@@ -84,6 +87,14 @@ const parseInputToTags = (input: string): string[] => {
   const matches = input.match(regex) || [];
   return matches.map((m) => m.trim());
 };
+
+/**
+ * Remove qualquer protocolo (`http://` / `https://`) que possa ter vazado
+ * para dentro de um valor de parâmetro e quebra a montagem de URLs relativas
+ * em `router.replace`. DBQL não contém URLs em campos, então é seguro.
+ */
+const sanitizeUrlParam = (value: string): string =>
+  value.replace(/^https?:\/\//i, "").trim();
 
 const validateDBQL = (query: string): ValidationError[] => {
   if (!query) return [];
@@ -205,18 +216,17 @@ const validateDBQL = (query: string): ValidationError[] => {
 };
 
 const getEditingToken = (text: string) => {
-  const tokens: string[] = text
-    .split(/(?=\b(?:and|or|not)\b|\s)/i)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const tokens = text.match(/("[^"]*"|[^"\s]+|"[^"]*$)/g) || [];
   const currentToken = tokens[tokens.length - 1] || "";
+
   const cleanToken = currentToken.replace(
     /^[\(!]+|\b(?:and\s+not|or\s+not|not|and|or)\s+/gi,
     "",
   );
 
-  const match = cleanToken.match(/^([a-zA-Z0-9_]+)(>=|<=|>|<|!=|:|=)(.*)$/);
+  const match = cleanToken.match(/^([a-zA-Z0-9_.]+)(>=|<=|>|<|!=|:|=)(.*)$/);
   if (!match) return null;
+
   return {
     rawToken: currentToken,
     cleanToken,
@@ -260,9 +270,15 @@ export default function DBQLAdvancedSearch({
   const [saveName, setSaveName] = useState("");
   const [saveVisibility, setSaveVisibility] = useState<Visibility>("private");
   const [isSavedDropdownOpen, setIsSavedDropdownOpen] = useState(false);
+
+  // IA
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiNaturalInput, setAiNaturalInput] = useState("");
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [aiGeneratedQuery, setAiGeneratedQuery] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [copiedGenerated, setCopiedGenerated] = useState(false);
+
   const [savedQueries, setSavedQueries] = useState<ISavedQuery[]>([]);
   const [tempQuery, setTempQuery] = useState<ISavedQuery>();
   const [isLoading, setIsLoading] = useState(true);
@@ -283,7 +299,7 @@ export default function DBQLAdvancedSearch({
   userSub = userSub ?? session?.user?.sub;
 
   // ============================================================
-  // Derivados (o compilador memoiza automaticamente)
+  // Derivados
   // ============================================================
   const currentEditingQuery =
     mode === "advanced"
@@ -300,6 +316,23 @@ export default function DBQLAdvancedSearch({
     !!activeSavedQuery &&
     activeSavedQuery.visibility !== "temporary" &&
     currentEditingQuery !== originalQueryString;
+
+  // ============================================================
+  // Navegação de URL (helper para blindar protocolo)
+  // ============================================================
+  const replaceUrlParams = (
+    updates: Record<string, string | null>,
+    extraDelete: string[] = [],
+  ) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([k, v]) => {
+      if (v === null) params.delete(k);
+      else params.set(k, sanitizeUrlParam(v));
+    });
+    extraDelete.forEach((k) => params.delete(k));
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   // ============================================================
   // Handlers
@@ -323,10 +356,7 @@ export default function DBQLAdvancedSearch({
     const targetMode = hasComplexSyntax(q.queryString) ? "advanced" : "tags";
     applyQuery(q, targetMode);
 
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("q", id);
-    params.set("m", targetMode === "advanced" ? "a" : "t");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    replaceUrlParams({ q: id, m: targetMode === "advanced" ? "a" : "t" });
     setDBQLQueryId(pathname, id);
 
     onSearch?.(id);
@@ -342,10 +372,7 @@ export default function DBQLAdvancedSearch({
     setMode("tags");
     lastLoadedKeyRef.current = null;
 
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("q");
-    params.delete("m");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    replaceUrlParams({ q: null, m: null });
     clearDBQLQueryId(pathname);
 
     onSearch?.("");
@@ -354,8 +381,9 @@ export default function DBQLAdvancedSearch({
     setTempQuery(undefined);
   };
 
-  const executeSearch = async () => {
-    const fullQuery = currentEditingQuery;
+  const executeSearch = async (overrideQuery?: string) => {
+    const fullQuery =
+      overrideQuery !== undefined ? overrideQuery : currentEditingQuery;
     const currentMode = mode;
 
     if (!fullQuery) {
@@ -370,6 +398,8 @@ export default function DBQLAdvancedSearch({
         activeSavedQuery?.name ||
         `Temporária (${session?.user?.name} - ${dbqlContext})`;
 
+      // Sem mudanças: ainda assim força o refresh (o parent incrementa a
+      // versão sempre que `onSearch` é chamado).
       if (fullQuery === activeQueryString && currentMode === mode) {
         onSearch?.(id ? id.toString() : "");
         return;
@@ -399,10 +429,10 @@ export default function DBQLAdvancedSearch({
           setOriginalQueryString(saved.queryString);
           setActiveQueryString(fullQuery);
 
-          const params = new URLSearchParams(searchParams.toString());
-          params.set("q", newId);
-          params.set("m", currentMode === "advanced" ? "a" : "t");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          replaceUrlParams({
+            q: newId,
+            m: currentMode === "advanced" ? "a" : "t",
+          });
           setDBQLQueryId(pathname, newId);
 
           onSearch?.(newId);
@@ -426,20 +456,18 @@ export default function DBQLAdvancedSearch({
           setOriginalQueryString(updated.queryString);
           setActiveQueryString(fullQuery);
 
-          const params = new URLSearchParams(searchParams.toString());
-          params.set("m", currentMode === "advanced" ? "a" : "t");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          replaceUrlParams({ m: currentMode === "advanced" ? "a" : "t" });
           setDBQLQueryId(pathname, updatedId);
           if (updated.visibility === "temporary") setTempQuery(updated);
 
+          // 🔥 Aqui está o segredo do re-fetch: mesmo `q` mas conteúdo novo.
+          // O parent vai detectar via versão incrementada.
           onSearch?.(updatedId);
         }
       } else {
-        const params = new URLSearchParams(searchParams.toString());
         const expectedMode = currentMode === "advanced" ? "a" : "t";
-        if (params.get("m") !== expectedMode) {
-          params.set("m", expectedMode);
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        if (searchParams.get("m") !== expectedMode) {
+          replaceUrlParams({ m: expectedMode });
         }
         setActiveQueryString(fullQuery);
         onSearch?.(activeSavedQuery?._id?.toString() || "");
@@ -461,9 +489,10 @@ export default function DBQLAdvancedSearch({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (mode === "tags" && inputValue.trim()) {
-        setTags([...tags, inputValue.trim()]);
+        const newTags = [...tags, inputValue.trim()];
+        setTags(newTags);
         setInputValue("");
-        executeSearch();
+        executeSearch(newTags.join(" "));
       } else {
         executeSearch();
       }
@@ -482,6 +511,7 @@ export default function DBQLAdvancedSearch({
   };
 
   const toggleMode = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (mode === "tags") {
       const fullQuery = tags.join(" ") + (inputValue ? ` ${inputValue}` : "");
       setInputValue(fullQuery.trim());
@@ -495,7 +525,6 @@ export default function DBQLAdvancedSearch({
       setInputValue("");
       setMode("tags");
     }
-    e.preventDefault();
   };
 
   const clearAll = (e?: React.MouseEvent) => {
@@ -550,10 +579,10 @@ export default function DBQLAdvancedSearch({
         setIsSaveModalOpen(false);
         setSaveName("");
 
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("q", newId);
-        params.set("m", mode === "advanced" ? "a" : "t");
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        replaceUrlParams({
+          q: newId,
+          m: mode === "advanced" ? "a" : "t",
+        });
         setDBQLQueryId(pathname, newId);
 
         const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
@@ -643,9 +672,52 @@ export default function DBQLAdvancedSearch({
   };
 
   // ============================================================
+  // IA — geração interna via RAG (streamChat local)
+  // ============================================================
+  const handleGenerateQuery = async () => {
+    const naturalLanguage = aiNaturalInput.trim();
+    if (!naturalLanguage || aiGenerating) return;
+
+    setAiGenerating(true);
+    setAiError(null);
+    setAiGeneratedQuery("");
+    setCopiedGenerated(false);
+
+    try {
+      const res = await fetch("/api/ai/dbql-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ naturalLanguage, context: dbqlContext }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao gerar DBQL");
+      setAiGeneratedQuery(data.query);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleApplyGenerated = () => {
+    if (!aiGeneratedQuery) return;
+    const targetMode = hasComplexSyntax(aiGeneratedQuery) ? "advanced" : "tags";
+    setMode(targetMode);
+    if (targetMode === "advanced") {
+      setInputValue(aiGeneratedQuery);
+      setTags([]);
+    } else {
+      setTags(parseInputToTags(aiGeneratedQuery));
+      setInputValue("");
+    }
+    setIsAiModalOpen(false);
+    setAiGeneratedQuery("");
+    setAiNaturalInput("");
+  };
+
+  // ============================================================
   // Effects
   // ============================================================
-  // Sincronização com valor externo
   useEffect(() => {
     if (value === undefined || value === lastValueRef.current) return;
     lastValueRef.current = value;
@@ -669,7 +741,6 @@ export default function DBQLAdvancedSearch({
     });
   }, [value]);
 
-  // Dropdown: resize
   useEffect(() => {
     if (!isSavedDropdownOpen || !savedButtonRef.current) return;
     const handleResize = () => {
@@ -689,7 +760,6 @@ export default function DBQLAdvancedSearch({
     return () => window.removeEventListener("resize", handleResize);
   }, [isSavedDropdownOpen]);
 
-  // Dropdown: click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (
@@ -706,16 +776,13 @@ export default function DBQLAdvancedSearch({
       document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
-  // Carregamento: URL > local-settings > vazio
   useEffect(() => {
     const loadFromUrl = async () => {
       const storedId = getDBQLQueryId(pathname);
       const targetId = rawUrlQueryId || storedId || "";
 
       if (!rawUrlQueryId && storedId) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("q", storedId);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        replaceUrlParams({ q: storedId });
         return;
       }
 
@@ -764,11 +831,8 @@ export default function DBQLAdvancedSearch({
         setTags([]);
         onSearch?.("");
 
-        const params = new URLSearchParams(searchParams.toString());
-        if (params.has("q") || params.has("m")) {
-          params.delete("q");
-          params.delete("m");
-          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        if (searchParams.has("q") || searchParams.has("m")) {
+          replaceUrlParams({ q: null, m: null });
         }
       } catch (err) {
         console.error("Erro ao carregar query da URL:", err);
@@ -781,7 +845,6 @@ export default function DBQLAdvancedSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawUrlQueryId, urlModeParam, pathname, router, searchParams, onSearch]);
 
-  // Lista de queries salvas
   useEffect(() => {
     const fetchSavedQueries = async () => {
       try {
@@ -817,7 +880,6 @@ export default function DBQLAdvancedSearch({
     fetchSavedQueries();
   }, [dbqlContext, session?.user?.name, session?.user?.tenantId, userSub]);
 
-  // Sugestões
   useEffect(() => {
     const tokenData = getEditingToken(inputValue);
     if (!tokenData || !tokenData.fieldKey || tokenData.query?.includes("*")) {
@@ -892,7 +954,6 @@ export default function DBQLAdvancedSearch({
     };
   }, [inputValue, dbqlContext]);
 
-  // Aviso de saída sem salvar
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isQueryModified) {
@@ -904,44 +965,16 @@ export default function DBQLAdvancedSearch({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isQueryModified]);
 
-  // ============================================================
-  // Prompt IA (derivado)
-  // ============================================================
-  const generatedAiPromptText = `Você é um assistente especialista na Debit Board Query Language (DBQL).
-Contexto atual da interface: ${dbqlContext} (AdvancedQuery - DBQL).
-
-Abaixo está a documentação técnica oficial da sintaxe DBQL para você seguir rigorosamente ao gerar consultas:
-
-🔍 Estrutura Básica:
-- Padrão: propriedade:valor
-- Valores com espaços ou caracteres especiais devem ser envolvidos em aspas duplas (" "). Ex: category:"Broken Access Control"
-
-📋 Propriedades Disponíveis:
-- category: Categoria da vulnerabilidade
-- severity: Severidade (critical, high, medium, low)
-- branch: Nome do branch
-- project: Nome do projeto
-- repository: Nome do repositório
-- status: Status atual (new, open, resolved, recurring, wont_fix)
-- is: Filtros especiais (ex: is:unresolved)
-- fileName: Nome do arquivo, suporta curingas (*)
-
-⚙️ Operadores Lógicos e Símbolos:
-- AND, OR, NOT / !
-- ( ) para agrupamento
-- * para Wildcard
-
-Solicitação do usuário em linguagem natural:
-"${aiNaturalInput}"
-
-Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente formatada e pronta para uso.`;
-
   const VISIBILITY_ICONS: Record<string, React.ReactNode> = {
     temporary: <TimerReset size={12} className="text-muted" />,
     private: <HatGlasses size={12} className="text-muted" />,
     public: <Globe size={12} className="text-muted" />,
     shared: <Share2 size={12} className="text-muted" />,
   };
+
+  const hasContent = tags.length > 0 || inputValue.trim() !== "";
+  const hasActiveSearch = !!activeQueryString || !!activeSavedQuery;
+  const showActions = hasContent || hasActiveSearch;
 
   // ============================================================
   // Render
@@ -1006,7 +1039,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-default dark:border-strong text-xs">
           <div className="text-[11px] text-muted flex items-center gap-2">
-            {(tags.length > 0 || inputValue) && (
+            {showActions && (
               <div className="flex items-center gap-1.5 mr-5">
                 <button
                   type="button"
@@ -1019,7 +1052,7 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 </button>
               </div>
             )}
-            {(tags.length > 0 || inputValue) && (
+            {showActions && (
               <button
                 type="button"
                 onClick={clearAll}
@@ -1181,36 +1214,62 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 )}
             </div>
 
+            {/* === Switch Advanced === */}
             <button
               type="button"
               onClick={toggleMode}
-              className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 border ${
+              role="switch"
+              aria-checked={mode === "advanced"}
+              title={
                 mode === "advanced"
-                  ? "bg-brand/10 text-brand dark:text-brand-300 border-brand/20"
-                  : "text-muted border-transparent hover:border-default"
-              }`}
+                  ? "Desativar modo Advanced (voltar para Tags)"
+                  : "Ativar modo Advanced (sintaxe livre)"
+              }
+              className="group flex items-center gap-2 px-2 py-1 rounded-md transition-colors"
             >
-              {mode === "advanced" ? (
-                <>
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span>Advanced</span>
-                </>
-              ) : (
-                <>
-                  <TagIcon className="w-3.5 h-3.5" />
-                  <span>Tags</span>
-                </>
+              <Code2
+                className={`w-3.5 h-3.5 transition-colors ${
+                  mode === "advanced" ? "text-brand" : "text-muted"
+                }`}
+              />
+              <span
+                className={`text-[11px] font-semibold transition-colors ${
+                  mode === "advanced" ? "text-brand" : "text-muted"
+                }`}
+              >
+                Advanced
+              </span>
+              <span
+                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                  mode === "advanced"
+                    ? "bg-brand"
+                    : "bg-gray-300 dark:bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                    mode === "advanced"
+                      ? "translate-x-[14px]"
+                      : "translate-x-[2px]"
+                  }`}
+                />
+              </span>
+              {mode === "tags" && (
+                <TagIcon className="w-3.5 h-3.5 text-muted" />
               )}
             </button>
 
+            {/* === Modal IA === */}
             <button
               type="button"
               onClick={(e) => {
                 e.preventDefault();
                 setIsAiModalOpen(true);
+                setAiError(null);
+                setAiGeneratedQuery("");
               }}
-              title="Gerar com IA"
-              className="p-2 rounded-md transition-colors"
+              title="Gerar query com IA"
+              className="p-2 rounded-md transition-colors hover:text-brand"
             >
               <Bot className="w-4 h-4" />
             </button>
@@ -1342,8 +1401,8 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-heading dark:text-heading flex items-center gap-2">
-                <Bot className="w-4 h-4 text-brand dark:text-brand-300" />
-                <span>Gerar Query com IA (Copiar Prompt)</span>
+                <Wand2 className="w-4 h-4 text-brand dark:text-brand-300" />
+                <span>Gerar Query com IA</span>
               </h3>
               <button
                 type="button"
@@ -1353,74 +1412,98 @@ Por favor, retorne APENAS a string da consulta DBQL resultante, perfeitamente fo
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-muted">
-                Descreva abaixo o que deseja buscar. O sistema vai gerar um
-                prompt estruturado contendo todas as regras da sintaxe DBQL e o
-                contexto atual (
-                <code className="text-brand">{dbqlContext}</code>) para você
-                colar na sua IA favorita.
-              </p>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
-                  Sua busca em linguagem natural:
-                </label>
-                <textarea
-                  value={aiNaturalInput}
-                  onChange={(e) => {
-                    setAiNaturalInput(e.target.value);
-                    setCopiedPrompt(false);
-                  }}
-                  rows={3}
-                  placeholder="Ex: Quero todas as observations de severidade crítica ou alta do projeto GEPIN que não sejam do arquivo Auth"
-                  className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
-                    Prompt gerado com a documentação DBQL:
-                  </label>
-                  <span className="text-[10px] text-muted">
-                    Pronto para envio
-                  </span>
-                </div>
-                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-lg p-3 text-[11px] font-mono text-heading dark:text-heading max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
-                  {generatedAiPromptText}
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAiModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted"
-                >
-                  Fechar
-                </button>
-                <button
-                  type="button"
-                  disabled={!aiNaturalInput.trim()}
-                  onClick={() => {
-                    navigator.clipboard.writeText(generatedAiPromptText);
-                    setCopiedPrompt(true);
-                    setTimeout(() => setCopiedPrompt(false), 3000);
-                  }}
-                  className="px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
-                >
-                  {copiedPrompt ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Prompt Copiado!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar Prompt para IA</span>
-                    </>
-                  )}
-                </button>
-              </div>
+
+            <p className="text-xs text-muted">
+              Descreva em português o que deseja buscar. O modelo local gera a
+              query DBQL usando a mesma documentação do assistente.
+            </p>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
+                Sua busca em linguagem natural:
+              </label>
+              <textarea
+                value={aiNaturalInput}
+                onChange={(e) => {
+                  setAiNaturalInput(e.target.value);
+                  setAiError(null);
+                }}
+                rows={3}
+                placeholder="Ex: todas as observations críticas do projeto GEPIN que estão abertas"
+                disabled={aiGenerating}
+                className="w-full bg-apple-border-light/20 dark:bg-[#2C2C2E] border border-default dark:border-strong rounded-lg p-3 text-xs outline-none focus:border-brand text-heading dark:text-heading resize-none font-mono disabled:opacity-60"
+              />
             </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateQuery}
+              disabled={!aiNaturalInput.trim() || aiGenerating}
+              className="self-end px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5 transition-all"
+            >
+              {aiGenerating ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Gerando…</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Gerar Query</span>
+                </>
+              )}
+            </button>
+
+            {aiError && (
+              <div className="flex items-start gap-2 bg-red-900/20 border border-red-700/30 rounded-lg p-3 text-red-300 text-xs">
+                <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{aiError}</span>
+              </div>
+            )}
+
+            {aiGeneratedQuery && (
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
+                  Query gerada:
+                </label>
+                <div className="relative bg-apple-border-light/10 dark:bg-[#111113] border border-default dark:border-strong rounded-lg p-3 text-[12px] font-mono text-heading dark:text-heading break-words">
+                  {aiGeneratedQuery}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(aiGeneratedQuery);
+                        setCopiedGenerated(true);
+                        setTimeout(() => setCopiedGenerated(false), 2000);
+                      } catch {}
+                    }}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium text-muted hover:text-heading flex items-center gap-1.5 transition-colors"
+                  >
+                    {copiedGenerated ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Copiar
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyGenerated}
+                    className="px-4 py-2 rounded-lg text-xs font-medium bg-brand text-white hover:opacity-90 flex items-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Usar esta query
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

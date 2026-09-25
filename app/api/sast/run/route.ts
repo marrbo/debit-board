@@ -1,15 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Tenant } from "@/models/Tenant";
 import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
+import { ScanProfile } from "@/models/ScanProfile";
 import { SASTScan } from "@/models/SASTScan";
 import { SASTScanResult } from "@/models/SASTScanResult";
 import { Observation } from "@/models/Observation";
 import { executeSearch } from "@/lib/azureSearch";
 import mongoose from "mongoose";
 import type { SearchItem } from "@/lib/types";
+import type { IScanProfile } from "@/types/IScanProfile";
 import { requireSession } from "@/lib/api-auth";
+import { toObjectId } from "@/lib/mongo-id";
 
 // ============================================================
 // CONSTANTES DE EXCLUSÃO
@@ -69,19 +72,20 @@ function isExcludedPath(filePath: string): boolean {
 // ROTA PRINCIPAL
 // ============================================================
 /**
- * Cria recurso do endpoint /api/sast/run.
+ * Executa o SAST Scanner sobre os patterns selecionados.
  *
- * Este endpoint expõe a operação post em /api/sast/run.
+ * Sem `profileId` no corpo (ou `null`), executa todos os patterns ativos
+ * — comportamento "Default".
  *
- * @summary Cria recurso do endpoint /api/sast/run
+ * @summary Executa SAST Scanner
  * @tags Sast, Run
  * @route POST /api/sast/run
  * @async
  * @function POST
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ * @param {NextRequest} req - Corpo opcional: `{ profileId?: string | null }`.
+ * @returns {Promise<NextResponse>} Resultado do scan (scanId, ocorrências, patterns, falhas).
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const auth = await requireSession();
     if (auth.ok === false) return auth.response;
@@ -107,14 +111,49 @@ export async function POST() {
       );
     }
 
+    const body = await req.json().catch(() => ({}));
+    const rawProfileId: unknown = body?.profileId;
+    const profileId = typeof rawProfileId === "string" ? rawProfileId : null;
+
+    // ============================================================
+    // SELEÇÃO DE PATTERNS (perfil ou Default = todos)
+    // ============================================================
+    let patternFilter: Record<string, unknown> = { enabled: true };
+    let profileName: string | null = null;
+
+    if (profileId) {
+      const profileObjectId = toObjectId(profileId);
+      if (!profileObjectId) {
+        return NextResponse.json(
+          { error: "Perfil inválido." },
+          { status: 400 },
+        );
+      }
+
+      const profile = await ScanProfile.findOne({
+        _id: profileObjectId,
+        sub: auth.user.sub,
+      }).lean<IScanProfile>();
+
+      if (!profile) {
+        return NextResponse.json(
+          { error: "Perfil não encontrado." },
+          { status: 404 },
+        );
+      }
+
+      patternFilter = { _id: { $in: profile.patternIds }, enabled: true };
+      profileName = profile.name;
+    }
+
     const settings = tenant.azureSettings;
     const ignoreTls = settings.ignoreTlsErrors || false;
     const tenantId = tenant._id.toString();
 
-    const patterns = await VulnerabilityPattern.find({ enabled: true }).lean();
+    const patterns = await VulnerabilityPattern.find(patternFilter).lean();
     if (!patterns.length) {
       return NextResponse.json(
-        { error: "Nenhum pattern SAST ativo." },
+        { error: "Nenhum pattern SAST ativo para este perfil." },
         { status: 400 },
       );
     }
@@ -170,7 +209,6 @@ export async function POST() {
             continue;
           }
 
-          // 🔥 APLICA EXCLUSÕES ANTES DE PROCESSAR
           result.results = result.results.filter(
             (item: SearchItem) =>
               ["main", "master"].includes(item.branch) &&
@@ -190,7 +228,7 @@ export async function POST() {
           totalOccurrences += result.results.length;
 
           for (const item of result.results) {
-            const key = `${item.project || ""}|${item.repository || ""}|${item.path}|${pattern.category}`;
+            const key = `${pattern.category}|${item.patternId}|${item.project || ""}|${item.repository || ""}|${item.path}|${item.fileName}`;
             if (foundKeys.has(key)) continue;
             foundKeys.add(key);
 
@@ -268,7 +306,6 @@ export async function POST() {
         }
       }
 
-      // Marca resolved/exclusion para observations não encontradas
       const resolvedUpdates: any[] = [];
       observationMap.forEach((issue, key) => {
         if (!foundKeys.has(key) && issue._id !== "temp") {
@@ -301,7 +338,6 @@ export async function POST() {
       if (resolvedUpdates.length > 0)
         await Observation.bulkWrite(resolvedUpdates);
 
-      // Salva resultados detalhados
       await SASTScanResult.create({
         scanId: newScan._id,
         tenantId,
@@ -310,7 +346,6 @@ export async function POST() {
         failedPatterns,
       });
 
-      // Atualiza scan com metadados
       await SASTScan.findByIdAndUpdate(newScan._id, {
         $set: {
           status: "completed",
@@ -324,6 +359,7 @@ export async function POST() {
       return NextResponse.json({
         success: true,
         scanId: newScan._id,
+        profileName,
         totalOccurrences,
         patternCount: patternResults.length,
         failedPatterns,

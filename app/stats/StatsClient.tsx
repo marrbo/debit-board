@@ -1,3 +1,4 @@
+// app/stats/StatsClient.tsx
 "use client";
 
 import {
@@ -18,13 +19,13 @@ import type { StatsData, DailyStats } from "./services/statsService";
 import PageHeader from "@/components/PageHeader";
 import TeamStatsCard from "@/components/TeamStatsCard";
 import TeamSelector from "@/components/TeamSelector";
+import RangeSelector from "@/components/RangeSelector";
 import { useTeam, useSlideToggle } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
+import { useRangeState } from "@/hooks/useRangeState";
+import { writeRangeState, type RangeState } from "@/lib/range-options";
 import SlideToggle from "@/components/SlideToggle";
 
-// ============================================================
-// ChartCard
-// ============================================================
 function ChartCard({
   title,
   children,
@@ -50,30 +51,25 @@ function ChartCard({
           <Maximize2 className="w-4 h-4" />
         </button>
       </div>
-      {/* 🔑 Sem h-64: o Charts define a própria altura via prop `height` */}
       <div className="flex-1">{children}</div>
     </div>
   );
 }
 
-// ============================================================
-// Props
-// ============================================================
 interface StatsClientProps {
   initialStats: StatsData;
 }
 
-// ============================================================
-// Componente
-// ============================================================
 export default function StatsClient({ initialStats }: StatsClientProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
-  // 🔥 Time persistido (mesma fonte do Dashboard)
   const [teamId] = useTeam();
   const { teams, loaded: teamsLoaded } = useTeams();
+
+  // 🔥 Range unificado (URL + storage)
+  const { state: rangeState, rangeKey } = useRangeState();
 
   const [stats, setStats] = useState<StatsData>(initialStats);
   const [loading, setLoading] = useState(false);
@@ -88,7 +84,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return selected?.isGlobal ? "all" : teamId;
   }, [teamId, teams]);
 
-  // 🔥 Modos de visualização persistidos por página
   const { value: projectViewMode, setValue: setProjectViewMode } =
     useSlideToggle<"severity" | "status">(
       pathname,
@@ -103,14 +98,10 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       "severity",
     );
 
-  // Refs
   const lastSearchQueryRef = useRef<string>("");
   const originalQueryRef = useRef<string>("");
   const lastSearchValueRef = useRef<string>("");
 
-  // ============================================================
-  // Handlers
-  // ============================================================
   const handleSearch = useCallback((newQuery: string) => {
     setSearchQuery(newQuery);
   }, []);
@@ -139,12 +130,17 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
   );
 
   const fetchStats = useCallback(
-    async (q: string, teamIdParam: string | null): Promise<StatsData> => {
+    async (
+      q: string,
+      teamIdParam: string | null,
+      range: RangeState,
+    ): Promise<StatsData> => {
       const params = new URLSearchParams();
-      if (q) params.set("q", q); // 🔥 q em vez de search
+      if (q) params.set("q", q);
       if (teamIdParam && teamIdParam !== "all") {
         params.set("teamId", teamIdParam);
       }
+      writeRangeState(range, params);
 
       const res = await fetch(`/api/stats?${params.toString()}`, {
         cache: "no-store",
@@ -193,9 +189,7 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     ],
   );
 
-  // ============================================================
-  // Fetch de stats — aguarda teams carregados
-  // ============================================================
+  // 🔥 Usa `rangeKey` (string estável) para evitar re-fetch em loop
   useEffect(() => {
     if (status !== "authenticated" || !session) return;
     if (!teamsLoaded) return;
@@ -205,8 +199,11 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     const loadAll = async () => {
       setLoading(true);
       try {
-        // 🔥 Manda o `searchQuery` cru — o servidor resolve ID → string
-        const statsData = await fetchStats(searchQuery, effectiveTeamId);
+        const statsData = await fetchStats(
+          searchQuery,
+          effectiveTeamId,
+          rangeState,
+        );
         if (!cancelled) {
           setStats(statsData);
           setError(null);
@@ -226,11 +223,21 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [searchQuery, effectiveTeamId, teamsLoaded, fetchStats, status, session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchQuery,
+    effectiveTeamId,
+    teamsLoaded,
+    fetchStats,
+    status,
+    session,
+    rangeKey,
+  ]);
 
-  // ============================================================
-  // Derivados
-  // ============================================================
+  // ... (derivados — severityTotals, categoryTotals, projectTotals,
+  //      statusTotals, chartData, movingAverage, evolutionData,
+  //      projectStackedData — permanecem EXATAMENTE iguais ao original) ...
+
   const severityTotals = stats?.severityTotals || {};
   const categoryTotals = stats?.categoryTotals || [];
   const projectTotals = useMemo(
@@ -265,13 +272,11 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
   const evolutionData = useMemo(() => {
     if (!chartData.length) return { labels: [], datasets: [] };
-
     const labels = chartData.map((d: DailyStats) =>
       format(new Date(d.label), "dd MMM", { locale: ptBR }),
     );
     const total = chartData.map((d: DailyStats) => d.total);
     const medianTotal = movingAverage(total);
-
     const datasets: unknown[] = [];
 
     if (evolutionViewMode === "severity") {
@@ -281,7 +286,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         { key: "medium", label: "Médio", color: "#FFCC00" },
         { key: "low", label: "Baixo", color: "#007AFF" },
       ] as const;
-
       severities.forEach(({ key, label, color }) => {
         datasets.push({
           label,
@@ -302,7 +306,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         { key: "resolved", label: "Resolvida", color: "#34C759" },
         { key: "wontFix", label: "Não Corrigir", color: "#FF3B30" },
       ] as const;
-
       statuses.forEach(({ key, label, color }) => {
         datasets.push({
           label,
@@ -335,12 +338,9 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
 
   const projectStackedData = useMemo(() => {
     if (!projectTotals.length) return { labels: [], datasets: [] };
-
-    // 🔥 Ordena por total decrescente e limita a 7 itens (menos é mais)
     const sorted = [...projectTotals]
       .sort((a, b) => (b.value || 0) - (a.value || 0))
       .slice(0, 7);
-
     const labels = sorted.map((p) =>
       p.label.length > 18 ? `${p.label.slice(0, 17)}…` : p.label,
     );
@@ -353,7 +353,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         { key: "wont_fix", label: "Não corrigir", color: "#EF4444" },
         { key: "unknown", label: "Outros", color: "#94A3B8" },
       ] as const;
-
       const datasets = statuses
         .filter((s) => sorted.some((p) => (p.status?.[s.key] || 0) > 0))
         .map((status) => ({
@@ -364,7 +363,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
           borderRadius: 2,
           borderSkipped: false as const,
         }));
-
       return { labels, datasets };
     }
 
@@ -375,7 +373,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       { key: "low", label: "Baixo", color: "#3B82F6" },
       { key: "unknown", label: "Outros", color: "#94A3B8" },
     ] as const;
-
     const datasets = severities
       .filter((s) => sorted.some((p) => (p.severity?.[s.key] || 0) > 0))
       .map((sev) => ({
@@ -386,22 +383,16 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         borderRadius: 2,
         borderSkipped: false as const,
       }));
-
     return { labels, datasets };
   }, [projectTotals, projectViewMode]);
 
-  // ============================================================
-  // Guards
-  // ============================================================
   if (status === "loading") {
     return <div className="text-muted py-10 text-center">Carregando...</div>;
   }
-
   if (!session) {
     router.push("/login");
     return null;
   }
-
   if (loading && !stats) {
     return (
       <div className="text-center py-12">
@@ -409,7 +400,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="bg-[#FFD1D1] dark:bg-[#FF453A]/20 border border-[#FF453A]/40 rounded-lg p-6 text-[#FF453A]">
@@ -417,10 +407,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       </div>
     );
   }
-
-  // ============================================================
-  // Render
-  // ============================================================
 
   return (
     <div className="w-full space-y-6 p-8">
@@ -446,12 +432,12 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
                 <FilterIcon className="w-4 h-4" />
               </button>
             )}
+            <RangeSelector />
             <TeamSelector teams={teams} />
           </div>
         }
       />
 
-      {/* Card compartilhado de Severidade e Status */}
       <TeamStatsCard
         type="status"
         variant="compact"
@@ -461,7 +447,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         status={statusTotals}
       />
 
-      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Evolução */}
         <div className="bg-elevated border border-subtle dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg dark:shadow-none transition-colors relative">
@@ -469,7 +454,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
             <h3 className="text-sm font-semibold text-body dark:text-body shrink-0">
               Novas ocorrências
             </h3>
-
             <div className="flex items-center gap-2 shrink-0">
               <SlideToggle
                 options={[
@@ -551,7 +535,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
             <h3 className="text-sm font-semibold text-body dark:text-body shrink-0">
               Total por Projeto
             </h3>
-
             <div className="flex items-center gap-2 shrink-0">
               <SlideToggle
                 options={[
@@ -597,7 +580,6 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
         </div>
       </div>
 
-      {/* Modal de expansão */}
       {expandedChart && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white dark:bg-[#1C1C1E] rounded-lg shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">

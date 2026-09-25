@@ -341,7 +341,10 @@ export async function GET(req: NextRequest) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *             example:
  *               error: Nome e Query são obrigatórios
  *       401:
@@ -357,11 +360,14 @@ export async function GET(req: NextRequest) {
  *             schema:
  *               $ref: '#/components/schemas/AuthError'
  *       500:
- *         description: Erro interno ao salvar (ex.: usuário não encontrado).
+ *         description: "Erro interno ao salvar (ex.: usuário não encontrado)."
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *             example:
  *               error: Erro ao salvar query
  */
@@ -502,7 +508,10 @@ export async function POST(req: NextRequest) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *       401:
  *         description: Sessão ausente ou inválida.
  *         content:
@@ -514,7 +523,10 @@ export async function POST(req: NextRequest) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *       423:
  *         description: Sessão válida, mas usuário sem tenant associado.
  *         content:
@@ -526,7 +538,10 @@ export async function POST(req: NextRequest) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function PUT(req: NextRequest) {
   try {
@@ -648,7 +663,10 @@ export async function PUT(req: NextRequest) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthError'
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *             example:
  *               error: ID inválido
  *       401:

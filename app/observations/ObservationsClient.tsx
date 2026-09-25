@@ -1,6 +1,7 @@
+// app/observations/ObservationsClient.tsx
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Binoculars, ExternalLink, UserPlus } from "lucide-react";
@@ -10,16 +11,15 @@ import ObservationDrawer from "@/components/ObservationDrawer";
 import AssigneeSelect from "@/components/AssigneeSelect";
 import BulkAssignAssigneeModal from "@/components/BulkAssignAssigneeModal";
 import TeamSelector from "@/components/TeamSelector";
+import RangeSelector from "@/components/RangeSelector";
 import { useTeam } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
 import { useUsers } from "@/hooks/useUsers";
+import { useRangeState } from "@/hooks/useRangeState";
 import type { IObservation } from "@/types/IObservation";
 import type { IAzureSettings } from "@/types/IAzureSettings";
 import LoadingSkeleton from "@/components/LoadingSkeleton";
 
-// ============================================================
-// Helpers de cor (fora do componente)
-// ============================================================
 const statusColor = (status: string) => {
   const colors: Record<string, string> = {
     open: "bg-red-50 text-red-700 border-red-200",
@@ -40,9 +40,6 @@ const severityColor = (severity: string) => {
   return colors[severity] || "bg-gray-100";
 };
 
-// ============================================================
-// Componente
-// ============================================================
 export default function ObservationsClient({
   azureSettings,
 }: {
@@ -56,12 +53,21 @@ export default function ObservationsClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkAssignIds, setBulkAssignIds] = useState<string[] | null>(null);
 
-  // Time persistido
   const [teamId] = useTeam();
   const { teams, loaded: teamsLoaded } = useTeams();
-
-  // Usuários (cache em memória via hook)
   const { users } = useUsers();
+
+  // 🔥 Range unificado (URL + storage)
+  const { state: rangeState, rangeKey } = useRangeState();
+
+  // Dispara refetch quando o range muda — compara a chave estável
+  const prevRangeKeyRef = useRef(rangeKey);
+  useEffect(() => {
+    if (prevRangeKeyRef.current !== rangeKey) {
+      prevRangeKeyRef.current = rangeKey;
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, [rangeKey]);
 
   const effectiveTeamId = useMemo(() => {
     if (!teamId) return "all";
@@ -103,7 +109,6 @@ export default function ObservationsClient({
     setBulkAssignIds(null);
   }, []);
 
-  // Colunas
   const columns: Column<IObservation>[] = useMemo(
     () => [
       {
@@ -217,7 +222,6 @@ export default function ObservationsClient({
     [users, handleUpdateAssignee],
   );
 
-  // 🔥 Ações em massa — aparecem na barra do DataTable quando há seleção
   const bulkActions = useMemo(
     () => [
       {
@@ -244,19 +248,30 @@ export default function ObservationsClient({
             "Buscar Observations, e.g. severity:critical OR project:my-api",
           context: "observations",
         }}
-        actions={<TeamSelector teams={teams} />}
+        actions={
+          <div className="flex items-center gap-4">
+            <RangeSelector />
+            <TeamSelector teams={teams} />
+          </div>
+        }
       />
 
       {!teamsLoaded ? (
-        // <div className="py-12 text-center text-muted">Carregando feed...</div>
-        <LoadingSkeleton></LoadingSkeleton>
+        <LoadingSkeleton />
       ) : (
         <DataTable
           endpoint="/api/observations"
           columns={columns}
-          searchQuery={searchQuery}
+          searchDbqlId={searchQuery}
           refreshKey={refreshKey}
           teamId={effectiveTeamId}
+          range={
+            rangeState.mode === "preset" && rangeState.preset !== "all"
+              ? rangeState.preset
+              : undefined
+          }
+          rangeFrom={rangeState.mode === "custom" ? rangeState.from : undefined}
+          rangeTo={rangeState.mode === "custom" ? rangeState.to : undefined}
           exportOrientation="landscape"
           selectable
           actions={bulkActions}

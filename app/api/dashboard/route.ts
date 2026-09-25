@@ -1,27 +1,34 @@
 // app/api/dashboard/route.ts
-import { type NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/mongodb";
+import { type NextRequest } from "next/server";
 import { Project } from "@/models/Project";
 import { Observation } from "@/models/Observation";
-import { Team } from "@/models/Team";
-import { SavedQuery } from "@/models/SavedQuery";
-import { parseDBQL } from "@/lib/parseDBQL";
 import mongoose from "mongoose";
-import { normalizeProjectIds } from "@/lib/serverUtils";
+import { handleGenericGet } from "@/lib/api-handler";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
+import { buildObservationFilters } from "@/lib/observation-filters";
+import {
+  sanitizePreset,
+  sanitizeIso,
+  DEFAULT_PRESET,
+} from "@/lib/range-options";
+
 /**
- * Lista recursos do endpoint /api/dashboard.
+ * Lista projetos do dashboard respeitando time, DBQL e janela temporal.
  *
- * Este endpoint expõe a operação get em /api/dashboard.
+ * A janela temporal pode ser um preset (`?range=30d`) ou um intervalo
+ * custom (`?from=ISO&to=ISO`). Quando o range é restritivo **ou** há DBQL,
+ * o grid é limitado aos projetos que possuem observations casando com o
+ * filtro completo — os mesmos considerados em `/api/observations` e
+ * `/api/dashboard/stats`.
  *
- * @summary Lista recursos do endpoint /api/dashboard
+ * @summary Lista projetos do dashboard
  * @tags Dashboard
  * @route GET /api/dashboard
  * @async
  * @function GET
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ * @param {NextRequest} req - Requisição HTTP.
+ * @returns Resposta JSON `{ data, total, page, limit, totalPages }`.
  */
 export async function GET(req: NextRequest) {
   const auth = await requireSession();
@@ -29,120 +36,67 @@ export async function GET(req: NextRequest) {
 
   const tenantId = toObjectId(auth.user.tenantId);
 
-  await connectToDatabase();
-
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const limit = parseInt(searchParams.get("limit") || "10", 10);
-  const sortField = searchParams.get("sort") || "createdAt";
-  const sortOrder = searchParams.get("order") === "asc" ? 1 : -1;
   const dbqlId = searchParams.get("q");
-  const searchQueryRaw = searchParams.get("search") || "";
-  const isAll = searchParams.get("all") === "true";
 
-  let finalSearchQuery = searchQueryRaw;
-  if (dbqlId) {
-    try {
-      const savedQuery = await SavedQuery.findById(dbqlId).lean();
-      if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
-    } catch (error) {
-      console.error("Erro ao buscar SavedQuery:", error);
-    }
-  }
+  const rawRange = searchParams.get("range");
+  const rawFrom = searchParams.get("from");
+  const rawTo = searchParams.get("to");
 
-  // 🔥 Lógica para achar os IDs de Projetos permitidos
+  // Sanitiza aqui só para decidir se há filtro restritivo. O match em si
+  // é montado por `buildObservationFilters`, que sanitiza de novo.
+  const range = sanitizePreset(rawRange);
+  const from = sanitizeIso(rawFrom);
+  const to = sanitizeIso(rawTo);
+  const hasCustomRange = Boolean(from && to);
+  const hasRestrictiveFilter =
+    Boolean(dbqlId && dbqlId.length > 0) ||
+    hasCustomRange ||
+    range !== DEFAULT_PRESET;
+
+  const { match, allowedProjectNames } = await buildObservationFilters({
+    tenantId,
+    dbqlId,
+    teamId,
+    range: rawRange,
+    rangeFrom: rawFrom,
+    rangeTo: rawTo,
+  });
+
+  // Se há filtro restritivo (DBQL ou range), restringe pelo conjunto de
+  // projetos que TÊM observations casando. Sem isso, projetos vazios
+  // ficariam no grid mostrando 0 enquanto o stat card mostraria 0 também
+  // — divergência silenciosa para o usuário.
   let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
 
-  if (teamId && teamId !== "all") {
-    const teamObjectId = mongoose.Types.ObjectId.isValid(teamId)
-      ? new mongoose.Types.ObjectId(teamId)
-      : null;
-
-    const team = await Team.findById(teamObjectId).lean();
-    if (!team) {
-      return NextResponse.json({
-        data: [],
-        total: 0,
-        message: "Time não encontrado",
-      });
-    }
-
-    // 🔥 Normaliza projectIds (achatamento + validação)
-    allowedProjectIds = normalizeProjectIds(team.projectIds);
-
-    // 🔥 Log para diagnóstico
-    console.log(
-      `[Dashboard] Time: ${team.name}, projectIds normalizados: ${allowedProjectIds.length}`,
-    );
+  if (hasRestrictiveFilter) {
+    const names = await Observation.distinct("project", match);
+    const projects = await Project.find({
+      tenantId,
+      name: { $in: names },
+    })
+      .select("_id")
+      .lean();
+    allowedProjectIds = projects.map((p) => p._id);
+  } else if (allowedProjectNames !== null) {
+    // Apenas time selecionado: devolve todos os projetos do time
+    // (mesmo os sem observations), preservando o comportamento anterior.
+    const projects = await Project.find({
+      tenantId,
+      name: { $in: allowedProjectNames },
+    })
+      .select("_id")
+      .lean();
+    allowedProjectIds = projects.map((p) => p._id);
   }
 
-  // Se houver DBQL, filtra pelos nomes de projetos que batem com a query
-  if (finalSearchQuery) {
-    const parsedMatch = parseDBQL(finalSearchQuery);
-    if (parsedMatch && Object.keys(parsedMatch).length > 0) {
-      const obsMatch: any = { tenantId };
-
-      // Intersecta com os projetos do time, se existir
-      if (allowedProjectIds) {
-        const teamProjects = await Project.find({
-          _id: { $in: allowedProjectIds },
-        })
-          .select("name")
-          .lean();
-        obsMatch.project = { $in: teamProjects.map((p) => p.name) };
-      }
-
-      Object.assign(obsMatch, parsedMatch);
-      const matchedProjectNames = await Observation.distinct(
-        "project",
-        obsMatch,
-      );
-
-      const matchedProjects = await Project.find({
-        name: { $in: matchedProjectNames },
-      })
-        .select("_id")
-        .lean();
-
-      if (allowedProjectIds) {
-        const matchedIds = matchedProjects.map((p) => p._id);
-        // Intersecção
-        allowedProjectIds = allowedProjectIds.filter((id) =>
-          matchedIds.some((mid) => mid.equals(id)),
-        );
-      } else {
-        allowedProjectIds = matchedProjects.map((p) => p._id);
-      }
-    }
-  }
-
-  // 🔥 Busca os Projetos com paginação
-  const filter: any = { tenantId };
-  if (allowedProjectIds && allowedProjectIds.length > 0) {
-    filter._id = { $in: allowedProjectIds };
-  }
-
-  try {
-    // 🔥 Se all=true, ignora paginação e retorna todos
-    const skip = isAll ? 0 : (page - 1) * limit;
-    const effectiveLimit = isAll ? 100000 : limit; // Use um número alto para garantir todos
-
-    const [projects, total] = await Promise.all([
-      Project.find(filter)
-        .sort({ [sortField]: sortOrder })
-        .skip(skip)
-        .limit(effectiveLimit)
-        .lean(),
-      Project.countDocuments(filter),
-    ]);
-
-    return NextResponse.json({ data: projects, total });
-  } catch (error: any) {
-    console.error("Erro ao buscar projetos:", error);
-    return NextResponse.json(
-      { data: [], total: 0, error: error.message },
-      { status: 500 },
-    );
-  }
+  return handleGenericGet(req, {
+    model: Project,
+    defaultSort: "name",
+    all: true,
+    additionalMatch:
+      allowedProjectIds !== null ? { _id: { $in: allowedProjectIds } } : {},
+    skipDbqlParsing: true,
+  });
 }

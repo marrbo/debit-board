@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
@@ -12,7 +13,10 @@ import TeamSelector from "@/components/TeamSelector";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useTeam } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
+import { useRangeState } from "@/hooks/useRangeState";
+import { writeRangeState } from "@/lib/range-options";
 import { drawSeverityShields } from "@/components/DataTable/pdfShared";
+import RangeSelector from "@/components/RangeSelector";
 
 // ============================================================
 // Colunas do grid
@@ -231,9 +235,6 @@ const columns: Column<any>[] = [
   },
 ];
 
-// ============================================================
-// Conteúdo
-// ============================================================
 function DashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -241,7 +242,11 @@ function DashboardContent() {
   const [teamId] = useTeam();
   const { teams, loaded: teamsLoaded } = useTeams();
 
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
+  const [searchDbqlId, setSearchDbqlId] = useState(searchParams.get("q") || "");
+  const [searchVersion, setSearchVersion] = useState(0);
+
+  // 🔥 Hook estável — `state` só muda de referência quando um campo muda
+  const { state: rangeState, rangeKey } = useRangeState();
 
   const [stats, setStats] = useState<any>({
     teamStats: {
@@ -255,29 +260,25 @@ function DashboardContent() {
 
   const [projects, setProjects] = useState<any[]>([]);
 
-  // Time efetivo (global → 'all')
   const effectiveTeamId = useMemo(() => {
     if (!teamId) return "all";
     const selected = teams.find((t) => t._id === teamId);
     return selected?.isGlobal ? "all" : teamId;
   }, [teamId, teams]);
 
-  // teamName derivado
   const teamName = useMemo(
     () => teams.find((t) => t._id === teamId)?.name ?? "",
     [teams, teamId],
   );
 
   // ============================================================
-  // Stats
+  // Stats — usa `rangeKey` (string estável) em vez do objeto
   // ============================================================
   useEffect(() => {
     if (!teamsLoaded || !effectiveTeamId) return;
-    const params = new URLSearchParams({
-      teamId: effectiveTeamId,
-      range: "30d",
-    });
-    if (searchTerm) params.set("q", searchTerm);
+    const params = new URLSearchParams({ teamId: effectiveTeamId });
+    writeRangeState(rangeState, params);
+    if (searchDbqlId) params.set("q", searchDbqlId);
 
     fetch(`/api/dashboard/stats?${params.toString()}`)
       .then((res) => {
@@ -317,10 +318,11 @@ function DashboardContent() {
           projectStats: {},
         });
       });
-  }, [teamsLoaded, effectiveTeamId, searchTerm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamsLoaded, effectiveTeamId, searchDbqlId, rangeKey, searchVersion]);
 
   // ============================================================
-  // Lista de projetos (para export e título)
+  // Lista de projetos
   // ============================================================
   useEffect(() => {
     if (!teamsLoaded || !effectiveTeamId) return;
@@ -331,7 +333,8 @@ function DashboardContent() {
       sort: "name",
       order: "asc",
     });
-    if (searchTerm) params.set("q", searchTerm);
+    writeRangeState(rangeState, params);
+    if (searchDbqlId) params.set("q", searchDbqlId);
 
     fetch(`/api/dashboard?${params.toString()}`)
       .then((res) => {
@@ -355,10 +358,12 @@ function DashboardContent() {
         console.error("Erro ao buscar projetos:", err);
         setProjects([]);
       });
-  }, [teamsLoaded, effectiveTeamId, searchTerm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamsLoaded, effectiveTeamId, searchDbqlId, rangeKey, searchVersion]);
 
   const handleSearch = useCallback((newQuery: string) => {
-    setSearchTerm(newQuery);
+    setSearchDbqlId(newQuery);
+    setSearchVersion((v) => v + 1);
   }, []);
 
   const handleExportPDF = useCallback(async () => {
@@ -368,7 +373,8 @@ function DashboardContent() {
       sort: "name",
       order: "asc",
     });
-    if (searchTerm) params.set("q", searchTerm);
+    writeRangeState(rangeState, params);
+    if (searchDbqlId) params.set("q", searchDbqlId);
 
     const res = await fetch(`/api/dashboard?${params.toString()}`);
     if (!res.ok) {
@@ -399,7 +405,7 @@ function DashboardContent() {
       projects: projectsForPDF,
       categoryDetails: stats.categoryDetails,
     });
-  }, [effectiveTeamId, searchTerm, stats, teamName]);
+  }, [effectiveTeamId, searchDbqlId, rangeState, stats, teamName]);
 
   if (status === "loading")
     return <div className="py-10 text-center">Carregando...</div>;
@@ -418,13 +424,14 @@ function DashboardContent() {
         search={{
           type: "advanced",
           onSearch: handleSearch,
-          userSub: session?.user?.sub || session?.user?.sub,
+          userSub: session?.user?.sub,
           placeholder:
             "Filtrar stats, e.g. severity:critical OR project:my-api",
           context: "observations",
         }}
         actions={
           <div className="flex items-center gap-4">
+            <RangeSelector />
             <button
               onClick={handleExportPDF}
               disabled={projects.length === 0}
@@ -435,7 +442,6 @@ function DashboardContent() {
               </span>
               <FaFilePdf className="w-5 h-5" />
             </button>
-
             <TeamSelector teams={teams} />
           </div>
         }
@@ -472,6 +478,17 @@ function DashboardContent() {
               columns={columns}
               defaultSort={{ field: "name", order: "asc" }}
               defaultLimit={10}
+              searchDbqlId={searchDbqlId}
+              refreshKey={searchVersion}
+              range={
+                rangeState.mode === "preset" && rangeState.preset !== "all"
+                  ? rangeState.preset
+                  : undefined
+              }
+              rangeFrom={
+                rangeState.mode === "custom" ? rangeState.from : undefined
+              }
+              rangeTo={rangeState.mode === "custom" ? rangeState.to : undefined}
               pdfTitle={`Projetos: Severidades - ${
                 effectiveTeamId === "all" ? "Global" : teamName
               }`}

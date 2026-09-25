@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
-import type { Types } from "mongoose";
 import {
   LoaderCircle,
   Trash2,
@@ -14,6 +13,7 @@ import { FaFileExcel, FaFilePdf } from "react-icons/fa";
 import { exportTableToPDF } from "./exportPDF";
 import { exportTableToExcel } from "./exportExcel";
 import { TableToolbar, TablePagination } from "../PaginationInfo";
+import type { Types } from "mongoose";
 
 // ============================================================
 // Tipos
@@ -119,7 +119,13 @@ export interface DataTableProps<T> {
   variant?: "table" | "cards";
   renderCard?: (item: T, extraData?: Record<string, any>) => React.ReactNode;
   extraData?: Record<string, any>;
-  searchQuery?: string;
+  searchDbqlId?: string;
+  /** Preset de range. Ignorado quando `rangeFrom` + `rangeTo` são passados. */
+  range?: string;
+  /** ISO. Deve vir com `rangeTo`. */
+  rangeFrom?: string;
+  /** ISO. Deve vir com `rangeFrom`. */
+  rangeTo?: string;
   filterColumn?: string | null;
   filterValue?: string;
   filterFunction?: (item: T) => boolean;
@@ -224,7 +230,10 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
   renderCard,
   extraData,
   onSelectionChange,
-  searchQuery = "",
+  searchDbqlId = "",
+  range,
+  rangeFrom,
+  rangeTo,
   filterColumn = null,
   filterValue = "",
   filterFunction,
@@ -373,12 +382,15 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
           limit: String(limit),
           ...(projectId && { projectId }),
           ...(teamId && { teamId }),
+          ...(range && { range }),
         });
         if (sortField) params.set("sort", sortField);
         if (sortOrder) params.set("order", sortOrder);
-        if (searchQuery) params.set("q", searchQuery);
+        if (searchDbqlId) params.set("q", searchDbqlId);
 
-        const res = await fetch(buildEndpointUrl(endpoint, params));
+        const endpointURL = buildEndpointUrl(endpoint, params);
+        console.log("[endpointURL]: {0}", endpointURL);
+        const res = await fetch(endpointURL);
         if (!res.ok) throw new Error("Erro ao buscar dados");
 
         const json = await res.json();
@@ -420,7 +432,8 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
     sortField,
     sortOrder,
     teamId,
-    searchQuery,
+    searchDbqlId,
+    range,
     projectId,
     refreshKey,
   ]);
@@ -435,9 +448,14 @@ export function DataTable<T extends { _id: string | Types.ObjectId }>({
         ...(projectId && { projectId }),
         ...(teamId && { teamId }),
       });
+      if (range) params.set("range", range);
+      if (rangeFrom && rangeTo) {
+        params.set("from", rangeFrom);
+        params.set("to", rangeTo);
+      }
       if (sortField) params.set("sort", sortField);
       if (sortOrder) params.set("order", sortOrder);
-      if (searchQuery) params.set("q", searchQuery);
+      if (searchDbqlId) params.set("q", searchDbqlId);
 
       const res = await fetch(buildEndpointUrl(endpoint, params));
       if (!res.ok) throw new Error("Falha ao buscar todos os dados");

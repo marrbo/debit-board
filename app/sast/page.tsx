@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Play, RefreshCw, ShieldKeyhole } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import type { Column } from "@/components/DataTable";
+import ScanProfileModal from "@/components/ScanProfileModal";
 
 interface SASTScanRow {
   _id: string;
@@ -87,38 +88,43 @@ function SASTScansContent() {
   const [scanning, setScanning] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setModalOpen] = useState(false);
 
-  const runScan = async () => {
-    if (scanning) return;
-    setScanning(true);
-    setError(null);
+  const runScan = useCallback(
+    async (profileId: string | null) => {
+      if (scanning) return;
+      setScanning(true);
+      setError(null);
 
-    try {
-      const res = await fetch("/api/sast/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      try {
+        setRefreshKey((prev) => prev + 1);
+        const res = await fetch("/api/sast/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileId }),
+        });
 
-      if (!res.ok) {
-        let errMsg = "Erro ao executar scanner";
-        try {
-          const data = await res.json();
-          errMsg = data.error || errMsg;
-        } catch {}
-        throw new Error(errMsg);
+        if (!res.ok) {
+          let errMsg = "Erro ao executar scanner";
+          try {
+            const data = await res.json();
+            errMsg = data.error || errMsg;
+          } catch {}
+          throw new Error(errMsg);
+        }
+
+        setModalOpen(false);
+        setRefreshKey((prev) => prev + 1);
+      } catch (err: unknown) {
+        if (err instanceof Error) setError(err.message);
+        else setError("Erro desconhecido");
+      } finally {
+        setScanning(false);
       }
+    },
+    [scanning],
+  );
 
-      // Após concluir, atualiza a tabela
-      setRefreshKey((prev) => prev + 1);
-    } catch (err: unknown) {
-      if (err instanceof Error) setError(err.message);
-      else setError("Erro desconhecido");
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  // Polling: enquanto estiver executando, atualiza a tabela a cada 3 segundos
   useEffect(() => {
     if (!scanning) return;
 
@@ -145,7 +151,7 @@ function SASTScansContent() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={runScan}
+              onClick={() => setModalOpen(true)}
               disabled={scanning}
               className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
             >
@@ -186,6 +192,13 @@ function SASTScansContent() {
         defaultLimit={10}
         selectable={false}
         onRowClick={() => {}}
+      />
+
+      <ScanProfileModal
+        isOpen={isModalOpen}
+        onClose={() => setModalOpen(false)}
+        onRun={runScan}
+        running={scanning}
       />
     </div>
   );

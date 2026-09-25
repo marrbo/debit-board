@@ -1,11 +1,15 @@
 // lib/ai/ingest.ts
 import fs from "fs";
+import crypto from "crypto";
 import path from "path";
 import AiEmbedding from "@/models/AiEmbedding";
 import { generateEmbedding } from "@/lib/ollama";
 import { reconcileOpenApi } from "./openapi-ingest";
 
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 1500;
+const CHUNK_OVERLAP = 300;
+const CHUNK_PARALLELISM = 4;
+
 const WIKI_DIR = path.join(process.cwd(), "content/wiki");
 const AI_CONTENT_DIR = path.join(process.cwd(), "content/ai");
 
@@ -20,20 +24,34 @@ const DEPRECATED_SOURCES = [
 
 let started = false;
 
-function chunkText(text: string, size: number): string[] {
-  const parts = text.split(/\n\n+/);
-  const out: string[] = [];
-  let cur = "";
-  for (const p of parts) {
-    if ((cur + p).length > size) {
-      if (cur) out.push(cur.trim());
-      cur = p;
-    } else {
-      cur += (cur ? "\n\n" : "") + p;
-    }
+/**
+ * Divide o texto em chunks menores com sobreposição (overlap).
+ * Isso reduz a perda de semântica nas bordas dos blocos durante a busca vetorial.
+ */
+export function chunkText(
+  text: string,
+  chunkSize: number = CHUNK_SIZE,
+  overlap: number = CHUNK_OVERLAP,
+): string[] {
+  if (!text || text.trim() === "") return [];
+
+  const chunks: string[] = [];
+  let startIndex = 0;
+
+  while (startIndex < text.length) {
+    const chunk = text.slice(startIndex, startIndex + chunkSize);
+    chunks.push(chunk);
+
+    if (startIndex + chunkSize >= text.length) break;
+
+    startIndex += chunkSize - overlap;
   }
-  if (cur) out.push(cur.trim());
-  return out;
+
+  return chunks;
+}
+
+function calculateHash(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex");
 }
 
 async function upsertDoc(
@@ -43,21 +61,37 @@ async function upsertDoc(
   text: string,
   metadata?: Record<string, unknown>,
 ): Promise<void> {
+  const hash = calculateHash(text);
+
+  const existing = await AiEmbedding.findOne({
+    source,
+    parentId,
+    chunkIndex: 0,
+  });
+  if (existing && existing.metadata?.hash === hash) {
+    return;
+  }
+
   const chunks = chunkText(text, CHUNK_SIZE);
   await AiEmbedding.deleteMany({ source, parentId });
 
-  for (let i = 0; i < chunks.length; i++) {
-    const embedding = await generateEmbedding(chunks[i]);
-    await AiEmbedding.create({
-      source,
-      parentId,
-      chunkIndex: i,
-      title,
-      content: chunks[i],
-      embedding,
-      metadata,
-      updatedAt: new Date(),
-    });
+  for (let i = 0; i < chunks.length; i += CHUNK_PARALLELISM) {
+    const slice = chunks.slice(i, i + CHUNK_PARALLELISM);
+    const embeddings = await Promise.all(
+      slice.map((c) => generateEmbedding(c)),
+    );
+    await AiEmbedding.insertMany(
+      slice.map((c, j) => ({
+        source,
+        parentId,
+        chunkIndex: i + j,
+        title,
+        content: c,
+        embedding: embeddings[j],
+        metadata: { ...metadata, hash },
+        updatedAt: new Date(),
+      })),
+    );
   }
 }
 
@@ -161,7 +195,7 @@ export async function startIngestion(): Promise<void> {
   await purgeDeprecatedEmbeddings();
   await reconcileWiki();
   await reconcileAiDocs();
-  await reconcileOpenApi(); // ← nova fonte
+  await reconcileOpenApi();
 
   console.log("[ai-ingest] pronto.");
 }

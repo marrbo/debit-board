@@ -5,6 +5,7 @@ import { parseDBQL } from "@/lib/parseDBQL";
 import type { Model, PipelineStage } from "mongoose";
 import { requireSession } from "./api-auth";
 import { toObjectId } from "./mongo-id";
+import { resolveDbqlString } from "./dbql";
 
 interface ProjectionObject {
   [key: string]: ProjectionValue;
@@ -26,6 +27,12 @@ interface GenericGetOptions<T> {
   all?: boolean;
   /** 🔥 Recursos globais (ex.: VulnerabilityPattern) não possuem tenantId. */
   skipTenantFilter?: boolean;
+  /**
+   * 🔥 Quando `true`, o handler não tenta resolver nem aplicar DBQL —
+   * útil quando o endpoint já traduziu o `q` para um filtro concreto
+   * (ex.: `/api/dashboard` converte DBQL em `Project._id` antes).
+   */
+  skipDbqlParsing?: boolean;
 }
 
 export async function handleGenericGet<T>(
@@ -40,7 +47,8 @@ export async function handleGenericGet<T>(
     additionalMatch = {},
     overrideSearchQuery,
     all = false,
-    skipTenantFilter = false, // 🔥 default: comportamento atual
+    skipTenantFilter = false,
+    skipDbqlParsing = false,
   } = options;
 
   const auth = await requireSession();
@@ -52,7 +60,7 @@ export async function handleGenericGet<T>(
 
   const { searchParams } = new URL(req.url);
 
-  const searchQuery = overrideSearchQuery || searchParams.get("search") || "";
+  const savedQueryId = searchParams.get("q") || "";
 
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "10", 10);
@@ -65,17 +73,22 @@ export async function handleGenericGet<T>(
     baseMatch.tenantId = tenantId;
   }
 
-  let finalMatch: Record<string, unknown>;
+  let finalMatch: Record<string, unknown> = baseMatch;
 
-  if (searchQuery) {
+  // 🔑 `overrideSearchQuery` pode vir sem `q` na URL (ex.: /api/sast/scans)
+  if (!skipDbqlParsing && (savedQueryId || overrideSearchQuery)) {
     try {
-      const parsedMatch = parseDBQL(searchQuery);
-      if (parsedMatch && Object.keys(parsedMatch).length > 0) {
-        const combinedMatch: Record<string, unknown> = { ...baseMatch };
-        combinedMatch["$and"] = [baseMatch, parsedMatch];
-        finalMatch = combinedMatch;
-      } else {
-        finalMatch = baseMatch;
+      const queryString =
+        overrideSearchQuery || (await resolveDbqlString(savedQueryId)) || "";
+
+      if (queryString) {
+        const parsedMatch = parseDBQL(queryString);
+        if (parsedMatch && Object.keys(parsedMatch).length > 0) {
+          finalMatch = {
+            ...baseMatch,
+            $and: [baseMatch, parsedMatch],
+          };
+        }
       }
     } catch (err) {
       console.error("Erro ao parsear DBQL:", err);
@@ -84,9 +97,13 @@ export async function handleGenericGet<T>(
         { status: 400 },
       );
     }
-  } else {
-    finalMatch = baseMatch;
   }
+
+  // 🔥 MongoDB rejeita `$project: {}`. Só adiciona quando há campos.
+  const projectionStage: PipelineStage.FacetPipelineStage[] =
+    Object.keys(projection).length > 0
+      ? [{ $project: projection } satisfies PipelineStage.FacetPipelineStage]
+      : [];
 
   // all=true → ignora paginação
   if (all) {
@@ -94,7 +111,7 @@ export async function handleGenericGet<T>(
       { $match: finalMatch },
       ...customPipeline,
       { $sort: { [sortField]: sortOrder } },
-      { $project: projection },
+      ...projectionStage,
     ];
 
     const allData = await model.aggregate<T[]>(pipeline);
@@ -107,6 +124,14 @@ export async function handleGenericGet<T>(
     });
   }
 
+  // 🔑 Sub-pipeline do `$facet.data` precisa ser `FacetPipelineStage[]`,
+  //    que exclui `$collStats` / `$out` / `$geoNear` (inválidos dentro de facet).
+  const dataStages: PipelineStage.FacetPipelineStage[] = [
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    ...projectionStage,
+  ];
+
   // Pipeline com paginação
   const pipeline: PipelineStage[] = [
     { $match: finalMatch },
@@ -114,11 +139,7 @@ export async function handleGenericGet<T>(
     { $sort: { [sortField]: sortOrder } },
     {
       $facet: {
-        data: [
-          { $skip: (page - 1) * limit },
-          { $limit: limit },
-          { $project: projection },
-        ],
+        data: dataStages,
         total: [{ $count: "count" }],
       },
     },

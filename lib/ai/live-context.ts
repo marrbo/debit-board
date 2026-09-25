@@ -4,8 +4,29 @@ import { Project } from "@/models/Project";
 import { Observation } from "@/models/Observation";
 import AiEmbedding from "@/models/AiEmbedding";
 import { connectToDatabase } from "@/lib/mongodb";
+import { tokenize } from "./text";
 
-const SNAPSHOT_END = "\n\n_[FIM — não acrescente análises.]_";
+const SNAPSHOT_END = "\n\n_[[FIM]]_";
+
+/**
+ * Envolve um snapshot em tags que instruem o LLM sobre o que copiar
+ * literalmente (`[[COPY]]`) e onde a interpretação é permitida (`[[ANALYZE]]`).
+ *
+ * O bloco `[[ANALYZE]]` é opcional: o system prompt orienta o modelo a
+ * ignorá-lo quando o usuário não pediu análise.
+ */
+function wrapSnapshot(snapshot: string): string {
+  const clean = snapshot.replace(/\n\n_\[\[FIM\]\]_\s*$/, "").trimEnd();
+  return [
+    "[[COPY]]",
+    clean,
+    "[[/COPY]]",
+    "",
+    "[[ANALYZE]]",
+    "(opcional: se e somente se o usuário pedir análise, adicione UMA frase interpretativa aqui, baseada apenas na tabela acima)",
+    "[[/ANALYZE]]",
+  ].join("\n");
+}
 
 // ============================================================
 // Cache em memória (60s)
@@ -38,20 +59,6 @@ function setCached(key: string, value: string): void {
 const ACCENTS = /[\u0300-\u036f]/g;
 const NON_WORD = /[^\w\s]/g;
 const SPACES = /\s+/g;
-
-function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(ACCENTS, "")
-    .replace(NON_WORD, " ")
-    .replace(SPACES, " ")
-    .trim();
-}
-
-function tokenize(text: string): string[] {
-  return normalize(text).split(" ").filter(Boolean);
-}
 
 function lev(a: string, b: string): number {
   const m = a.length;
@@ -1342,7 +1349,10 @@ export interface LiveContextResult {
 
 function finalize(sections: string[]): LiveContextResult {
   return {
-    context: sections.join("\n\n---\n\n"),
+    context: sections
+      .filter(Boolean)
+      .map((s) => wrapSnapshot(s))
+      .join("\n\n---\n\n"),
     sections: sections.map((s) =>
       s
         .split("\n")[0]

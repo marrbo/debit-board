@@ -1,5 +1,7 @@
 // lib/local-settings.ts
 
+import type { RangeState } from "./range-options";
+
 export interface DBQLQueryRef {
   page: string;
   id: string | null;
@@ -19,6 +21,7 @@ export interface LocalSettings {
   team: string | null;
   dbql: DBQLQueryRef[];
   slideToggle: SlideToggleRef[];
+  range: RangeState | null;
 }
 
 export const DEFAULT_DBQL_VISIBLE = true;
@@ -30,6 +33,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   team: null,
   dbql: [],
   slideToggle: [],
+  range: null,
 };
 
 const STORAGE_KEY = "debit-board";
@@ -134,7 +138,9 @@ function serialize(s: LocalSettings): string {
   return JSON.stringify(s);
 }
 
-export function updateLocalSettings(patch: Partial<LocalSettings>): LocalSettings {
+export function updateLocalSettings(
+  patch: Partial<LocalSettings>,
+): LocalSettings {
   const next: LocalSettings = { ...cache, ...patch };
 
   // No-op real: nada muda → não reatribui cache, não emite, não re-renderiza.
@@ -225,10 +231,7 @@ export function toggleSearchVisible(page: string): void {
 // ============================================================
 // Helpers SlideToggle (page + key → value)
 // ============================================================
-export function getSlideToggleValue(
-  page: string,
-  key: string,
-): string | null {
+export function getSlideToggleValue(page: string, key: string): string | null {
   return (
     cache.slideToggle.find((e) => e.page === page && e.key === key)?.value ??
     null
