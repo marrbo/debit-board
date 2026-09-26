@@ -56,10 +56,16 @@ function ChartCard({
   );
 }
 
+// ============================================================
+// Props
+// ============================================================
 interface StatsClientProps {
   initialStats: StatsData;
 }
 
+// ============================================================
+// Componente
+// ============================================================
 export default function StatsClient({ initialStats }: StatsClientProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -407,6 +413,10 @@ export default function StatsClient({ initialStats }: StatsClientProps) {
       </div>
     );
   }
+
+  // ============================================================
+  // Render
+  // ============================================================
 
   return (
     <div className="w-full space-y-6 p-8">

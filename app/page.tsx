@@ -235,6 +235,9 @@ const columns: Column<any>[] = [
   },
 ];
 
+// ============================================================
+// Conteúdo
+// ============================================================
 function DashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();

@@ -489,8 +489,7 @@ export default function DBQLAdvancedSearch({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (mode === "tags" && inputValue.trim()) {
-        const newTags = [...tags, inputValue.trim()];
-        setTags(newTags);
+        setTags([...tags, inputValue.trim()]);
         setInputValue("");
         executeSearch(newTags.join(" "));
       } else {
@@ -511,7 +510,6 @@ export default function DBQLAdvancedSearch({
   };
 
   const toggleMode = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (mode === "tags") {
       const fullQuery = tags.join(" ") + (inputValue ? ` ${inputValue}` : "");
       setInputValue(fullQuery.trim());
@@ -525,6 +523,7 @@ export default function DBQLAdvancedSearch({
       setInputValue("");
       setMode("tags");
     }
+    e.preventDefault();
   };
 
   const clearAll = (e?: React.MouseEvent) => {
