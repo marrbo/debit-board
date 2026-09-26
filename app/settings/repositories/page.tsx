@@ -133,7 +133,7 @@ function RepositoriesContent() {
         defaultSort={{ field: "name", order: "asc" }}
         defaultLimit={8}
         pdfTitle="Repositórios"
-        searchQuery={searchQuery}
+        searchDbqlId={searchQuery}
         projectId={projectId || undefined}
       />
     </div>

@@ -34,7 +34,7 @@ export async function* streamChat(
       stream: true,
       keep_alive: "2h",
       options: {
-        temperature: 0.1,
+        temperature: 0,
         top_p: 0.8,
         repeat_penalty: 1.15,
         ...options,

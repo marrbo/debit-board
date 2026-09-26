@@ -22,8 +22,13 @@ services:
       NEXTAUTH_URL: "http://localhost:3001"
       DB_DUMPS_DIR: "/var/lib/debit-board/dumps"
       OLLAMA_BASE_URL: "http://debitboard-ollama:11434"
-      OLLAMA_CHAT_MODEL: "llama3.2"
+      # ⚠️ Precisa casar com o que `ollama-model-pull` baixa.
+      OLLAMA_CHAT_MODEL: "qwen2.5:3b"
       OLLAMA_EMBED_MODEL: "nomic-embed-text"
+      # 🔥 Rerank: vazio desabilita (usa heurístico por keyword).
+      #    Usar o MESMO modelo do chat evita reload de 2GB a cada
+      #    rerank quando OLLAMA_MAX_LOADED_MODELS=1.
+      OLLAMA_RERANK_MODEL: "qwen2.5:3b"
     volumes:
       - dumps_data:/var/lib/debit-board/dumps
     depends_on:
@@ -33,6 +38,14 @@ services:
         condition: service_started
       debitboard-ollama:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     networks:
       - debitboard-network
 
@@ -43,7 +56,14 @@ services:
     image: mongo:8.0
     container_name: debitboard-mongo-db
     restart: unless-stopped
-    command: ["--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    command:
+      - "--replSet"
+      - "rs0"
+      - "--bind_ip_all"
+      - "--quiet"
+      # WiredTiger cache limitado a ~1.5GB; evita o motor engolir toda a RAM.
+      - "--wiredTigerCacheSizeGB"
+      - "1.5"
     ports:
       - "27017:27017"
     environment:
@@ -57,6 +77,14 @@ services:
       timeout: 5s
       retries: 1
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     networks:
       - debitboard-network
 
@@ -82,6 +110,14 @@ services:
       interval: 60s
       timeout: 3s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     networks:
       - debitboard-network
 
@@ -120,6 +156,14 @@ services:
     depends_on:
       debitboard-keycloak-db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     networks:
       - debitboard-network
 
@@ -136,13 +180,22 @@ services:
       - ollama_models:/root/.ollama
     environment:
       OLLAMA_HOST: "0.0.0.0"
+      # Mantém 1 modelo carregado → evita reloads de ~2GB.
+      # Bom o suficiente porque chat e rerank usam o MESMO modelo.
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "2h"
+      OLLAMA_KEEP_ALIVE: "2h" # ← aspas fechadas (bug crítico #1)
     deploy:
       resources:
         limits:
+          # Sem limite de CPU o Ollama monopoliza o host sob carga.
+          # 4 vCPU é o sweet spot para qwen2.5:3b em 8-core.
+          cpus: "4.0"
+          # 3B Q4 (~2GB) + KV cache + overhead fica ~3GB; 6G dá folga.
           memory: 6G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s
@@ -165,12 +218,19 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        set -e
+        echo "[init] baixando qwen2.5:3b…"
         ollama pull qwen2.5:3b
+        echo "[init] baixando nomic-embed-text…"
         ollama pull nomic-embed-text
-        echo "Modelos baixados com sucesso."
+        echo "[init] modelos prontos."
     environment:
       OLLAMA_HOST: "http://debitboard-ollama:11434"
-      OLLAMA_CHAT_MODEL: "qwen2.5:3b"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - debitboard-network
 
@@ -187,10 +247,15 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo '*/1 * * * * wget -qO- --header="Authorization: Bearer ${CRON_TOKEN}" http://debitboard-app:3000/api/cron/backup > /dev/null 2>&1' > /etc/crontabs/root
+        echo '*/1 * * * * wget -q -T 30 -O- --header="Authorization: Bearer ${CRON_TOKEN}" http://debitboard-app:3000/api/cron/backup > /dev/null 2>&1' > /etc/crontabs/root
         crond -f -l 2
     depends_on:
       - debitboard-app
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
     networks:
       - debitboard-network
 

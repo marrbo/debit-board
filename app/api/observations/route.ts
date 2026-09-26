@@ -1,122 +1,80 @@
+// app/api/observations/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { handleGenericGet } from "@/lib/api-handler";
 import { Observation } from "@/models/Observation";
-import { SavedQuery } from "@/models/SavedQuery";
 import {
   VulnerabilityPattern,
   type IVulnerabilityPattern,
 } from "@/models/VulnerabilityPattern";
-import { resolveTeamFilter } from "@/lib/team-filter";
+import { buildObservationFilters } from "@/lib/observation-filters";
+import { requireSession } from "@/lib/api-auth";
+import { toObjectId } from "@/lib/mongo-id";
 import type { IObservation } from "@/types/IObservation";
 
-async function resolvePatternNameQuery(
-  query: string,
-): Promise<{ cleanedQuery: string; patternIds: any[] } | null> {
-  if (!query || !query.includes("pattern.name")) {
-    return { cleanedQuery: query, patternIds: [] };
-  }
-
-  const patternRegex = /pattern\.name:(?:"([^"]*)"|(\S+))/gi;
-  let match: RegExpExecArray | null;
-  const patternNames: string[] = [];
-
-  while ((match = patternRegex.exec(query)) !== null) {
-    const value = match[1] || match[2];
-    if (value) patternNames.push(value);
-  }
-
-  if (patternNames.length === 0) return { cleanedQuery: query, patternIds: [] };
-
-  const patterns = await VulnerabilityPattern.find({
-    name: { $in: patternNames },
-  })
-    .select("_id")
-    .lean();
-
-  const patternIds = patterns.map((p) => p._id);
-  if (patternIds.length === 0) return { cleanedQuery: "", patternIds: [] };
-
-  let cleanedQuery = query.replace(patternRegex, "");
-  cleanedQuery = cleanedQuery.replace(/\s+/g, " ").trim();
-  cleanedQuery = cleanedQuery
-    .replace(/^(AND|OR)\s+/i, "")
-    .replace(/\s+(AND|OR)$/i, "");
-
-  return { cleanedQuery, patternIds };
-}
-
 /**
- * Lista recursos do endpoint /api/observations.
+ * Lista observations respeitando DBQL, time e janela temporal.
  *
- * Este endpoint expõe a operação get em /api/observations.
+ * Aceita `range=7d|14d|30d|90d|all` (preset) **ou** `from` + `to` (ISO,
+ * custom). Quando ambos vêm preenchidos, `from`/`to` têm precedência.
  *
- * @summary Lista recursos do endpoint /api/observations
+ * Usa `buildObservationFilters` como fonte única de verdade — os mesmos
+ * filtros são aplicados em `/api/dashboard` e `/api/dashboard/stats`,
+ * então as contagens nas três telas batem para o mesmo conjunto de
+ * parâmetros.
+ *
+ * @summary Lista observations
  * @tags Observations
  * @route GET /api/observations
  * @async
  * @function GET
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ * @param {NextRequest} req - Requisição HTTP.
+ * @returns {Promise<NextResponse>} `{ data, total, page, limit, totalPages }`.
  */
 export async function GET(req: NextRequest) {
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantId = toObjectId(auth.user.tenantId);
+
   const { searchParams } = new URL(req.url);
   const dbqlId = searchParams.get("q");
-  const isAll = searchParams.get("all") === "true";
-  const projectId = searchParams.get("projectId");
   const teamId = searchParams.get("teamId");
+  const range = searchParams.get("range");
+  const rangeFrom = searchParams.get("from");
+  const rangeTo = searchParams.get("to");
+  const isAll = searchParams.get("all") === "true";
 
-  let finalSearchQuery = "";
-  if (dbqlId) {
-    try {
-      const savedQuery = await SavedQuery.findById(dbqlId).lean();
-      if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
-    } catch (error) {
-      console.error("Erro ao buscar SavedQuery:", error);
-      return NextResponse.json(
-        { error: "Erro ao carregar saved query" },
-        { status: 500 },
-      );
-    }
-  }
-
-  // 🔥 Filtros de projeto — agrega em $and se houver mais de um
-  const projectFilters: Record<string, unknown>[] = [];
-
-  if (projectId && projectId !== "all") {
-    projectFilters.push({ project: projectId });
-  }
-
-  const { allowedProjectNames } = await resolveTeamFilter(teamId);
-  if (allowedProjectNames !== null) {
-    projectFilters.push({ project: { $in: allowedProjectNames } });
-  }
-
-  const additionalMatch: Record<string, unknown> = {};
-  if (projectFilters.length === 1) {
-    Object.assign(additionalMatch, projectFilters[0]);
-  } else if (projectFilters.length > 1) {
-    additionalMatch.$and = projectFilters;
-  }
-
-  const patternResolution = await resolvePatternNameQuery(finalSearchQuery);
-  if (patternResolution) {
-    finalSearchQuery = patternResolution.cleanedQuery;
-    if (patternResolution.patternIds.length > 0) {
-      additionalMatch.patternId = { $in: patternResolution.patternIds };
-    }
-  }
+  const { match } = await buildObservationFilters({
+    tenantId,
+    dbqlId,
+    teamId,
+    range,
+    rangeFrom,
+    rangeTo,
+  });
 
   try {
     const result = await handleGenericGet(req, {
       model: Observation,
       defaultSort: "firstSeen",
-      additionalMatch,
-      overrideSearchQuery: finalSearchQuery,
+      additionalMatch: match,
+      skipDbqlParsing: true,
       projection: {
-        _id: 1, fileName: 1, filePath: 1, category: 1,
-        patternId: 1, branch: 1, severity: 1, status: 1, slaDueAt: 1,
-        assignedTo: 1, hitCount: 1, project: 1, repository: 1,
-        firstSeen: 1, lastSeen: 1,
+        _id: 1,
+        fileName: 1,
+        filePath: 1,
+        category: 1,
+        patternId: 1,
+        branch: 1,
+        severity: 1,
+        status: 1,
+        slaDueAt: 1,
+        assignedTo: 1,
+        hitCount: 1,
+        project: 1,
+        repository: 1,
+        firstSeen: 1,
+        lastSeen: 1,
       },
       all: isAll,
     });
@@ -168,7 +126,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (Array.isArray(responseData)) {
-      return NextResponse.json({ data: observations, total: observations.length });
+      return NextResponse.json({
+        data: observations,
+        total: observations.length,
+      });
     }
     return NextResponse.json({ ...responseData, data: observations });
   } catch (error) {

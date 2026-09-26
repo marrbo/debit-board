@@ -57,4 +57,76 @@ export const OPENAPI_SCHEMAS: Record<string, SchemaObject> = {
       },
     },
   },
+  SASTPatternOption: {
+    type: "object",
+    required: ["_id", "name", "category", "severity"],
+    properties: {
+      _id: { type: "string", description: "ObjectId do pattern." },
+      name: { type: "string", description: "Nome do pattern." },
+      category: { type: "string", description: "Categoria do pattern." },
+      severity: {
+        type: "string",
+        enum: ["low", "medium", "high", "critical"],
+      },
+    },
+  },
+  SASTPatternListResponse: {
+    type: "object",
+    required: ["patterns"],
+    properties: {
+      patterns: {
+        type: "array",
+        items: { $ref: "#/components/schemas/SASTPatternOption" },
+      },
+    },
+  },
+  ScanProfile: {
+    type: "object",
+    required: ["_id", "name", "patternIds"],
+    properties: {
+      _id: { type: "string" },
+      name: { type: "string" },
+      description: { type: "string", nullable: true },
+      patternIds: {
+        type: "array",
+        items: { type: "string" },
+        description: "ObjectIds dos patterns selecionados.",
+      },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  ScanProfileInput: {
+    type: "object",
+    required: ["name", "patternIds"],
+    properties: {
+      name: { type: "string", minLength: 1 },
+      description: { type: "string" },
+      patternIds: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+  },
+  ScanProfileListResponse: {
+    type: "object",
+    required: ["profiles"],
+    properties: {
+      profiles: {
+        type: "array",
+        items: { $ref: "#/components/schemas/ScanProfile" },
+      },
+    },
+  },
+  SASTRunRequest: {
+    type: "object",
+    properties: {
+      profileId: {
+        type: "string",
+        nullable: true,
+        description:
+          "ObjectId do perfil. Quando ausente/null, todos os patterns ativos são executados (Default).",
+      },
+    },
+  },
 };

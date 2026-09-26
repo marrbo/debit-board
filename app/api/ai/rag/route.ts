@@ -1,10 +1,18 @@
 // app/api/ai/rag/route.ts
 import { NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { generateEmbedding, streamChat } from "@/lib/ollama";
+import { streamChat } from "@/lib/ollama";
 import AiEmbedding from "@/models/AiEmbedding";
 import { buildLiveContext } from "@/lib/ai/live-context";
 import { Team } from "@/models/Team";
+import { getCachedEmbedding } from "@/lib/ai/embedding-cache";
+import { buildKeywordRegex } from "@/lib/ai/text";
+import { rerank } from "@/lib/ai/rerank";
+import {
+  validateResponse,
+  extractCopyBlock,
+  stripAugmentationTags,
+} from "@/lib/ai/validate-response";
 
 const IDENTITY_SOURCE = "identity";
 const OPENAPI_SOURCE = "openapi";
@@ -12,7 +20,7 @@ const STATIC_TOP_K = 5;
 const STATIC_TOP_K_WITH_LIVE = 3;
 
 const TYPING_CHUNK_SIZE = 24;
-const TYPING_DELAY_MS = 16;
+const TYPING_DELAY_MS = 12;
 
 const REFUSAL = "Não encontrei essa informação na documentação do DebitBoard.";
 const MIN_CONTENT_BEFORE_REFUSAL = 40;
@@ -68,7 +76,7 @@ function* chunkString(text: string, size: number): Generator<string> {
 }
 
 // ============================================================
-// Cache de nomes de times (5 min) — usado pelo TeamWordFilter
+// Cache de nomes de times (5 min)
 // ============================================================
 let cachedTeamNames: string[] = [];
 let cacheExpiry = 0;
@@ -140,16 +148,6 @@ class RefusalFilter {
   }
 }
 
-/**
- * Corrige "tempo/tempos" → "time/times" quando o contexto é sobre times.
- *
- * Modo agressivo (contexto = times): substitui TODAS as ocorrências de
- * "tempo(s)" como palavra isolada. A resposta está ancorada em dados de
- * times, então "tempo" nunca é duração legítima.
- *
- * Modo estrito (contexto genérico): só substitui "tempo" seguido
- * imediatamente (com separadores markdown) por um nome de time conhecido.
- */
 class TeamWordFilter {
   private buffer = "";
   private readonly aggressive: boolean;
@@ -161,8 +159,6 @@ class TeamWordFilter {
     this.aggressive = aggressive;
 
     if (aggressive) {
-      // Modo agressivo: substitui tudo, exceto "tempo real" (dados em
-      // tempo real) que é jargão técnico e pode aparecer em alguma resposta.
       this.aggressivePattern = /\btempos?\b(?!\s+real)/gi;
       this.strictPattern = null;
     } else if (teamNames.length > 0) {
@@ -212,8 +208,6 @@ class TeamWordFilter {
 
     let cut = this.buffer.length - this.holdBack;
 
-    // No modo agressivo, segura qualquer prefixo de "tempo" ou "tempos".
-    // No estrito, segura a partir de "tempo".
     const searchRe = this.aggressive
       ? /\btempos?\b|tempor?|temp|tem|te/gi
       : /\btempos?\b/gi;
@@ -252,27 +246,74 @@ class TeamWordFilter {
 const SYSTEM_PROMPT = `Você é o assistente do DebitBoard.
 
 Se houver <dados_tempo_real>, use-o como fonte de verdade dos números.
-Caso contrário, responda a partir de <documentacao>.
 
 REGRAS:
 
-- Se houver um bloco "## Fatos pré-calculados" em <dados_tempo_real>,
-  use-o LITERALMENTE para responder perguntas analíticas. Copie os fatos
-  como estão — NÃO recalcule, NÃO reformule, NÃO troque o rótulo dos
-  números (ex: se o fato diz "X observations", não escreva "X críticas").
-- Se o usuário pediu análise e NÃO houver fatos pré-calculados, adicione
-  UMA frase interpretativa ao final, baseada exclusivamente na tabela.
-- "Time" (equipe/grupo) NÃO é "tempo" (duração). Escreva sempre "time".
+- Tudo entre [[COPY]]…[[/COPY]] é dado factual LITERAL. Copie sem
+  reformular, sem trocar rótulos de números e sem recalcular.
+- Blocos [[ANALYZE]]…[[/ANALYZE]] são espaço OPCIONAL de interpretação:
+  use SOMENTE se o usuário pedir análise, prioridade, recomendação ou
+  comparação valorativa. Caso contrário, ignore o bloco inteiro.
+- NUNCA invente números. Se não estiver em [[COPY]], não escreva.
+- "Time" (equipe) NÃO é "tempo" (duração). Escreva sempre "time".
 - NÃO invente endpoints, rotas ou métodos HTTP.
 - NÃO formate respostas de dados como "MÉTODO /rota".
 - Se — e somente se — o contexto não contiver a informação pedida,
-  responda unicamente: Não encontrei essa informação na documentação do DebitBoard.
+  responda unicamente: ${REFUSAL}
 
 Nunca escreva SQL. DBQL é \`propriedade:valor\` com dois-pontos.`;
 
 interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+/**
+ * Recupera os chunks estáticos mais relevantes para a query.
+ *
+ * Pipeline em três camadas:
+ *  1. **Pré-filtro no Mongo** por tokens únicos (≥4 chars) em title/content.
+ *  2. **Cosine** in-memory sobre os candidatos.
+ *  3. **Rerank** (cross-encoder se habilitado; heurístico por padrão).
+ *
+ * @param query - Query do usuário.
+ * @param queryEmbedding - Embedding já calculado (cacheado).
+ * @param excludedSources - Fontes a excluir do retrieval.
+ * @param k - Quantos chunks retornar após o rerank.
+ * @returns Array de chunks com `source`, `title`, `content`.
+ */
+async function retrieveStaticChunks(
+  query: string,
+  queryEmbedding: number[],
+  excludedSources: string[],
+  k: number,
+) {
+  const baseFilter: Record<string, unknown> = {
+    source: { $nin: excludedSources },
+  };
+
+  const keywordRegex = buildKeywordRegex(query, 4);
+  const preDocs = keywordRegex
+    ? await AiEmbedding.find({
+        ...baseFilter,
+        $or: [
+          { title: { $regex: keywordRegex, $options: "i" } },
+          { content: { $regex: keywordRegex, $options: "i" } },
+        ],
+      })
+        .limit(500)
+        .lean()
+    : [];
+
+  const docs =
+    preDocs.length >= 20
+      ? preDocs
+      : preDocs.concat(await AiEmbedding.find(baseFilter).limit(500).lean());
+
+  if (docs.length === 0) return [];
+
+  const ranked = rank(docs, queryEmbedding, Math.max(k * 2, 10));
+  return rerank(ranked, query, k);
 }
 
 /**
@@ -283,21 +324,22 @@ interface HistoryMessage {
  *     description: |
  *       Estratégia em três modos:
  *
- *       1. **Streaming direto** — quando o `live-context` detecta uma
- *          intenção de dados E o usuário não pediu análise.
- *       2. **LLM com dados** — quando há live data E o usuário pediu análise.
- *       3. **LLM só com documentação** — quando não há live data.
+ *       1. **Streaming direto** — snapshot pré-calculado entregue ao
+ *          cliente sem passar pelo LLM (evita alucinação por completo).
+ *       2. **LLM com dados** — resposta gerada pelo LLM a partir de
+ *          snapshot + documentação, com validação numérica buffered.
+ *       3. **LLM só com documentação** — sem live data.
  *
- *       **Retrieval de `openapi` bloqueado quando há live data** — endpoints
- *       não competem com snapshots de dados.
+ *       **Buffered validation:** a resposta do LLM é acumulada em memória
+ *       antes de ser emitida. Se ≥40% dos números não constarem no
+ *       contexto, a resposta é substituída pelo bloco `[[COPY]]` literal.
  *
- *       **Histórico de conversa** — o campo `history` (últimas N mensagens)
- *       é usado para (a) reconstruir intenção em follow-ups curtos
- *       ("e do GEPIN?") e (b) dar contexto ao LLM.
+ *       **Tags [[COPY]]/[[ANALYZE]]:** o live-context envolve tabelas
+ *       factuais em `[[COPY]]` e reserva `[[ANALYZE]]` para interpretação
+ *       opcional. O system prompt obriga cópia literal do bloco COPY.
  *
- *       **Correção determinística no stream:** o filtro `TeamWordFilter`
- *       troca "tempo <TIME>" por "time <TIME>" para contornar o falso
- *       cognato comum em modelos pequenos.
+ *       **Cross-encoder:** habilitado via env `OLLAMA_RERANK_MODEL`.
+ *       Sem essa variável, usa-se rerank heurístico por keyword overlap.
  *     tags:
  *       - AI
  *     security:
@@ -310,39 +352,23 @@ interface HistoryMessage {
  *             type: object
  *             required: [query]
  *             properties:
- *               query:
- *                 type: string
- *                 example: 'resumo executivo do time GEPIN'
- *               context:
- *                 type: string
- *                 default: general
+ *               query: { type: string, example: 'resumo executivo do time GEPIN' }
+ *               context: { type: string, default: general }
  *               teamName: { type: string }
  *               projectName: { type: string }
  *               repositoryName: { type: string }
  *               history:
  *                 type: array
- *                 description: Últimas mensagens da conversa (máx. 6).
  *                 items:
  *                   type: object
  *                   properties:
- *                     role:
- *                       type: string
- *                       enum: [user, assistant]
+ *                     role: { type: string, enum: [user, assistant] }
  *                     content: { type: string }
  *     responses:
  *       200:
  *         description: Stream SSE.
- *         content:
- *           text/event-stream:
- *             schema: { type: string }
  *       400:
  *         description: Query ausente.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error: { type: string }
  *       401:
  *         description: Sessão ausente.
  *         content:
@@ -351,18 +377,8 @@ interface HistoryMessage {
  *               $ref: '#/components/schemas/AuthError'
  *       423:
  *         description: Sem tenant.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthError'
  *       500:
- *         description: Ollama indisponível ou erro no pipeline.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error: { type: string }
+ *         description: Ollama indisponível.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -384,17 +400,11 @@ export async function POST(req: NextRequest) {
 
   await connectToDatabase();
 
-  // Reconstrói a query "efetiva" para detecção de intenção quando a
-  // mensagem atual é uma continuação curta de um turno anterior.
   const historyArr = Array.isArray(history) ? history.slice(-MAX_HISTORY) : [];
   const isFollowUp =
     query.trim().split(/\s+/).length < 8 && historyArr.length > 0;
   const lastUserMsg = [...historyArr].reverse().find((m) => m.role === "user");
 
-  // Tenta com a query atual primeiro. Se ela sozinha já resolve uma
-  // intenção ou menciona uma entidade específica, NÃO concatena com o
-  // histórico — evita herdar "comparativo entre times" de um turno
-  // anterior quando o usuário agora pergunta só sobre um time.
   let live: Awaited<ReturnType<typeof buildLiveContext>> = {
     context: "",
     sections: [],
@@ -408,7 +418,6 @@ export async function POST(req: NextRequest) {
   }
 
   if (live.context.length === 0 && isFollowUp && lastUserMsg) {
-    // Fallback: só então usa o histórico
     const effectiveQuery = `${lastUserMsg.content} ${query}`;
     try {
       live = await buildLiveContext(effectiveQuery);
@@ -427,10 +436,11 @@ export async function POST(req: NextRequest) {
     `[rag] q="${query.slice(0, 50)}" ctx=${contextLabel} mode=${directStream ? "direct" : "llm"} live=[${live.sections.join(", ")}] analysis=${wantsAnalysis} history=${historyArr.length}${usedFollowUp ? " followup" : ""}`,
   );
 
+  // ============================================================
+  // Modo 1 — streaming direto (sem LLM): entrega o snapshot puro
+  // ============================================================
   if (directStream) {
-    const cleanContext = live.context
-      .replace(/\n\n_\[FIM[^\]]*\]_\s*$/, "")
-      .trimEnd();
+    const cleanContext = stripAugmentationTags(live.context);
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -463,7 +473,10 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const queryEmbedding = await generateEmbedding(query);
+  // ============================================================
+  // Modos 2/3 — LLM (com validação buffered)
+  // ============================================================
+  const queryEmbedding = await getCachedEmbedding(query);
 
   const identityDocs = await AiEmbedding.find({
     source: IDENTITY_SOURCE,
@@ -472,15 +485,20 @@ export async function POST(req: NextRequest) {
     .map((c) => c.content)
     .join("\n\n");
 
-  const staticK = live.context ? STATIC_TOP_K_WITH_LIVE : STATIC_TOP_K;
-  const excludedSources = live.context
+  const isApiIntent = live.sections.some((s) => /endpoint/i.test(s));
+  const excludeOpenApi = live.context.length > 0 && !isApiIntent;
+  const excludedSources = excludeOpenApi
     ? [IDENTITY_SOURCE, OPENAPI_SOURCE]
     : [IDENTITY_SOURCE];
 
-  const staticDocs = await AiEmbedding.find({
-    source: { $nin: excludedSources },
-  }).lean();
-  const staticChunks = rank(staticDocs, queryEmbedding, staticK);
+  const staticK = live.context ? STATIC_TOP_K_WITH_LIVE : STATIC_TOP_K;
+  const staticChunks = await retrieveStaticChunks(
+    query,
+    queryEmbedding,
+    excludedSources,
+    staticK,
+  );
+
   const staticContext = staticChunks
     .map((c) => `[${c.source}] ${c.title}\n${c.content}`)
     .join("\n\n---\n\n");
@@ -516,8 +534,6 @@ ${query}
     async start(controller) {
       const enc = new TextEncoder();
       let finished = false;
-      const refusalFilter = new RefusalFilter();
-      const teamWordFilter = new TeamWordFilter(teamNames, teamScope);
 
       const emit = (text: string) => {
         if (!text) return;
@@ -527,26 +543,45 @@ ${query}
       };
 
       try {
+        // ---- 1. Bufferiza a resposta completa do LLM ----
+        let raw = "";
         for await (const chunk of streamChat(messages)) {
           if (finished) continue;
 
           const idx = chunk.indexOf("[FIM");
-          let effective = chunk;
           if (idx !== -1) {
-            effective = chunk.slice(0, idx).replace(/[_*]+\s*$/, "");
+            raw += chunk.slice(0, idx).replace(/[_*]+\s*$/, "");
             finished = true;
+            break;
           }
-
-          const afterRefusal = refusalFilter.push(effective);
-          const afterTeam = teamWordFilter.push(afterRefusal);
-          emit(afterTeam);
-
-          if (finished) break;
+          raw += chunk;
         }
 
-        if (!finished) {
-          emit(teamWordFilter.flush());
-          emit(refusalFilter.flush());
+        // ---- 2. Aplica filtros pós-processamento no buffer inteiro ----
+        const refusalFilter = new RefusalFilter();
+        const teamWordFilter = new TeamWordFilter(teamNames, teamScope);
+
+        const afterRefusal = refusalFilter.push(raw);
+        const afterTeam = teamWordFilter.push(afterRefusal);
+        let finalText =
+          afterTeam + teamWordFilter.flush() + refusalFilter.flush();
+
+        // ---- 3. Validação numérica buffered ----
+        if (live.context) {
+          const validation = validateResponse(finalText, live.context);
+          if (!validation.valid) {
+            console.warn(
+              `[rag] validação falhou (${validation.reason}); usando fallback [[COPY]]`,
+            );
+            const copyBlock = extractCopyBlock(live.context);
+            finalText = copyBlock ?? stripAugmentationTags(live.context);
+          }
+        }
+
+        // ---- 4. Emite o texto final em chunks (animação) ----
+        for (const piece of chunkString(finalText, TYPING_CHUNK_SIZE)) {
+          emit(piece);
+          await sleep(TYPING_DELAY_MS);
         }
 
         controller.enqueue(enc.encode("data: [DONE]\n\n"));

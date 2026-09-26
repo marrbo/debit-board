@@ -2,48 +2,37 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import { Project } from "@/models/Project";
-import { Team } from "@/models/Team";
-import { SavedQuery } from "@/models/SavedQuery";
 import { subDays, format } from "date-fns";
-import { parseDBQL } from "@/lib/parseDBQL";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
-import mongoose from "mongoose";
+import { buildObservationFilters } from "@/lib/observation-filters";
 import * as Sentry from "@sentry/nextjs";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * Retorna estatísticas agregadas das observations do tenant.
+ * Estatísticas agregadas das observations do tenant.
  *
- * Este endpoint expõe a operação get em /api/stats.
+ * **Fonte única de filtros**: usa `buildObservationFilters` — os mesmos
+ * filtros aplicados aqui são aplicados em `/api/observations` e
+ * `/api/dashboard/stats`. Isso garante que o `kpi.total` retornado aqui
+ * bata com o total mostrado nas outras telas para a mesma DBQL + time +
+ * janela temporal.
  *
- * Suporta:
- *  - `range`: janela temporal (`24h`, `7d`, `14d`, `30d`). Default: `30d`.
- *  - `projectId`: filtra por um projeto específico (ignorado quando `all`).
- *  - `teamId`: filtra pelo time selecionado. `all` ou ausente = sem filtro.
- *  - `q`: filtra por consulta DBQL. Aceita **ID de SavedQuery** (resolvido
- *    server-side e respeitando visibilidade) ou **DBQL cru** (compatibilidade
- *    com cliques em fatias de gráfico).
+ * Aceita `range=1h|24h|7d|14d|30d|90d|all` (preset) **ou** `from` + `to`
+ * (ISO, custom). Quando ambos vêm preenchidos, `from`/`to` têm precedência.
  *
  * @summary Estatísticas agregadas do tenant
- * @description Retorna KPIs (totais, status, SLA), distribuição por severidade
- *              e categoria, top 10 projetos (com quebra por status e severidade)
- *              e série temporal para os gráficos de evolução.
  * @tags Stats
  * @route GET /api/stats
  * @async
- * @access analyst, viewer
  * @function GET
- * @param {NextRequest} req - Requisição HTTP contendo os query params
- *                            `range`, `projectId`, `teamId` e `q`.
- * @returns {Promise<NextResponse>} JSON com `kpi`, `severityTotals`,
- *                                  `categoryTotals`, `projectTotals` e `chartData`.
+ * @param {NextRequest} req - Requisição HTTP.
+ * @returns {Promise<NextResponse>} `{ kpi, severityTotals, categoryTotals, projectTotals, chartData }`.
  * @throws {401} Sessão ausente ou inválida.
  * @throws {423} Usuário autenticado sem tenant associado.
- * @throws {500} Erro inesperado ao agregar dados (registrado no Sentry).
+ * @throws {500} Erro inesperado (registrado no Sentry).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -51,101 +40,30 @@ export async function GET(req: NextRequest) {
     if (auth.ok === false) return auth.response;
 
     const tenantId = toObjectId(auth.user.tenantId);
-    const userSub = auth.user.sub;
-
     await connectToDatabase();
 
     const { searchParams } = new URL(req.url);
-    const range = searchParams.get("range") || "30d";
     const projectId = searchParams.get("projectId");
     const teamId = searchParams.get("teamId");
-    const qParam = searchParams.get("q");
+    const dbqlId = searchParams.get("q");
+    const range = searchParams.get("range");
+    const rangeFrom = searchParams.get("from");
+    const rangeTo = searchParams.get("to");
 
-    // ============================================================
-    // 🔥 Resolve `q`: pode ser ID de saved query OU DBQL cru
-    // ============================================================
-    let finalSearchQuery = "";
-    if (qParam) {
-      const dbqlId = toObjectId(qParam);
-      if (dbqlId) {
-        const savedQuery = await SavedQuery.findOne({
-          _id: { $eq: dbqlId },
-          $or: [
-            { visibility: { $eq: "public" } },
-            { visibility: { $eq: "shared" }, tenantId: { $eq: tenantId } },
-            {
-              visibility: { $eq: "private" },
-              tenantId: { $eq: tenantId },
-              sub: { $eq: userSub },
-            },
-            {
-              visibility: { $eq: "temporary" },
-              tenantId: { $eq: tenantId },
-              sub: { $eq: userSub },
-            },
-          ],
-        }).lean();
+    const { match } = await buildObservationFilters({
+      tenantId,
+      dbqlId,
+      teamId,
+      range,
+      rangeFrom,
+      rangeTo,
+    });
 
-        if (savedQuery?.queryString) {
-          finalSearchQuery = savedQuery.queryString;
-        }
-      } else {
-        // Não é ObjectId válido → trata como DBQL cru (compat. e slices)
-        finalSearchQuery = qParam;
-      }
-    }
-
-    // ============================================================
-    // 🔥 Team filter (mesmo padrão do /api/dashboard/stats)
-    // ============================================================
-    let allowedProjectNames: string[] | null = null;
-    if (teamId && teamId !== "all") {
-      const teamObjectId = toObjectId(teamId);
-      if (teamObjectId) {
-        const team = await Team.findById(teamObjectId).lean();
-        if (team) {
-          const allowedProjectIds = (team.projectIds || []).map((id: any) => {
-            if (typeof id === "string" && mongoose.Types.ObjectId.isValid(id)) {
-              return new mongoose.Types.ObjectId(id);
-            }
-            return id;
-          });
-
-          const teamProjects = await Project.find({
-            _id: { $in: allowedProjectIds },
-          })
-            .select("name")
-            .lean();
-
-          allowedProjectNames = teamProjects.map((p) => p.name);
-        }
-      }
-    }
-
-    // ============================================================
-    // Match base
-    // ============================================================
-    let baseMatch: Record<string, unknown> = {};
-    if (tenantId) baseMatch.tenantId = tenantId;
-
-    if (range === "7d") baseMatch.firstSeen = { $gte: subDays(new Date(), 7) };
-    else if (range === "14d")
-      baseMatch.firstSeen = { $gte: subDays(new Date(), 14) };
-    else if (range === "30d")
-      baseMatch.firstSeen = { $gte: subDays(new Date(), 30) };
-
-    if (projectId && projectId !== "all") baseMatch.project = projectId;
-
-    if (allowedProjectNames !== null && allowedProjectNames.length > 0) {
-      baseMatch.project = { $in: allowedProjectNames };
-    }
-
-    if (finalSearchQuery) {
-      const parsedMatch = parseDBQL(finalSearchQuery);
-      if (parsedMatch && Object.keys(parsedMatch).length > 0) {
-        baseMatch = { $and: [baseMatch, parsedMatch] };
-      }
-    }
+    // `projectId` é específico desta tela — adiciona como cláusula extra.
+    const baseMatch: Record<string, unknown> =
+      projectId && projectId !== "all"
+        ? { $and: [match, { project: projectId }] }
+        : match;
 
     // ============================================================
     // KPIs
@@ -208,34 +126,35 @@ export async function GET(req: NextRequest) {
     }));
 
     // ============================================================
-    // Projetos (TOP 10 + detalhes por status/severidade)
+    // Projetos (TOP 10 + detalhes)
     // ============================================================
-    const projectData = await Observation.aggregate([
-      { $match: baseMatch },
-      { $group: { _id: "$project", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
-
-    const projectStatusData = await Observation.aggregate([
-      { $match: baseMatch },
-      {
-        $group: {
-          _id: { project: "$project", status: "$status" },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const projectSeverityData = await Observation.aggregate([
-      { $match: baseMatch },
-      {
-        $group: {
-          _id: { project: "$project", severity: "$severity" },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const [projectData, projectStatusData, projectSeverityData] =
+      await Promise.all([
+        Observation.aggregate([
+          { $match: baseMatch },
+          { $group: { _id: "$project", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ]),
+        Observation.aggregate([
+          { $match: baseMatch },
+          {
+            $group: {
+              _id: { project: "$project", status: "$status" },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+        Observation.aggregate([
+          { $match: baseMatch },
+          {
+            $group: {
+              _id: { project: "$project", severity: "$severity" },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+      ]);
 
     const projectStatusTotals = projectStatusData.reduce(
       (acc: any, item: any) => {
@@ -265,38 +184,54 @@ export async function GET(req: NextRequest) {
     }));
 
     // ============================================================
-    // Evolução (chartData)
+    // Evolução — deriva `days` do mesmo range usado no match.
     // ============================================================
-    const days =
-      range === "24h" ? 1 : range === "7d" ? 7 : range === "14d" ? 14 : 30;
+    let days = 30;
+    if (range === "1h") days = 1;
+    else if (range === "24h") days = 1;
+    else if (range === "7d") days = 7;
+    else if (range === "14d") days = 14;
+    else if (range === "30d") days = 30;
+    else if (range === "90d") days = 90;
+    else if (rangeFrom && rangeTo) {
+      // Custom: calcula em dias entre os extremos (limitado a 180 para o gráfico)
+      const ms = new Date(rangeTo).getTime() - new Date(rangeFrom).getTime();
+      days = Math.min(180, Math.max(1, Math.ceil(ms / 86_400_000)));
+    }
+
     const dateFilter = { $gte: subDays(new Date(), days) };
 
-    const evolutionSeverityData = await Observation.aggregate([
-      { $match: { ...baseMatch, firstSeen: dateFilter } },
-      {
-        $group: {
-          _id: {
-            day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
-            severity: "$severity",
+    const [evolutionSeverityData, evolutionStatusData] = await Promise.all([
+      Observation.aggregate([
+        { $match: { ...baseMatch, firstSeen: dateFilter } },
+        {
+          $group: {
+            _id: {
+              day: {
+                $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" },
+              },
+              severity: "$severity",
+            },
+            count: { $sum: 1 },
           },
-          count: { $sum: 1 },
         },
-      },
-      { $sort: { "_id.day": 1 } },
-    ]);
-
-    const evolutionStatusData = await Observation.aggregate([
-      { $match: { ...baseMatch, firstSeen: dateFilter } },
-      {
-        $group: {
-          _id: {
-            day: { $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" } },
-            status: "$status",
+        { $sort: { "_id.day": 1 } },
+      ]),
+      Observation.aggregate([
+        { $match: { ...baseMatch, firstSeen: dateFilter } },
+        {
+          $group: {
+            _id: {
+              day: {
+                $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" },
+              },
+              status: "$status",
+            },
+            count: { $sum: 1 },
           },
-          count: { $sum: 1 },
         },
-      },
-      { $sort: { "_id.day": 1 } },
+        { $sort: { "_id.day": 1 } },
+      ]),
     ]);
 
     const today = new Date();

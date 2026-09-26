@@ -2,104 +2,59 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import { Project } from "@/models/Project";
-import { Team } from "@/models/Team";
-import { SavedQuery } from "@/models/SavedQuery";
 import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
-import { parseDBQL } from "@/lib/parseDBQL";
-import { subDays } from "date-fns";
 import mongoose from "mongoose";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
+import { buildObservationFilters } from "@/lib/observation-filters";
 
 /**
- * Lista recursos do endpoint /api/dashboard/stats.
+ * Estatísticas agregadas do dashboard (cards + tabela).
  *
- * Este endpoint expõe a operação get em /api/dashboard/stats.
+ * Aceita `range=7d|14d|30d|90d|all` (preset) **ou** `from` + `to` (ISO,
+ * custom). Quando ambos vêm preenchidos, `from`/`to` têm precedência.
  *
- * @summary Lista recursos do endpoint /api/dashboard/stats
+ * Aplica exatamente o mesmo filtro de `/api/observations` via
+ * `buildObservationFilters`, garantindo que o total mostrado aqui
+ * bata com o total da tela de Observations para a mesma DBQL + time + range.
+ *
+ * @summary Stats agregados do dashboard
  * @tags Dashboard, Stats
  * @route GET /api/dashboard/stats
  * @async
  * @function GET
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
+ * @param {NextRequest} req - Requisição HTTP.
+ * @returns {Promise<NextResponse>} `{ teamStats, projectStats, categoryDetails }`.
  */
 export async function GET(req: NextRequest) {
   const auth = await requireSession();
   if (auth.ok === false) return auth.response;
 
   const tenantId = toObjectId(auth.user.tenantId);
-
   await connectToDatabase();
 
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
-
-  const range = searchParams.get("range") || "30d";
   const dbqlId = searchParams.get("q");
-  const searchQueryRaw = searchParams.get("search") || "";
+  const range = searchParams.get("range");
+  const rangeFrom = searchParams.get("from");
+  const rangeTo = searchParams.get("to");
 
-  searchParams.keys().toArray().join("&");
+  const { match: obsMatch } = await buildObservationFilters({
+    tenantId,
+    dbqlId,
+    teamId,
+    range,
+    rangeFrom,
+    rangeTo,
+  });
 
-  let finalSearchQuery = searchQueryRaw;
-  if (dbqlId) {
-    try {
-      const savedQuery = await SavedQuery.findById(dbqlId).lean();
-      if (savedQuery?.queryString) finalSearchQuery = savedQuery.queryString;
-    } catch {}
-  }
-
-  let allowedProjectNames: string[] | null = null;
-  let allowedProjectIds: mongoose.Types.ObjectId[] | null = null;
-
-  if (teamId && teamId !== "all") {
-    const teamObjectId = toObjectId(teamId);
-    const team = await Team.findById(teamObjectId).lean();
-    if (team) {
-      // 🔥 Converte todos os projectIds para ObjectId (defensivo)
-      allowedProjectIds = (team.projectIds || []).map((id: any) => {
-        if (typeof id === "string" && mongoose.Types.ObjectId.isValid(id)) {
-          return new mongoose.Types.ObjectId(id);
-        }
-        return id;
-      });
-
-      const teamProjects = await Project.find({
-        _id: { $in: allowedProjectIds },
-      })
-        .select("name")
-        .lean();
-      allowedProjectNames = teamProjects.map((p) => p.name);
-    }
-  }
-  // Filtro base
-  const obsMatch: any = { tenantId };
-
-  if (finalSearchQuery) {
-    const parsedMatch = parseDBQL(finalSearchQuery);
-    if (parsedMatch && Object.keys(parsedMatch).length > 0) {
-      Object.assign(obsMatch, parsedMatch);
-    }
-  }
-
-  if (range === "7d") obsMatch.firstSeen = { $gte: subDays(new Date(), 7) };
-  else if (range === "14d")
-    obsMatch.firstSeen = { $gte: subDays(new Date(), 14) };
-  else if (range === "30d")
-    obsMatch.firstSeen = { $gte: subDays(new Date(), 30) };
-
-  if (allowedProjectNames) {
-    obsMatch.project = { $in: allowedProjectNames };
-  }
-
-  // 🔥 Filtro extra para agregações de categoria: ignora patternId nulo/vazio
   const categoryMatch = {
     ...obsMatch,
     patternId: { $exists: true, $nin: [null, ""] },
   };
 
-  // 4. Stats do Time (Cards) - mantém para os cards principais
+  // ---------- 1. Team stats ----------
   const teamPipeline: any[] = [
     { $match: obsMatch },
     {
@@ -181,7 +136,6 @@ export async function GET(req: NextRequest) {
 
   const teamStatsResult = await Observation.aggregate(teamPipeline);
 
-  // 4.1 - Agrupamento por categoria e patternId (somente com patternId válido)
   const categoryPipeline = [
     { $match: categoryMatch },
     { $group: { _id: { category: "$category", patternId: "$patternId" } } },
@@ -204,7 +158,6 @@ export async function GET(req: NextRequest) {
   teamStats.categoryTotals = teamStats.categoryTotals || {};
   teamStats.categoryGroupTotals = categoryGroupTotals;
 
-  // 4.2 - Detalhes por categoria (padrões distintos) com filtro de patternId válido
   const detailPipeline = [
     { $match: categoryMatch },
     {
@@ -226,11 +179,9 @@ export async function GET(req: NextRequest) {
   const categoryDetails: Record<string, Record<string, number>> = {};
   detailResults.forEach((item: any) => {
     if (!categoryDetails[item.category]) categoryDetails[item.category] = {};
-    // Converte patternId para string para usar como chave
     categoryDetails[item.category][item.patternId] = item.count;
   });
 
-  // 🔥 Busca nomes dos patterns - converte IDs para ObjectId
   const allPatternIds = new Set<string>();
   Object.values(categoryDetails).forEach((patterns) => {
     Object.keys(patterns).forEach((id) => allPatternIds.add(id));
@@ -245,6 +196,7 @@ export async function GET(req: NextRequest) {
   })
     .select("_id name")
     .lean();
+
   const patternNameMap: Record<string, string> = {};
   patterns.forEach((p: any) => {
     patternNameMap[p._id] = p.name;
@@ -254,12 +206,11 @@ export async function GET(req: NextRequest) {
   Object.entries(categoryDetails).forEach(([category, patterns]) => {
     categoryDetailsWithNames[category] = {};
     Object.entries(patterns).forEach(([patternId, count]) => {
-      const patternName = patternNameMap[patternId] || patternId; // fallback para o ID se não encontrar
+      const patternName = patternNameMap[patternId] || patternId;
       categoryDetailsWithNames[category][patternName] = count;
     });
   });
 
-  // 5. Stats por Projeto (Grid) - mantém sem filtro de patternId
   const projectPipeline: any[] = [
     { $match: obsMatch },
     {
