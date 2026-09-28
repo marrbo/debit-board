@@ -3,14 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  DoorOpen,
-  IterationCcw,
-  IterationCw,
-  ShieldKeyhole,
-  UserCog2,
-  UserMinus,
-} from "lucide-react";
+import { DoorOpen, UserCog2, UserMinus } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useMemo, useState } from "react";
 

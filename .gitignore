@@ -3,7 +3,7 @@
 # devcontainer
 .devcontainer/dev_node_modules/
 .vscode/.debug/
-.docker/keycloak/realm.json
+realm.json
 
 *.pem
 
@@ -53,3 +53,5 @@ certificates
 .env.local
 .env.production.local
 .devcontainer/env.development.local
+.docker/keycloak/realm.json
+.gitignore
