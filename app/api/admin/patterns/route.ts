@@ -2,7 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
-import { requireAdmin } from "@/lib/api-auth";
+import { requireRole } from "@/lib/api-auth";
 
 /**
  * Lista recursos do endpoint /api/admin/patterns.
@@ -19,7 +19,7 @@ import { requireAdmin } from "@/lib/api-auth";
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function GET() {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   await connectToDatabase();
@@ -42,7 +42,7 @@ export async function GET() {
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const body = await req.json();
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function PUT(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const { searchParams } = new URL(req.url);
@@ -95,7 +95,7 @@ export async function PUT(req: NextRequest) {
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const { searchParams } = new URL(req.url);

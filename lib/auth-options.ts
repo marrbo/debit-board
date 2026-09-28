@@ -49,6 +49,8 @@ export const authOptions: NextAuthOptions = {
         url: `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/auth`,
         params: {
           scope: "openid profile email groups organization",
+          // Força o locale PT-BR na tela do Keycloak, alinhado ao app.
+          ui_locales: "pt-BR",
         },
       },
       token: `${KEYCLOAK_LOCAL_URL}/realms/${REALM}/protocol/openid-connect/token`,
@@ -152,6 +154,10 @@ export const authOptions: NextAuthOptions = {
             originalAdminSub: impersonatingAdmin,
             // Nunca dá privilégio de admin em impersonação
             isAdmin: false,
+            // RBAC — impersonação herda os grupos do alvo, mas o
+            // `isAdmin: false` acima bloqueia qualquer escalação.
+            groups: (target as any).groups ?? [],
+            realmRoles: [],
           };
 
           return session;
@@ -171,6 +177,14 @@ export const authOptions: NextAuthOptions = {
         session.user.organization = token.organization;
         session.user.onboardingCompleted = token.onboardingCompleted;
         session.user.azureSettings = token.azureSettings;
+
+        // 🔥 RBAC — claims expostas para o client derivar papéis
+        //    via `rolesFromSession()`. Não mutar `session.user` para
+        //    `roles: Role[]` aqui: mantemos as claims cruas e
+        //    deixamos a derivação no `lib/permissions.ts` (puro,
+        //    testável, idêntico em client e server).
+        session.user.groups = (token.groups as string[]) ?? [];
+        session.user.realmRoles = (token.realmRoles as string[]) ?? [];
 
         session.user.impersonating = false;
       }

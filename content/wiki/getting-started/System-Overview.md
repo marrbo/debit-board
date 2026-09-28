@@ -29,35 +29,34 @@ vulnerabilidades em containers, dependências e qualidade de código.
 
 ### Dashboard
 
-Visão executiva do time selecionado, com totais por severidade e status,
-distribuição por categoria e tabela de projetos. Inclui o botão **Resumo
-Executivo**, que exporta um PDF consolidado para compartilhamento.
+Visão executiva do escopo selecionado (time específico ou Global). Combina
+cards de severidade e status, evolução temporal, distribuição por categoria,
+top projetos e tabela detalhada. Os widgets podem ser reorganizados, exibidos
+ou ocultados individualmente, e o layout resultante pode ser salvo como
+**perfil** — reutilizável pela própria pessoa ou compartilhado com o time.
 
-### Stats & Usage
-
-Painel analítico do tenant com gráficos de:
-
-- **Novas ocorrências** — evolução no tempo por severidade ou status.
-- **Distribuição por Categoria** — proporção entre categorias de falha.
-- **Total por Projeto** — projetos com maior volume de achados.
-
-Todos os gráficos respondem ao filtro DBQL aplicado no topo da página.
+Inclui o botão **Resumo Executivo**, que exporta um PDF consolidado para
+compartilhamento, e um link direto para o **Modo TV** (dashboard em tela
+cheia, com atualização automática configurável).
 
 ### Observations (Feed)
 
-Lista navegável de todos os achados de SAST do escopo selecionado. Cada linha
-mostra status, arquivo, categoria, subcategoria, branch, severidade e
-responsável. Clicar em uma observation abre um painel lateral com:
+Lista navegável de todos os achados do escopo selecionado. Cada linha mostra
+status, arquivo, categoria, subcategoria, branch, severidade e responsável.
+Clicar em uma observation abre um painel lateral com:
 
 - **Overview** — projeto, repositório, branch, ID, detalhes do problema.
 - **Security** — referência OWASP, explicação de por que é um problema e como
   corrigir.
 
-### SAST Scanner
+Atribuição em massa e filtro DBQL ficam disponíveis no cabeçalho.
+
+### SAST
 
 Histórico de execuções do scanner, com data, status, número de ocorrências,
 padrões avaliados e falhas. O botão **Executar Scanner** dispara uma nova
-varredura manual.
+varredura manual e permite escolher um **perfil de patterns** salvo — ou, por
+padrão, todos os patterns ativos.
 
 ### Wiki
 
@@ -67,7 +66,7 @@ pastas:
 - **Getting Started** — páginas como esta.
 - **User Guide** — manual por funcionalidade.
 - **Admin** — configuração e operação (visível para admins).
-- **_dev** — documentação técnica (admins, em ambiente de desenvolvimento).
+- **\_dev** — documentação técnica (admins, em ambiente de desenvolvimento).
 - **Changelog** — notas de release.
 
 Todo o conteúdo é indexado automaticamente para o assistente de IA.
@@ -77,19 +76,22 @@ Todo o conteúdo é indexado automaticamente para o assistente de IA.
 Configuração do tenant dividida em duas seções:
 
 **Organização**
+
 - **Perfil** — dados do usuário.
+- **Dashboards** — layouts salvos do Dashboard e do Modo TV.
 - **Projetos** — projetos do tenant, com repositórios vinculados.
-- **Queries** — consultas DBQL salvas.
 - **Repositórios** — repositórios sincronizados.
 - **Times** — times e seus projetos associados.
+- **Queries** — consultas DBQL salvas.
 
 **Administração** (admins)
+
 - **Admin** — gestão de tenants e usuários, incluindo impersonation.
-- **API Docs** — documentação OpenAPI das rotas internas.
-- **Auth (OpenID)** — configuração do Keycloak.
-- **Backup & Restore** — exportação e restauração de coleções MongoDB.
-- **Integrations (Azure)** — conexões com serviços externos.
 - **Padrões de Segurança** — regras de detecção do scanner SAST.
+- **Backup & Restore** — exportação e restauração de coleções MongoDB.
+- **API Docs** — documentação OpenAPI das rotas internas.
+- **Auth (OpenID)** — configuração do Keycloak. _(em breve)_
+- **Integrations (Azure)** — conexões com serviços externos. _(em breve)_
 
 ## Funcionalidades transversais
 
@@ -98,12 +100,12 @@ Configuração do tenant dividida em duas seções:
 Todas as listas e dashboards aceitam filtros em DBQL. A sintaxe é
 `propriedade:valor` combinada com operadores lógicos:
 
-| Operador | Descrição |
-|---|---|
+| Operador           | Descrição         |
+| ------------------ | ----------------- |
 | `AND`, `OR`, `NOT` | Combinação lógica |
-| `!` | Atalho de negação |
-| `( )` | Agrupamento |
-| `*` | Curinga |
+| `!`                | Atalho de negação |
+| `( )`              | Agrupamento       |
+| `*`                | Curinga           |
 
 Exemplo:
 
@@ -124,20 +126,32 @@ visibilidade:
 
 Consultas salvas podem ser reutilizadas em qualquer tela, com um clique.
 
+### Perfis de Dashboard
+
+Layouts de widgets podem ser salvos como **perfis** e reutilizados em
+qualquer sessão. Mesma taxonomia de visibilidade das Saved Queries
+(privada / compartilhada / pública). Perfis do tipo **TV** também guardam
+configurações de refresh automático e ciclagem entre times.
+
 ### Assistente de IA
 
 Disponível no cabeçalho de todas as páginas. Responde perguntas em linguagem
 natural consultando a Wiki e os dados do sistema via RAG. Exemplos:
 
-- *"Como escrevo uma query DBQL para severidade crítica no projeto X?"*
-- *"Quais observations críticas existem no branch main?"*
-- *"O que mudou na release 2026.9.20?"*
+- _"Como escrevo uma query DBQL para severidade crítica no projeto X?"_
+- _"Quais observations críticas existem no branch main?"_
+- _"O que mudou na release 2026.9.20?"_
 
 ### Multi-tenant e autenticação
 
 A plataforma é multi-tenant: cada usuário está associado a um tenant e vê
 apenas os dados desse escopo. A autenticação é feita via **Keycloak** (OpenID
-Connect).
+Connect), com grupos e papéis do diretório corporativo definindo permissões:
+
+- **Analyst** — acesso a Dashboard, Feed, SAST, Wiki e configurações do
+  próprio tenant.
+- **Admin** — acesso adicional a `/settings/admin/*` (gestão de tenant,
+  usuários, impersonation, backup/restore, patterns).
 
 ### Backup e Restore
 

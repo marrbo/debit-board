@@ -1,9 +1,10 @@
-import { Suspense } from 'react';
-import ObservationsClient from './ObservationsClient';
-import LoadingSkeleton from '@/components/LoadingSkeleton';
-import { getServerAzureSettings } from '@/lib/auth-server';
+//app/observations/page.tsx
+import { Suspense } from "react";
+import ObservationsClient from "./ObservationsClient";
+import LoadingSkeleton from "@/components/LoadingSkeleton";
+import { getServerAzureSettings } from "@/lib/auth-server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function ObservationsPage() {
   const azureSettings = await getServerAzureSettings();

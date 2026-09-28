@@ -4,8 +4,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Binoculars, ExternalLink, UserPlus } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import { ExternalLink, UserPlus } from "lucide-react";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable, type Column } from "@/components/DataTable";
 import ObservationDrawer from "@/components/ObservationDrawer";
 import AssigneeSelect from "@/components/AssigneeSelect";
@@ -237,9 +237,6 @@ export default function ObservationsClient({
   return (
     <div className="w-full p-8 space-y-6">
       <PageHeader
-        title="Observations Feed"
-        subtitle="Central de monitoramento de vulnerabilidades."
-        icon={<Binoculars className="w-10 h-10 text-brand" />}
         search={{
           type: "advanced",
           onSearch: handleSearch,

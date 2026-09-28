@@ -8,8 +8,8 @@ import { Providers } from "./providers";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "DebitBoard",
-  description: "SAST & Observabilidade",
+  title: "[db] Debit-Board",
+  description: "ASPM - SAST, SCA & Observabilidade",
 };
 
 export default async function RootLayout({
@@ -21,6 +21,7 @@ export default async function RootLayout({
 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
+      <link rel="icon" type="image/svg+xml" href="favicon.svg"></link>
       <body className="min-h-screen bg-page flex flex-col transition-all">
         <InitColorSchemeScript attribute="class" />
         <Providers session={session}>

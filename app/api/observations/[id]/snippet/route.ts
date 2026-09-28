@@ -1,53 +1,64 @@
 // app/api/observations/[id]/snippet/route.ts
-import type { NextRequest} from 'next/server';
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { Observation } from '@/models/Observation';
-import { Tenant } from '@/models/Tenant';
-import https from 'node:https';
-import { URL } from 'node:url';
-import { getServerSessionIds } from '@/lib/session-server';
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Observation } from "@/models/Observation";
+import { Tenant } from "@/models/Tenant";
+import https from "node:https";
+import { URL } from "node:url";
+import { getServerSessionIds } from "@/lib/session-server";
 
 async function azureFetch(urlString: string, pat: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = new URL(urlString);
     const agent = new https.Agent({ rejectUnauthorized: false });
-    const req = https.request({
-      hostname: url.hostname,
-      port: url.port || 443,
-      path: url.pathname + url.search,
-      method: 'GET',
-      headers: { Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}` },
-      agent,
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(data);
-        } else {
-          reject(new Error(`Erro Azure: ${res.statusCode} - ${data}`));
-        }
-      });
-    });
-    req.on('error', reject);
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: "GET",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`:${pat}`).toString("base64")}`,
+        },
+        agent,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(data);
+          } else {
+            reject(new Error(`Erro Azure: ${res.statusCode} - ${data}`));
+          }
+        });
+      },
+    );
+    req.on("error", reject);
     req.end();
   });
 }
 
 // 🔥 Mapeia offsets para linhas
-function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, number> {
+function mapOffsetsToLines(
+  offsets: number[],
+  lines: string[],
+): Map<number, number> {
   const lineOffsets: number[] = [];
   let currentChar = 0;
   for (let i: number = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
+    const line = lines[i] ?? "";
     lineOffsets[i] = currentChar;
     currentChar += line.length + 1;
   }
 
   const offsetToLineMap = new Map<number, number>();
-  offsets.forEach(offset => {
-    let low = 0, high = lineOffsets.length - 1;
+  offsets.forEach((offset) => {
+    let low = 0,
+      high = lineOffsets.length - 1;
     while (low <= high) {
       const mid = (low + high) >> 1;
       const lineStart = lineOffsets[mid];
@@ -56,7 +67,8 @@ function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, numb
       if (
         lineStart !== undefined &&
         lineStart <= offset &&
-        (mid === lineOffsets.length - 1 || (nextLineStart !== undefined && offset < nextLineStart))
+        (mid === lineOffsets.length - 1 ||
+          (nextLineStart !== undefined && offset < nextLineStart))
       ) {
         offsetToLineMap.set(offset, mid);
         break;
@@ -85,33 +97,43 @@ function mapOffsetsToLines(offsets: number[], lines: string[]): Map<number, numb
  * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
-export async function GET(_: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _: NextRequest,
+  props: { params: Promise<{ id: string }> },
+) {
   const params = await props.params;
   const sessionIds = await getServerSessionIds();
-  const tenantId = sessionIds.tenantId;
+  const tenantId = sessionIds.tenantId.toString();
 
   await connectToDatabase();
   // 🔥 Popula o padrão para trazer os dados mais atualizados
-  const issue = await Observation.findById(params.id).populate('patternId');
-  if (!issue || !issue.tenantId.equals(tenantId)) {
-    return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+  const issue = await Observation.findById(params.id).populate("patternId");
+  if (!issue || issue.tenantId.toString() === tenantId) {
+    return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 
   const tenant = await Tenant.findById(issue.tenantId);
-  if (!tenant || !tenant.azureSettings?.instanceUrl || !tenant.azureSettings?.pat) {
-    return NextResponse.json({ error: 'Azure settings missing' }, { status: 400 });
+  if (
+    !tenant ||
+    !tenant.azureSettings?.instanceUrl ||
+    !tenant.azureSettings?.pat
+  ) {
+    return NextResponse.json(
+      { error: "Azure settings missing" },
+      { status: 400 },
+    );
   }
 
   const { instanceUrl, azureCollection, pat } = tenant.azureSettings;
   const { project, repository, filePath, branch, hits, patternId } = issue;
 
-  const baseUrl = instanceUrl.replace(/\/+$/, '');
-  const cleanCollection = azureCollection.replace(/^\/+|\/+$/g, '');
+  const baseUrl = instanceUrl.replace(/\/+$/, "");
+  const cleanCollection = azureCollection.replace(/^\/+|\/+$/g, "");
   const url = `${baseUrl}/tfs/${cleanCollection}/${project}/_apis/git/repositories/${repository}/items?path=${encodeURIComponent(filePath)}&versionDescriptor.versionType=branch&versionDescriptor.version=${encodeURIComponent(branch)}&includeContent=true&api-version=7.1`;
 
   try {
     const fileContent = await azureFetch(url, pat);
-    const lines = fileContent.split('\n');
+    const lines = fileContent.split("\n");
     const margin = 5;
 
     const offsets = hits?.map((h: any) => h.charOffset) || [];
@@ -123,9 +145,9 @@ export async function GET(_: NextRequest, props: { params: Promise<{ id: string 
       const start = Math.max(0, hitLine - margin);
       const end = Math.min(lines.length, hitLine + margin + 1);
       return {
-        snippet: lines.slice(start, end).join('\n'),
+        snippet: lines.slice(start, end).join("\n"),
         startLine: start + 1,
-        hitLine: hitLine + 1
+        hitLine: hitLine + 1,
       };
     });
 
@@ -134,22 +156,21 @@ export async function GET(_: NextRequest, props: { params: Promise<{ id: string 
       const start = Math.max(0, hitLine - margin);
       const end = Math.min(lines.length, hitLine + margin + 1);
       snippets.push({
-        snippet: lines.slice(start, end).join('\n'),
+        snippet: lines.slice(start, end).join("\n"),
         startLine: start + 1,
-        hitLine: hitLine + 1
+        hitLine: hitLine + 1,
       });
     }
 
     return NextResponse.json({
       snippets,
-      pattern: patternId || null 
+      pattern: patternId || null,
     });
-    
   } catch (error: any) {
-    console.error('Erro ao buscar snippet do Azure:', error.message);
+    console.error("Erro ao buscar snippet do Azure:", error.message);
     return NextResponse.json({
       snippets: [],
-      pattern: patternId || null
+      pattern: patternId || null,
     });
   }
 }
@@ -167,7 +188,10 @@ export async function GET(_: NextRequest, props: { params: Promise<{ id: string 
  * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
-export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> },
+) {
   const params = await props.params;
   try {
     const sessionIds = await getServerSessionIds();
@@ -183,16 +207,22 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     const updatedObservation = await Observation.findOneAndUpdate(
       { _id: { $eq: id }, tenantId: { $eq: tenantId } },
       { $set: { assigneeId: assigneeId || null } },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedObservation) {
-      return NextResponse.json({ error: 'Observation not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: "Observation not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(updatedObservation);
   } catch (error) {
-    console.error('Erro ao atualizar assignee da observation:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error("Erro ao atualizar assignee da observation:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

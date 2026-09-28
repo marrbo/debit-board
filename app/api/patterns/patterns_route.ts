@@ -4,7 +4,7 @@ import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
 import { SavedQuery } from "@/models/SavedQuery";
 import { handleGenericGet } from "@/lib/api-handler";
 import { connectToDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/api-auth";
+import { requireRole } from "@/lib/api-auth";
 
 /**
  * Lista recursos do endpoint /api/patterns.
@@ -22,7 +22,7 @@ import { requireAdmin } from "@/lib/api-auth";
  */
 export async function GET(req: NextRequest) {
   // 1. Autenticação
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   await connectToDatabase();

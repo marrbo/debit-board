@@ -1,0 +1,11 @@
+{
+  "name": "debitboard-realm-exporter",
+  "version": "1.0.0",
+  "description": "Sidecar isolado para export offline do realm Keycloak.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
+}

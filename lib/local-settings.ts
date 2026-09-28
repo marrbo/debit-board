@@ -14,6 +14,13 @@ export interface SlideToggleRef {
   value: string;
 }
 
+export interface DashboardWidgetRef {
+  widgetId: string;
+  visible: boolean;
+  order: number;
+  span: 2 | 3 | 4 | 6;
+}
+
 export interface LocalSettings {
   theme: "light" | "dark" | "system";
   settingsNav: boolean;
@@ -22,6 +29,9 @@ export interface LocalSettings {
   dbql: DBQLQueryRef[];
   slideToggle: SlideToggleRef[];
   range: RangeState | null;
+  dashboardLayout: DashboardWidgetRef[];
+  /** Perfil de dashboard ativo. `null` = layout local (navegador). */
+  dashboardProfileId: string | null;
 }
 
 export const DEFAULT_DBQL_VISIBLE = true;
@@ -34,6 +44,8 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   dbql: [],
   slideToggle: [],
   range: null,
+  dashboardLayout: [],
+  dashboardProfileId: null,
 };
 
 const STORAGE_KEY = "debit-board";
@@ -77,6 +89,28 @@ function normalizeSlideToggle(raw: unknown): SlideToggleRef[] {
     .filter((entry) => entry.page !== "" && entry.key !== "");
 }
 
+function normalizeDashboardLayout(raw: unknown): DashboardWidgetRef[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        !!entry && typeof entry === "object",
+    )
+    .map((entry, index) => {
+      const span = entry.span;
+      return {
+        widgetId: String(entry.widgetId ?? ""),
+        visible: typeof entry.visible === "boolean" ? entry.visible : true,
+        order: typeof entry.order === "number" ? entry.order : index,
+        span:
+          span === 2 || span === 3 || span === 4 || span === 6
+            ? (span as 2 | 3 | 4 | 6)
+            : 3,
+      };
+    })
+    .filter((entry) => entry.widgetId !== "");
+}
+
 function readFromStorage(): LocalSettings {
   if (typeof window === "undefined") return DEFAULT_LOCAL_SETTINGS;
   try {
@@ -89,6 +123,11 @@ function readFromStorage(): LocalSettings {
       team: typeof parsed.team === "string" ? parsed.team : null,
       dbql: normalizeDBQL(parsed.dbql),
       slideToggle: normalizeSlideToggle(parsed.slideToggle),
+      dashboardLayout: normalizeDashboardLayout(parsed.dashboardLayout),
+      dashboardProfileId:
+        typeof parsed.dashboardProfileId === "string"
+          ? parsed.dashboardProfileId
+          : null,
     };
   } catch {
     return DEFAULT_LOCAL_SETTINGS;
@@ -108,9 +147,6 @@ function emit(): void {
   listeners.forEach((listener) => listener());
 }
 
-// ============================================================
-// Inicialização única no carregamento do módulo (client-only)
-// ============================================================
 if (typeof window !== "undefined") {
   cache = readFromStorage();
   window.addEventListener("storage", (event) => {
@@ -121,7 +157,7 @@ if (typeof window !== "undefined") {
 }
 
 // ============================================================
-// API pública — snapshot puro
+// API pública
 // ============================================================
 export function getLocalSettings(): LocalSettings {
   return cache;
@@ -143,10 +179,7 @@ export function updateLocalSettings(
 ): LocalSettings {
   const next: LocalSettings = { ...cache, ...patch };
 
-  // No-op real: nada muda → não reatribui cache, não emite, não re-renderiza.
-  if (serialize(next) === serialize(cache)) {
-    return cache;
-  }
+  if (serialize(next) === serialize(cache)) return cache;
 
   cache = next;
   writeToStorage(cache);
@@ -162,7 +195,7 @@ export function resetLocalSettings(): LocalSettings {
 }
 
 // ============================================================
-// Team (global)
+// Team
 // ============================================================
 export function getTeam(): string | null {
   return cache.team;
@@ -177,7 +210,7 @@ export function clearTeam(): void {
 }
 
 // ============================================================
-// Helpers DBQL (page → { id, visible })
+// DBQL
 // ============================================================
 function upsertDBQLRef(
   page: string,
@@ -229,7 +262,7 @@ export function toggleSearchVisible(page: string): void {
 }
 
 // ============================================================
-// Helpers SlideToggle (page + key → value)
+// SlideToggle
 // ============================================================
 export function getSlideToggleValue(page: string, key: string): string | null {
   return (
@@ -257,4 +290,15 @@ export function clearSlideToggleValue(page: string, key: string): void {
       (e) => !(e.page === page && e.key === key),
     ),
   });
+}
+
+// ============================================================
+// Dashboard Profile (ativo)
+// ============================================================
+export function getDashboardProfileId(): string | null {
+  return cache.dashboardProfileId;
+}
+
+export function setDashboardProfileId(id: string | null): void {
+  updateLocalSettings({ dashboardProfileId: id });
 }

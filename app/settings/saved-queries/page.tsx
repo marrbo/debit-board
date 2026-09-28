@@ -15,7 +15,7 @@ import {
   Eye,
   DatabaseSearch,
 } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useFeedback } from "@/hooks/useFeedback";
 import type { ISavedQuery } from "@/types/ISavedQuery";

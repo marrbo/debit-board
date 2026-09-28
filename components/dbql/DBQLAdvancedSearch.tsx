@@ -644,7 +644,7 @@ export default function DBQLAdvancedSearch({
         method: "DELETE",
       });
       if (res.ok) {
-        if (activeSavedQuery?._id.equals(id)) clearAllInternal();
+        if (activeSavedQuery?._id.toString() === id) clearAllInternal();
         const listRes = await fetch(`/api/saved-query?context=${dbqlContext}`, {
           cache: "no-store",
         });

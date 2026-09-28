@@ -1,3 +1,4 @@
+// components/Charts.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -6,10 +7,8 @@ import { ResponsivePie } from "@nivo/pie";
 import { ResponsiveBar } from "@nivo/bar";
 import type { ChartDataPoint } from "@/lib/types";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
+import { CATEGORY_COLORS } from "@/lib/palette";
 
-// ============================================================
-// Tipos
-// ============================================================
 type ChartType =
   | "bar"
   | "line"
@@ -24,27 +23,10 @@ interface ChartsProps {
   labels?: string[];
   type: ChartType;
   onSliceClick?: (label: string) => void;
+  hideLegend?: boolean;
+  barLayout?: "vertical" | "horizontal";
 }
 
-// ============================================================
-// Paleta compartilhada
-// ============================================================
-const PIE_COLORS = [
-  "#e8c1a0",
-  "#f47560",
-  "#f1e15b",
-  "#e8a838",
-  "#61cdbb",
-  "#97e3d5",
-  "#e25c60",
-  "#be7cb0",
-  "#9dbcd4",
-  "#a1c9f4",
-];
-
-// ============================================================
-// Tema Nivo
-// ============================================================
 const getNivoTheme = (mode: "light" | "dark") => {
   const isDark = mode === "dark";
   return {
@@ -70,15 +52,8 @@ const getNivoTheme = (mode: "light" | "dark") => {
         },
       },
     },
-    grid: {
-      line: { stroke: isDark ? "#1E293B" : "#F1F5F9", strokeWidth: 1 },
-    },
-    legends: {
-      text: {
-        fontSize: 10,
-        fill: isDark ? "#CBD5E1" : "#475569",
-      },
-    },
+    grid: { line: { stroke: isDark ? "#1E293B" : "#F1F5F9", strokeWidth: 1 } },
+    legends: { text: { fontSize: 10, fill: isDark ? "#CBD5E1" : "#475569" } },
     tooltip: {
       container: {
         background: isDark ? "#1E293B" : "#FFFFFF",
@@ -99,9 +74,6 @@ const getNivoTheme = (mode: "light" | "dark") => {
   };
 };
 
-// ============================================================
-// Helpers
-// ============================================================
 function buildLineData(datasets: any[]) {
   return datasets.map((ds) => ({
     id: ds.label,
@@ -129,16 +101,65 @@ function truncate(s: string, max = 18) {
 }
 
 // ============================================================
-// Tooltip customizado — mostra TODAS as séries no mesmo X
+// Resolução de série — robusta contra variações do Nivo
+// ============================================================
+interface SeriesRef {
+  label: string;
+  color: string;
+}
+
+function resolveSeries(
+  point: any,
+  seriesLabels: string[],
+  seriesColors: string[],
+): SeriesRef {
+  // 1) serieId string → procura por label exato
+  const sid = point?.serieId;
+  if (typeof sid === "string") {
+    const idx = seriesLabels.indexOf(sid);
+    if (idx >= 0) return { label: sid, color: seriesColors[idx] };
+  }
+  // 2) series.id string → procura por label exato
+  const nestedId = point?.series?.id;
+  if (typeof nestedId === "string") {
+    const idx = seriesLabels.indexOf(nestedId);
+    if (idx >= 0) return { label: nestedId, color: seriesColors[idx] };
+  }
+  // 3) point.id string no formato "seriesLabel.xIdx" → extrai a parte da série
+  if (typeof point?.id === "string" && point.id.includes(".")) {
+    const seriesPart = point.id.split(".")[0];
+    const idx = seriesLabels.indexOf(seriesPart);
+    if (idx >= 0) return { label: seriesPart, color: seriesColors[idx] };
+  }
+  // 4) serieId / seriesIndex numérico → índice direto
+  const numeric =
+    typeof sid === "number"
+      ? sid
+      : typeof point?.seriesIndex === "number"
+        ? point.seriesIndex
+        : -1;
+  if (numeric >= 0 && numeric < seriesLabels.length) {
+    return { label: seriesLabels[numeric], color: seriesColors[numeric] };
+  }
+  // 5) casa por cor (último recurso antes de desistir)
+  const color = point?.serieColor;
+  if (typeof color === "string") {
+    const idx = seriesColors.findIndex(
+      (c) => c.toLowerCase() === color.toLowerCase(),
+    );
+    if (idx >= 0) return { label: seriesLabels[idx], color: seriesColors[idx] };
+  }
+  return { label: "—", color: "#94A3B8" };
+}
+
+// ============================================================
+// Tooltip da slice (todos os pontos do mesmo X)
 // ============================================================
 interface LineSliceTooltipProps {
   slice: any;
   xLabels: string[];
   isDark: boolean;
-  /** Labels das séries na ORDEM em que foram passadas ao Nivo.
-   *  Usado como fallback quando o Nivo não expõe `serieId`. */
   seriesLabels: string[];
-  /** Cores das séries na mesma ordem. */
   seriesColors: string[];
 }
 
@@ -156,16 +177,12 @@ function LineSliceTooltip({
       ? xLabels[xIndex]
       : String(firstPoint?.data?.xFormatted ?? xIndex ?? "");
 
-  // 🔑 Preserva o índice ORIGINAL antes de ordenar.
-  //    A ordem de `slice.points` no Nivo espelha a ordem das séries
-  //    passadas em `data`, então `originalIdx` mapeia 1:1 com `seriesLabels`.
-  const indexed = slice.points.map((point: any, originalIdx: number) => ({
-    point,
-    originalIdx,
-  }));
-
-  const sorted = indexed
-    .filter(({ point }) => (point.data?.y ?? 0) > 0)
+  const rows = slice.points
+    .map((point: any) => ({
+      point,
+      series: resolveSeries(point, seriesLabels, seriesColors),
+    }))
+    .filter(({ point }: any) => (point.data?.y ?? 0) > 0)
     .sort((a: any, b: any) => (b.point.data?.y ?? 0) - (a.point.data?.y ?? 0));
 
   const bg = isDark ? "#1E293B" : "#FFFFFF";
@@ -198,103 +215,75 @@ function LineSliceTooltip({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {sorted.map(({ point, originalIdx }: any, renderIdx: number) => {
-          // 🔑 Cascata de fallback:
-          // 1. `serieId` (nome)
-          // 2. `series.id` (nome aninhado)
-          // 3. `seriesLabels[originalIdx]` (nome passado por prop)
-          // 4. fallback numérico
-          const serieLabel =
-            (typeof point.serieId === "string" && point.serieId) ||
-            (typeof point.series?.id === "string" && point.series.id) ||
-            seriesLabels[originalIdx] ||
-            `Série ${originalIdx + 1}`;
-
-          // Cor: mesma cascata
-          const serieColor =
-            (typeof point.serieColor === "string" && point.serieColor) ||
-            (typeof point.series?.color === "string" && point.series.color) ||
-            seriesColors[originalIdx] ||
-            "#94A3B8";
-
-          return (
-            <div
-              key={`${originalIdx}-${renderIdx}`}
+        {rows.map(({ point, series }: any, i: number) => (
+          <div
+            key={`${series.label}-${i}`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                width: "100%",
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: 9999,
+                background: series.color,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                color: textSecondary,
+                flex: "1 1 0",
+                minWidth: 0,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: 9999,
-                  background: serieColor,
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  color: textSecondary,
-                  flex: "1 1 0",
-                  minWidth: 0,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {serieLabel}
-              </span>
-              <span
-                style={{
-                  color: textPrimary,
-                  fontWeight: 600,
-                  fontVariantNumeric: "tabular-nums",
-                  flexShrink: 0,
-                }}
-              >
-                {point.data?.yFormatted ?? point.data?.y ?? 0}
-              </span>
-            </div>
-          );
-        })}
+              {series.label}
+            </span>
+            <span
+              style={{
+                color: textPrimary,
+                fontWeight: 600,
+                fontVariantNumeric: "tabular-nums",
+                flexShrink: 0,
+              }}
+            >
+              {point.data?.yFormatted ?? point.data?.y ?? 0}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ============================================================
-// Componente
-// ============================================================
 export default function Charts({
   data,
   datasets,
   labels,
   type,
   onSliceClick,
+  hideLegend = false,
+  barLayout = "vertical",
 }: ChartsProps) {
   const mode = useResolvedTheme();
   const theme = useMemo(() => getNivoTheme(mode), [mode]);
   const isDark = mode === "dark";
 
-  // ============================================================
-  // Multi-dataset: linha ou barras empilhadas
-  // ============================================================
   if (datasets && datasets.length > 0) {
-    // ---------- LINHA ----------
     if (type === "line") {
       const lineData = buildLineData(datasets);
       const xLabels = labels || datasets[0]?.labels || [];
-      const legendRows = Math.ceil(lineData.length / 3);
-
-      // 🔑 Props auxiliares para o tooltip — evita depender do Nivo expor
-      //    `serieId`/`serieColor` (que varia entre versões).
+      const legendRows = hideLegend ? 0 : Math.ceil(lineData.length / 3);
       const seriesLabels = lineData.map((d) => d.id);
-      const seriesColors = lineData.map((d) => d.color);
+      const seriesColors = lineData.map((d) => d.color as string);
 
       return (
         <ResponsiveLine
@@ -303,7 +292,7 @@ export default function Charts({
           margin={{
             top: 20,
             right: 20,
-            bottom: 20 + legendRows * 22,
+            bottom: hideLegend ? 40 : 20 + legendRows * 22,
             left: 45,
           }}
           xScale={{ type: "point" }}
@@ -319,7 +308,7 @@ export default function Charts({
           }}
           axisLeft={{ tickSize: 5, tickPadding: 6, tickRotation: 0 }}
           enableGridX={false}
-          colors={datasets.map((ds) => ds.borderColor || ds.backgroundColor)}
+          colors={seriesColors}
           lineWidth={2}
           enablePoints
           pointSize={6}
@@ -338,32 +327,97 @@ export default function Charts({
               seriesColors={seriesColors}
             />
           )}
-          legends={[
-            {
-              anchor: "bottom",
-              direction: "row",
-              justify: true,
-              translateX: 0,
-              translateY: 55,
-              itemsSpacing: 4,
-              itemWidth: 75,
-              itemHeight: 18,
-              itemDirection: "left-to-right",
-              itemOpacity: 0.85,
-              symbolSize: 6,
-              symbolShape: "circle",
-            },
-          ]}
+          legends={
+            hideLegend
+              ? []
+              : [
+                  {
+                    anchor: "bottom",
+                    direction: "row",
+                    justify: true,
+                    translateX: 0,
+                    translateY: 55,
+                    itemsSpacing: 4,
+                    itemWidth: 75,
+                    itemHeight: 18,
+                    itemDirection: "left-to-right",
+                    itemOpacity: 0.85,
+                    symbolSize: 6,
+                    symbolShape: "circle",
+                  },
+                ]
+          }
         />
       );
     }
 
-    // ---------- BARRAS EMPILHADAS (legenda no topo) ----------
+    // ---------- BARRAS EMPILHADAS ----------
     const {
       data: barData,
       keys,
       colors: barColors,
     } = buildBarData(labels || [], datasets);
+    const isHorizontal = barLayout === "horizontal";
+
+    if (isHorizontal) {
+      return (
+        <ResponsiveBar
+          data={barData}
+          theme={theme}
+          keys={keys}
+          indexBy="index"
+          layout="horizontal"
+          margin={{
+            top: hideLegend ? 20 : 50,
+            right: 30,
+            bottom: 30,
+            left: 140,
+          }}
+          padding={0.35}
+          groupMode="stacked"
+          colors={barColors}
+          borderRadius={3}
+          axisTop={null}
+          axisRight={null}
+          axisBottom={{ tickSize: 5, tickPadding: 6, tickRotation: 0 }}
+          axisLeft={{
+            tickSize: 5,
+            tickPadding: 8,
+            tickRotation: 0,
+            format: (v) => truncate(String(v), 20),
+          }}
+          enableGridX
+          enableGridY={false}
+          labelSkipWidth={16}
+          labelSkipHeight={16}
+          labelTextColor="#FFFFFF"
+          motionConfig="gentle"
+          role="application"
+          ariaLabel="Gráfico de barras empilhadas horizontal"
+          legends={
+            hideLegend
+              ? []
+              : [
+                  {
+                    dataFrom: "keys",
+                    anchor: "top",
+                    direction: "row",
+                    justify: false,
+                    translateX: 0,
+                    translateY: -42,
+                    itemsSpacing: 20,
+                    itemWidth: 60,
+                    itemHeight: 18,
+                    itemDirection: "left-to-right",
+                    itemOpacity: 0.9,
+                    symbolSize: 8,
+                    symbolShape: "circle",
+                  },
+                ]
+          }
+        />
+      );
+    }
 
     return (
       <ResponsiveBar
@@ -371,7 +425,12 @@ export default function Charts({
         theme={theme}
         keys={keys}
         indexBy="index"
-        margin={{ top: 45, right: 20, bottom: 100, left: 45 }}
+        margin={{
+          top: hideLegend ? 20 : 45,
+          right: 20,
+          bottom: 100,
+          left: 45,
+        }}
         padding={0.5}
         groupMode="stacked"
         colors={barColors}
@@ -392,87 +451,86 @@ export default function Charts({
         motionConfig="gentle"
         role="application"
         ariaLabel="Gráfico de barras empilhadas"
-        legends={[
-          {
-            dataFrom: "keys",
-            anchor: "top",
-            direction: "row",
-            justify: false,
-            translateX: 0,
-            translateY: -38,
-            itemsSpacing: 20,
-            itemWidth: 60,
-            itemHeight: 18,
-            itemDirection: "left-to-right",
-            itemOpacity: 0.9,
-            symbolSize: 8,
-            symbolShape: "circle",
-          },
-        ]}
+        legends={
+          hideLegend
+            ? []
+            : [
+                {
+                  dataFrom: "keys",
+                  anchor: "top",
+                  direction: "row",
+                  justify: false,
+                  translateX: 0,
+                  translateY: -38,
+                  itemsSpacing: 20,
+                  itemWidth: 60,
+                  itemHeight: 18,
+                  itemDirection: "left-to-right",
+                  itemOpacity: 0.9,
+                  symbolSize: 8,
+                  symbolShape: "circle",
+                },
+              ]
+        }
       />
     );
   }
 
-  // ============================================================
-  // Pizza
-  // ============================================================
   if (data && type === "pie") {
     const pieData = data.map((d) => ({
       id: d.label,
       label: d.label,
       value: d.value,
     }));
-
     return (
       <ResponsivePie
         data={pieData}
         theme={theme}
-        margin={{ top: 20, right: 150, bottom: 20, left: 20 }}
+        margin={{ top: 10, right: 170, bottom: 20, left: 10 }}
         innerRadius={0.55}
         padAngle={1.5}
         cornerRadius={4}
         activeOuterRadiusOffset={8}
-        colors={PIE_COLORS}
+        colors={CATEGORY_COLORS}
         borderWidth={0}
         enableArcLinkLabels={false}
         arcLabelsSkipAngle={15}
         arcLabelsTextColor="#FFFFFF"
         arcLabel={(d) => `${d.value}`}
         onClick={(slice) => {
-          if (onSliceClick && slice.label) {
-            onSliceClick(String(slice.label));
-          }
+          if (onSliceClick && slice.label) onSliceClick(String(slice.label));
         }}
         motionConfig="gentle"
-        legends={[
-          {
-            anchor: "right",
-            direction: "column",
-            justify: false,
-            translateX: 140,
-            translateY: 0,
-            itemsSpacing: 6,
-            itemWidth: 130,
-            itemHeight: 18,
-            itemTextColor: isDark ? "#CBD5E1" : "#475569",
-            itemDirection: "left-to-right",
-            itemOpacity: 0.9,
-            symbolSize: 8,
-            symbolShape: "circle",
-            data: pieData.map((d, i) => ({
-              id: d.id,
-              label: truncate(d.label, 20),
-              color: PIE_COLORS[i % PIE_COLORS.length],
-            })),
-          },
-        ]}
+        legends={
+          hideLegend
+            ? []
+            : [
+                {
+                  anchor: "right",
+                  direction: "column",
+                  justify: false,
+                  translateX: 140,
+                  translateY: 0,
+                  itemsSpacing: 6,
+                  itemWidth: 120,
+                  itemHeight: 18,
+                  itemTextColor: isDark ? "#CBD5E1" : "#475569",
+                  itemDirection: "left-to-right",
+                  itemOpacity: 0.9,
+                  symbolSize: 10,
+                  symbolShape: "circle",
+                  data: pieData.map((d, i) => ({
+                    id: d.id,
+                    label: truncate(d.label, 30),
+                    color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+                  })),
+                },
+              ]
+        }
       />
     );
   }
 
-  // ============================================================
-  // Fallback — barras simples
-  // ============================================================
   const simpleBarData = (data || []).map((d) => ({
     index: truncate(d.label, 14),
     value: d.value,
@@ -490,11 +548,7 @@ export default function Charts({
       borderRadius={3}
       axisTop={null}
       axisRight={null}
-      axisBottom={{
-        tickSize: 5,
-        tickPadding: 6,
-        tickRotation: -45,
-      }}
+      axisBottom={{ tickSize: 5, tickPadding: 6, tickRotation: -45 }}
       axisLeft={{ tickSize: 5, tickPadding: 6, tickRotation: 0 }}
       enableGridX={false}
       motionConfig="gentle"

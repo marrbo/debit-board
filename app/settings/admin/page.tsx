@@ -1,17 +1,22 @@
-// app/admin/page.tsx
+// app/settings/admin/page.tsx
+import { redirect } from "next/navigation";
+import { UserCog } from "lucide-react";
+import AdminTabs from "./AdminTabs";
+import KeycloakExportPanel from "./KeycloakExportPanel";
+import PageHeader from "@/components/PageHeader/Header";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
-import { redirect } from "next/navigation";
-import AdminTabs from "./AdminTabs";
-import { UserCog } from "lucide-react";
 import { getServerAuthSession } from "@/lib/auth-server";
+import { rolesFromSession } from "@/lib/permissions";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const session = await getServerAuthSession();
+  const roles = rolesFromSession(session);
 
-  // Remova o comentário abaixo se quiser proteger a rota
-  if (!session || session.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+  if (!roles.includes("admin")) {
     redirect("/settings");
   }
 
@@ -23,21 +28,16 @@ export default async function AdminPage() {
   const serializedUsers = JSON.parse(JSON.stringify(users));
 
   return (
-    <div className="w-full mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-heading dark:text-heading flex items-center gap-2">
-          <UserCog className="w-10 h-10 text-brand" />
-          Admin
-        </h1>
-      </div>
+    <div className="w-full mx-auto space-y-6">
+      <PageHeader subtitle="Gerencie Tenants, Usuários e configurações do realm" />
 
-      <div className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg shadow-sm hover:drop-shadow-lg overflow-hidden transition-colors">
-        <div className="px-6 py-4 border-b border-default dark:border-strong flex items-center gap-3 bg-surface dark:bg-surface/80">
-          <p className="text-xs text-muted dark:text-muted">
-            Gerencie Tenants e Usuários
-          </p>
+      <KeycloakExportPanel />
+
+      <div className="card overflow-hidden">
+        <div className="px-6 py-4 border-b border-default flex items-center gap-3">
+          <UserCog className="w-5 h-5 text-brand" />
+          <p className="text-xs text-muted">Gerencie Tenants e Usuários</p>
         </div>
-
         <AdminTabs tenants={serializedTenants} users={serializedUsers} />
       </div>
     </div>

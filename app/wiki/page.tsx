@@ -1,3 +1,4 @@
+//app/wiki/page.tsx
 import fs from "fs";
 import path from "path";
 import { redirect } from "next/navigation";

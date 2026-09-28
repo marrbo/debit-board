@@ -4,7 +4,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Tenant } from "@/models/Tenant";
 import crypto from "crypto";
-import { requireAdmin } from "@/lib/api-auth";
+import { requireRole } from "@/lib/api-auth";
 
 /**
  * Cria recurso do endpoint /api/admin/sync-keycloak.
@@ -21,7 +21,7 @@ import { requireAdmin } from "@/lib/api-auth";
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function POST() {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   try {

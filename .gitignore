@@ -3,6 +3,7 @@
 # devcontainer
 .devcontainer/dev_node_modules/
 .vscode/.debug/
+.docker/keycloak/realm.json
 
 *.pem
 
@@ -11,7 +12,8 @@
 /.pnp
 .pnp.js
 
-#dump
+#dump & backups
+backups/
 dumps/
 
 # testing

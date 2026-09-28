@@ -1,3 +1,4 @@
+//app/wiki/layout.tsx
 import path from "path";
 import { requireSession } from "@/lib/api-auth";
 import { getWikiTree } from "@/lib/wiki-utils";

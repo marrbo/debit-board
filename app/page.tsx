@@ -1,264 +1,205 @@
 // app/page.tsx
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
-import PageHeader from "@/components/PageHeader";
-import { ChartAreaIcon } from "lucide-react";
+import { Tv } from "lucide-react";
 import { FaFilePdf } from "react-icons/fa";
+
+import PageHeader from "@/components/PageHeader/Header";
 import TeamStatsCard from "@/components/TeamStatsCard";
 import TeamSelector from "@/components/TeamSelector";
-import { DataTable, type Column } from "@/components/DataTable";
-import { useTeam } from "@/hooks/useLocalSettings";
+import RangeSelector from "@/components/RangeSelector";
+import TeamsExecutiveCard from "@/components/stats/TeamsExecutiveCard";
+import EvolutionWidget from "@/components/dashboard/EvolutionWidget";
+import TopProjectsWidget from "@/components/dashboard/TopProjectsWidget";
+import CategoryPieWidget from "@/components/dashboard/CategoryPieWidget";
+import WidgetsMenu from "@/components/dashboard/WidgetsMenu";
+import DashboardProfileBar from "@/components/dashboard/DashboardProfileBar";
+import { DataTable } from "@/components/DataTable";
+import { projectColumns } from "@/components/dashboard/projectColumns";
+import LoadingSkeleton from "@/components/LoadingSkeleton";
+import DashboardProfileModal from "@/app/settings/dashboards/DashboardProfileModal";
+
+import { useTeam, useLocalSettings } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
 import { useRangeState } from "@/hooks/useRangeState";
+import { useDashboardProfiles } from "@/hooks/useDashboardProfiles";
+import { useFeedback } from "@/hooks/useFeedback";
+import {
+  DASHBOARD_WIDGETS,
+  useDashboardLayout,
+} from "@/hooks/useDashboardLayout";
+
 import { writeRangeState } from "@/lib/range-options";
-import { drawSeverityShields } from "@/components/DataTable/pdfShared";
-import RangeSelector from "@/components/RangeSelector";
+import { exportDashboardPDF } from "@/utils/exportDashboardPDF";
+
+import type {
+  DashboardProjectStat,
+  DashboardStatsResponse,
+  StatsData,
+} from "@/types/IStats";
+import type { IDashboardWidgetRef } from "@/types/IDashboardProfile";
+import HeaderActions from "@/components/PageHeader/HeaderActions";
+import Loading from "@/components/Loading";
 
 // ============================================================
-// Colunas do grid
+// Mapa de dependências de endpoints por widget
 // ============================================================
-/**
- * Aplica cor de fundo suave + fonte bold colorida a uma célula
- * de severidade. Quando o valor é 0, deixa neutro para o olho
- * bater nas células com contagem > 0.
- */
-function applySeverityCellStyle(
-  cell: any,
-  value: number,
-  palette: { fill: string; font: string },
-) {
-  cell.value = value;
-  cell.alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
+const WIDGETS_NEEDING_DASHBOARD_STATS = [
+  "severity-status",
+  "category",
+  "projects-table",
+] as const;
 
-  if (value > 0) {
-    cell.font = {
-      name: "Arial",
-      size: 10,
-      bold: true,
-      color: { argb: palette.font },
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: palette.fill },
-    };
-  } else {
-    // Zero: cinza neutro, sem fill — não compete visualmente
-    cell.font = {
-      name: "Arial",
-      size: 10,
-      color: { argb: "FF94A3B8" }, // slate-400
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFFFFFFF" },
-    };
-  }
-}
+const WIDGETS_NEEDING_STATS = [
+  "evolution",
+  "category-pie",
+  "top-projects",
+] as const;
 
-const columns: Column<any>[] = [
-  { key: "name", width: "250px", label: "Projeto", sortable: true },
-  {
-    key: "observationSeverityCounts",
-    label: "Severidade",
-    sortable: false,
-    width: "260px",
-    align: "center",
-    className: "hover:scale-150 hover:translate-x-16 translate-x-10",
-    /**
-     * No PDF: desenha os shields C/H/M/L com as contagens abaixo,
-     * lendo os dados do `extraData` (projectStats) — igual à tela.
-     */
-    pdfCellRenderer: (doc, cell, item, extraData) => {
-      const stats = extraData?.[item.name] || {};
-      const sev = stats.severity || {};
-      drawSeverityShields(
-        doc,
-        cell.cell.x,
-        cell.cell.y,
-        sev,
-        cell.cell.width,
-        cell.cell.height,
-      );
-    },
-    // 🔑 Excel: 4 colunas separadas (Crítico, Alto, Médio, Baixo)
-    excelSubColumns: [
-      {
-        label: "Crítico",
-        width: 80,
-        render: (item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          return sev.critical || 0;
-        },
-        excelCellRenderer: (cell, item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          const value = sev.critical || 0;
-          applySeverityCellStyle(cell, value, {
-            fill: "FFFEE2E2", // red-100
-            font: "FF991B1B", // red-800
-          });
-        },
-      },
-      {
-        label: "Alto",
-        width: 80,
-        render: (item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          return sev.high || 0;
-        },
-        excelCellRenderer: (cell, item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          const value = sev.high || 0;
-          applySeverityCellStyle(cell, value, {
-            fill: "FFFED7AA", // orange-200
-            font: "FF9A3412", // orange-800
-          });
-        },
-      },
-      {
-        label: "Médio",
-        width: 80,
-        render: (item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          return sev.medium || 0;
-        },
-        excelCellRenderer: (cell, item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          const value = sev.medium || 0;
-          applySeverityCellStyle(cell, value, {
-            fill: "FFFEF3C7", // amber-100
-            font: "FF92400E", // amber-800
-          });
-        },
-      },
-      {
-        label: "Baixo",
-        width: 80,
-        render: (item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          return sev.low || 0;
-        },
-        excelCellRenderer: (cell, item, extraData) => {
-          const sev = extraData?.[item.name]?.severity || {};
-          const value = sev.low || 0;
-          applySeverityCellStyle(cell, value, {
-            fill: "FFDCFCE7", // green-100
-            font: "FF166534", // green-800
-          });
-        },
-      },
-    ],
-    render: (item: any, extraData?: Record<string, any>) => {
-      const stats = extraData?.[item.name] || {};
-      const sev = stats.severity || {};
-      const severityItems = [
-        {
-          letter: "C",
-          count: sev.critical || 0,
-          color: "#ef4444",
-          label: "Critical",
-        },
-        { letter: "H", count: sev.high || 0, color: "#f97316", label: "High" },
-        {
-          letter: "M",
-          count: sev.medium || 0,
-          color: "#eab308",
-          label: "Medium",
-        },
-        { letter: "L", count: sev.low || 0, color: "#22c55e", label: "Low" },
-      ];
+// ============================================================
+// Mapeamento de span → classe Tailwind
+// ============================================================
+const SPAN_CLASS: Record<number, string> = {
+  2: "lg:col-span-2",
+  3: "lg:col-span-3",
+  4: "lg:col-span-4",
+  6: "lg:col-span-6",
+};
 
-      return (
-        <div className="flex items-center gap-2">
-          {severityItems.map((sevItem) => (
-            <div
-              key={sevItem.letter}
-              className="flex flex-col items-center gap-0.5"
-              title={`${sevItem.label}: ${sevItem.count}`}
-            >
-              <div className="relative w-7 h-8">
-                <svg viewBox="0 0 24 24" className="w-full h-full">
-                  <path
-                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
-                    fill={sevItem.color}
-                  />
-                  <path
-                    d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
-                    fill="none"
-                    stroke="rgba(0,0,0,0.15)"
-                    strokeWidth="0.8"
-                  />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[11px]">
-                  {sevItem.letter}
-                </span>
-              </div>
-              <span className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">
-                {sevItem.count}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    },
+// ============================================================
+// Fallbacks
+// ============================================================
+const EMPTY_DASHBOARD_STATS: DashboardStatsResponse = {
+  teamStats: {
+    total: 0,
+    severityTotals: {},
+    statusTotals: {},
+    categoryTotals: {},
+    categoryGroupTotals: {},
   },
-  {
-    key: "description",
-    label: "Descrição",
-    sortable: true,
-    exportable: false,
-    className:
-      "text-ellipsis text-muted italic font-mono text-xs line-clamp-1 text-wrap",
-  },
-  {
-    key: "lastScan",
-    label: "Last scan",
-    sortable: true,
-    width: "120px",
-    align: "center",
-    render: (item: any) => {
-      if (!item.syncDate) return "—";
-      const diff = Date.now() - new Date(item.syncDate).getTime();
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      if (hours < 1) return "há menos de 1h";
-      if (hours < 24) return `há ${hours}h`;
-      return `há ${Math.floor(hours / 24)}d`;
-    },
-  },
-];
+  projectStats: {},
+  categoryDetails: {},
+};
 
+const EMPTY_STATS: StatsData = {
+  kpi: {
+    total: 0,
+    open: 0,
+    recurring: 0,
+    resolved: 0,
+    wontFix: 0,
+    accepted: 0,
+    expired: 0,
+  },
+  severityTotals: {},
+  categoryTotals: [],
+  projectTotals: [],
+  chartData: [],
+};
+
+// ============================================================
+// Dashboard
+// ============================================================
 function DashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [teamId] = useTeam();
+
+  const [teamId, setTeamId] = useTeam();
   const { teams, loaded: teamsLoaded } = useTeams();
 
   const [searchDbqlId, setSearchDbqlId] = useState(searchParams.get("q") || "");
   const [searchVersion, setSearchVersion] = useState(0);
-
-  // 🔥 Hook estável — `state` só muda de referência quando um campo muda
   const { state: rangeState, rangeKey } = useRangeState();
+  const { toast } = useFeedback();
 
-  const [stats, setStats] = useState<any>({
-    teamStats: {
-      total: 0,
-      severityTotals: {},
-      statusTotals: {},
-      categoryTotals: {},
-    },
-    projectStats: {},
+  const { settings, update } = useLocalSettings();
+  const activeProfileId = settings.dashboardProfileId;
+
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const { profiles, updateLayout, refresh } = useDashboardProfiles();
+  const activeProfile = profiles.find(
+    (p) => p._id.toString() === activeProfileId,
+  );
+
+  const overrideLayout = useMemo(
+    () => (activeProfile?.kind === "dashboard" ? activeProfile.layout : null),
+    [activeProfile],
+  );
+
+  const {
+    allWidgets,
+    widgets,
+    toggle,
+    move,
+    setSpan,
+    reset,
+    isDirty,
+    draftLayout,
+    discardDraft,
+  } = useDashboardLayout({
+    overrideLayout,
+    overrideKey: activeProfileId ?? undefined,
   });
 
-  const [projects, setProjects] = useState<any[]>([]);
+  // Se o perfil salvo no storage não existir mais (foi excluído por
+  // outra instância, por exemplo), limpa o ponteiro — evita que o
+  // Dashboard fique preso em "perfil fantasma".
+  useEffect(() => {
+    if (!activeProfileId) return;
+    if (profiles.length === 0) return;
+    const exists = profiles.some((p) => p._id.toString() === activeProfileId);
+    if (!exists) update({ dashboardProfileId: null });
+  }, [activeProfileId, profiles, update]);
+
+  const handleSaveToProfile = useCallback(async () => {
+    if (!activeProfileId || !draftLayout) return;
+    setSavingProfile(true);
+    try {
+      await updateLayout(activeProfileId, draftLayout);
+      toast.success("Layout salvo no perfil.");
+      discardDraft();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Erro ao salvar layout.",
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  }, [activeProfileId, draftLayout, updateLayout, discardDraft, toast]);
+
+  // Ao ativar um perfil que tem `teamId` (raro em dashboard, mas
+  // possível), aplica uma vez.
+  useEffect(() => {
+    if (!activeProfile?.tv?.teamId) return;
+    if (activeProfile.kind !== "dashboard") return;
+    setTeamId(activeProfile.tv.teamId.toString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfile?._id]);
+
+  const [dashboardStats, setDashboardStats] = useState<DashboardStatsResponse>(
+    EMPTY_DASHBOARD_STATS,
+  );
+  const [stats, setStats] = useState<StatsData>(EMPTY_STATS);
+  const [expandedChart, setExpandedChart] = useState<string | null>(null);
+
+  const visibleWidgetIds = useMemo(
+    () =>
+      widgets
+        .map((w) => w.id)
+        .sort()
+        .join(","),
+    [widgets],
+  );
+  const visibleIds = useMemo(
+    () => new Set(visibleWidgetIds.split(",").filter(Boolean)),
+    [visibleWidgetIds],
+  );
 
   const effectiveTeamId = useMemo(() => {
     if (!teamId) return "all";
@@ -271,95 +212,103 @@ function DashboardContent() {
     [teams, teamId],
   );
 
+  const tvHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (effectiveTeamId !== "all") params.set("teamId", effectiveTeamId);
+    if (searchDbqlId) params.set("q", searchDbqlId);
+    writeRangeState(rangeState, params);
+    const qs = params.toString();
+    return qs ? `/tv?${qs}` : "/tv";
+  }, [effectiveTeamId, searchDbqlId, rangeState]);
+
   // ============================================================
-  // Stats — usa `rangeKey` (string estável) em vez do objeto
+  // Fetch condicional
   // ============================================================
   useEffect(() => {
     if (!teamsLoaded || !effectiveTeamId) return;
-    const params = new URLSearchParams({ teamId: effectiveTeamId });
-    writeRangeState(rangeState, params);
-    if (searchDbqlId) params.set("q", searchDbqlId);
 
-    fetch(`/api/dashboard/stats?${params.toString()}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((text) => {
-        const fallback = {
-          teamStats: {
-            total: 0,
-            severityTotals: {},
-            statusTotals: {},
-            categoryTotals: {},
-          },
-          projectStats: {},
-        };
-        if (!text) {
-          setStats(fallback);
-          return;
-        }
-        try {
-          setStats(JSON.parse(text));
-        } catch (e) {
-          console.error("Erro ao parsear JSON de stats:", e);
-          setStats(fallback);
-        }
-      })
-      .catch((err) => {
-        console.error("Erro ao buscar stats:", err);
-        setStats({
-          teamStats: {
-            total: 0,
-            severityTotals: {},
-            statusTotals: {},
-            categoryTotals: {},
-          },
-          projectStats: {},
+    const needsDashboardStats = WIDGETS_NEEDING_DASHBOARD_STATS.some((id) =>
+      visibleIds.has(id),
+    );
+    const needsStats = WIDGETS_NEEDING_STATS.some((id) => visibleIds.has(id));
+
+    if (!needsDashboardStats && !needsStats) return;
+
+    let cancelled = false;
+
+    const buildBase = () => {
+      const params = new URLSearchParams({ teamId: effectiveTeamId });
+      writeRangeState(rangeState, params);
+      if (searchDbqlId) params.set("q", searchDbqlId);
+      return params.toString();
+    };
+
+    const tasks: Array<{
+      key: "dashboardStats" | "stats";
+      promise: Promise<unknown>;
+    }> = [];
+
+    if (needsDashboardStats) {
+      tasks.push({
+        key: "dashboardStats",
+        promise: fetch(`/api/dashboard/stats?${buildBase()}`).then((r) =>
+          r.ok ? r.json() : null,
+        ),
+      });
+    }
+    if (needsStats) {
+      tasks.push({
+        key: "stats",
+        promise: fetch(`/api/stats?${buildBase()}`, {
+          cache: "no-store",
+        }).then((r) => (r.ok ? r.json() : null)),
+      });
+    }
+
+    Promise.all(tasks.map((t) => t.promise))
+      .then((results) => {
+        if (cancelled) return;
+        results.forEach((json, i) => {
+          const { key } = tasks[i];
+          if (key === "dashboardStats") {
+            setDashboardStats(
+              (json as DashboardStatsResponse | null) ?? EMPTY_DASHBOARD_STATS,
+            );
+          } else {
+            setStats((json as StatsData | null) ?? EMPTY_STATS);
+          }
         });
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamsLoaded, effectiveTeamId, searchDbqlId, rangeKey, searchVersion]);
-
-  // ============================================================
-  // Lista de projetos
-  // ============================================================
-  useEffect(() => {
-    if (!teamsLoaded || !effectiveTeamId) return;
-    const params = new URLSearchParams({
-      teamId: effectiveTeamId,
-      page: "1",
-      limit: "100",
-      sort: "name",
-      order: "asc",
-    });
-    writeRangeState(rangeState, params);
-    if (searchDbqlId) params.set("q", searchDbqlId);
-
-    fetch(`/api/dashboard?${params.toString()}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((text) => {
-        if (!text) {
-          setProjects([]);
-          return;
-        }
-        try {
-          const json = JSON.parse(text);
-          setProjects(json.data || []);
-        } catch (e) {
-          console.error("Erro ao parsear JSON de projetos:", e);
-          setProjects([]);
-        }
       })
       .catch((err) => {
-        console.error("Erro ao buscar projetos:", err);
-        setProjects([]);
+        console.error("Erro no carregamento do dashboard:", err);
+        if (cancelled) return;
+        if (needsDashboardStats) setDashboardStats(EMPTY_DASHBOARD_STATS);
+        if (needsStats) setStats(EMPTY_STATS);
       });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamsLoaded, effectiveTeamId, searchDbqlId, rangeKey, searchVersion]);
+  }, [
+    teamsLoaded,
+    effectiveTeamId,
+    searchDbqlId,
+    rangeKey,
+    searchVersion,
+    visibleWidgetIds,
+  ]);
+
+  const currentLayoutSnapshot: IDashboardWidgetRef[] = useMemo(
+    () =>
+      allWidgets.map((w) => ({
+        widgetId: w.id,
+        visible: w.visible,
+        order: w.order,
+        span: w.span,
+      })),
+    [allWidgets],
+  );
 
   const handleSearch = useCallback((newQuery: string) => {
     setSearchDbqlId(newQuery);
@@ -381,103 +330,117 @@ function DashboardContent() {
       alert("Erro ao buscar dados para exportação");
       return;
     }
-
     const json = await res.json();
     const allProjects = json.data || [];
 
     const projectsForPDF = allProjects.map((p: any) => {
-      const projectStat = stats.projectStats?.[p.name] || {};
+      const projectStat: DashboardProjectStat =
+        dashboardStats.projectStats?.[p.name];
       return {
         name: p.name,
         description: p.description,
         lastScan: p.syncDate
           ? new Date(p.syncDate).toLocaleDateString("pt-BR")
           : "—",
-        severity: projectStat.severity || {},
+        severity: projectStat?.severity || {},
       };
     });
 
     await exportDashboardPDF({
       teamName,
       generatedAt: new Date(),
-      teamStats: stats.teamStats,
-      projectStats: stats.projectStats,
+      teamStats: dashboardStats.teamStats,
+      projectStats: dashboardStats.projectStats,
       projects: projectsForPDF,
-      categoryDetails: stats.categoryDetails,
+      categoryDetails: dashboardStats.categoryDetails,
     });
-  }, [effectiveTeamId, searchDbqlId, rangeState, stats, teamName]);
+  }, [effectiveTeamId, searchDbqlId, rangeState, dashboardStats, teamName]);
 
-  if (status === "loading")
-    return <div className="py-10 text-center">Carregando...</div>;
+  if (status === "loading") return <Loading />;
 
   if (!session) {
     router.push("/login");
     return null;
   }
 
-  return (
-    <div className="w-full space-y-6 p-8">
-      <PageHeader
-        title="Dashboard"
-        icon={<ChartAreaIcon className="w-10 h-10 text-brand" />}
-        subtitle="Visão geral do time selecionado."
-        search={{
-          type: "advanced",
-          onSearch: handleSearch,
-          userSub: session?.user?.sub,
-          placeholder:
-            "Filtrar stats, e.g. severity:critical OR project:my-api",
-          context: "observations",
-        }}
-        actions={
-          <div className="flex items-center gap-4">
-            <RangeSelector />
-            <button
-              onClick={handleExportPDF}
-              disabled={projects.length === 0}
-              className="group btn-ghost !text-red-500 hover:!bg-red-600"
-            >
-              <span className="hidden group-hover:block transition-transform mr-2">
-                Resumo Executivo{" "}
-              </span>
-              <FaFilePdf className="w-5 h-5" />
-            </button>
-            <TeamSelector teams={teams} />
-          </div>
-        }
-      />
+  if (!teamsLoaded) {
+    return (
+      <div className="w-full p-8 space-y-6">
+        <LoadingSkeleton />
+      </div>
+    );
+  }
 
-      {!teamsLoaded ? (
-        <div className="py-12 text-center text-muted">Carregando times...</div>
-      ) : teamId ? (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <TeamStatsCard
-              type="status"
-              title="Severidade e Status"
-              total={stats.teamStats.total}
-              severity={stats.teamStats.severityTotals}
-              status={stats.teamStats.statusTotals}
-            />
-            <TeamStatsCard
-              type="category"
-              title="Distribuição por Categoria"
-              total={stats.teamStats.total}
-              category={stats.teamStats.categoryTotals}
-              categoryGroup={stats.teamStats.categoryGroupTotals}
-              categoryDetails={stats.categoryDetails}
-            />
-          </div>
+  const { teamStats, projectStats, categoryDetails } = dashboardStats;
 
-          <div className="pt-4 border-t border-default dark:border-strong">
-            <h3 className="text-lg font-semibold mb-4">
+  const renderWidget = (id: string) => {
+    switch (id) {
+      case "severity-status":
+        return (
+          <TeamStatsCard
+            type="status"
+            title="Severidade e Status"
+            total={teamStats.total}
+            severity={teamStats.severityTotals}
+            status={teamStats.statusTotals}
+          />
+        );
+
+      case "evolution":
+        return (
+          <EvolutionWidget
+            chartData={stats.chartData}
+            onExpand={() => setExpandedChart("evolution")}
+          />
+        );
+
+      case "executive":
+        return (
+          <TeamsExecutiveCard
+            teamId={effectiveTeamId}
+            searchQuery={searchDbqlId}
+          />
+        );
+
+      case "category-pie":
+        return (
+          <CategoryPieWidget
+            categories={stats.categoryTotals}
+            onExpand={() => setExpandedChart("category-pie")}
+          />
+        );
+
+      case "category":
+        return (
+          <TeamStatsCard
+            type="category"
+            title="Distribuição por Categoria"
+            total={teamStats.total}
+            category={teamStats.categoryTotals}
+            categoryGroup={teamStats.categoryGroupTotals}
+            categoryDetails={categoryDetails}
+          />
+        );
+
+      case "top-projects":
+        return (
+          <TopProjectsWidget
+            projects={stats.projectTotals}
+            onExpand={() => setExpandedChart("top-projects")}
+          />
+        );
+
+      case "projects-table":
+        return (
+          <div>
+            <h3 className="text-lg font-semibold mb-4 text-heading">
               Projetos - {effectiveTeamId === "all" ? "Global" : teamName}
             </h3>
             <DataTable
               endpoint="/api/dashboard"
-              columns={columns}
+              columns={projectColumns}
               defaultSort={{ field: "name", order: "asc" }}
-              defaultLimit={10}
+              defaultLimit={5}
               searchDbqlId={searchDbqlId}
               refreshKey={searchVersion}
               range={
@@ -493,15 +456,154 @@ function DashboardContent() {
                 effectiveTeamId === "all" ? "Global" : teamName
               }`}
               teamId={effectiveTeamId}
-              extraData={stats.projectStats}
+              extraData={projectStats}
               onRowClick={() => {}}
             />
           </div>
-        </>
-      ) : (
-        <div className="py-12 text-center text-muted">
-          Selecione um time para visualizar o dashboard.
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="w-full space-y-6 p-8">
+      <PageHeader
+        search={{
+          type: "advanced",
+          onSearch: handleSearch,
+          userSub: session?.user?.sub,
+          placeholder:
+            "Filtrar dashboard, ex: severity:critical OR project:my-api",
+          context: "observations",
+        }}
+        actions={
+          <div className="flex items-center gap-1">
+            <HeaderActions
+              href={tvHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              tooltip="Modo TV"
+              color="warning"
+            >
+              <Tv />
+            </HeaderActions>
+
+            <RangeSelector />
+
+            <HeaderActions
+              onClick={handleExportPDF}
+              disabled={!teamsLoaded}
+              tooltip="Resumo Executivo (PDF)"
+              color="error"
+            >
+              <FaFilePdf />
+            </HeaderActions>
+
+            <div
+              className="w-px h-5 border-r bg-default mx-1"
+              aria-hidden="true"
+            />
+
+            <DashboardProfileBar />
+            <WidgetsMenu
+              widgets={allWidgets}
+              onToggle={toggle}
+              onMove={move}
+              onSpanChange={setSpan}
+              onReset={reset}
+              activeProfileName={activeProfile?.name ?? null}
+              isDirty={isDirty}
+              onSave={handleSaveToProfile}
+              onSaveAs={() => setSaveAsOpen(true)}
+              saving={savingProfile}
+            />
+
+            <div className="w-px h-5 border-r mx-1" aria-hidden="true" />
+
+            <TeamSelector teams={teams} />
+          </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+        {DASHBOARD_WIDGETS.map((meta) => {
+          const w = widgets.find((x) => x.id === meta.id);
+          if (!w) return null;
+          return (
+            <div
+              key={`${w.id}-${w.effectiveSpan}`}
+              style={{ order: w.order }}
+              className={`min-w-0 ${
+                SPAN_CLASS[w.effectiveSpan] ?? "lg:col-span-6"
+              }`}
+            >
+              {renderWidget(w.id)}
+            </div>
+          );
+        })}
+      </div>
+
+      {expandedChart && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-elevated border border-default rounded-lg shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-default shrink-0">
+              <h3 className="text-base font-semibold text-heading">
+                {expandedChart === "evolution" && "Evolução das ocorrências"}
+                {expandedChart === "top-projects" && "Top projetos"}
+                {expandedChart === "category-pie" &&
+                  "Distribuição por Categoria"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setExpandedChart(null)}
+                className="btn-ghost text-error"
+                title="Fechar"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 p-6 overflow-hidden">
+              <div className="w-full h-full">
+                {expandedChart === "evolution" && (
+                  <EvolutionWidget chartData={stats.chartData} fillContainer />
+                )}
+                {expandedChart === "top-projects" && (
+                  <TopProjectsWidget
+                    projects={stats.projectTotals}
+                    limit={12}
+                    fillContainer
+                  />
+                )}
+                {expandedChart === "category-pie" && (
+                  <CategoryPieWidget
+                    categories={stats.categoryTotals}
+                    fillContainer
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         </div>
+      )}
+
+      {saveAsOpen && (
+        <DashboardProfileModal
+          initialLayout={currentLayoutSnapshot}
+          defaultKind="dashboard"
+          onClose={() => setSaveAsOpen(false)}
+          onSaved={async (created) => {
+            setSaveAsOpen(false);
+            // Garante que o cache global já tem o perfil antes de
+            // apontá-lo como ativo — sem isso o Dashboard fica 1 tick
+            // sem `activeProfile` e o layout pisca.
+            await refresh();
+            update({ dashboardProfileId: created._id.toString() });
+          }}
+        />
       )}
     </div>
   );
@@ -511,7 +613,9 @@ export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center">Carregando dashboard...</div>
+        <div className="w-full p-8">
+          <LoadingSkeleton />
+        </div>
       }
     >
       <DashboardContent />

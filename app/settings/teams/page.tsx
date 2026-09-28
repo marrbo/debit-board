@@ -4,7 +4,7 @@ import { Suspense, useCallback, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable } from "@/components/DataTable";
 import TeamDrawer from "@/components/TeamDrawer";
 import type { Column } from "@/components/DataTable";
@@ -12,6 +12,7 @@ import type { ITeam } from "@/types/ITeam";
 import { Plus, UserGroup } from "lucide-react";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useFeedback } from "@/hooks/useFeedback";
+import Loading from "@/components/Loading";
 
 // ============================================================
 // Colunas
@@ -135,7 +136,7 @@ function TeamsContent() {
   // Guards
   // ============================================================
   if (status === "loading") {
-    return <div className="py-10 text-center">Carregando...</div>;
+    return <Loading />;
   }
   if (!session) {
     router.push("/login");

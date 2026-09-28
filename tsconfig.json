@@ -38,7 +38,8 @@
     "**/*.mts",
     "next.config.mjs",
     "tailwind.config.mjs",
-    "auto-swagger.config.cjs"
+    "auto-swagger.config.cjs",
+    "components/PageHeader/HeaderActions"
   ],
   "exclude": [
     "node_modules",

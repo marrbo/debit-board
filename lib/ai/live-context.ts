@@ -56,10 +56,6 @@ function setCached(key: string, value: string): void {
 // ============================================================
 // Fuzzy matching
 // ============================================================
-const ACCENTS = /[\u0300-\u036f]/g;
-const NON_WORD = /[^\w\s]/g;
-const SPACES = /\s+/g;
-
 function lev(a: string, b: string): number {
   const m = a.length;
   const n = b.length;

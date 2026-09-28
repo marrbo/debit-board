@@ -1,16 +1,19 @@
+// app/settings/projects/page.tsx
 "use client";
 
 import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, FolderPlus, FolderGit2 } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import { RefreshCw, FolderPlus } from "lucide-react";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable } from "@/components/DataTable";
 import ProjectDrawer from "@/components/ProjectDrawer";
 import BulkAssignTeamModal from "@/components/BulkAssignTeamModal";
 import type { IProject } from "@/types/IProject";
 import type { Column } from "@/components/DataTable";
+import HeaderActions from "@/components/PageHeader/HeaderActions";
+import Loading from "@/components/Loading";
 
 const columns: Column<IProject>[] = [
   { key: "name", label: "Nome do Projeto", sortable: true },
@@ -74,8 +77,7 @@ function ProjectsContent() {
     }
   };
 
-  if (status === "loading")
-    return <div className="py-10 text-center">Carregando...</div>;
+  if (status === "loading") return <Loading />;
   if (!session) {
     router.push("/login");
     return null;
@@ -84,9 +86,6 @@ function ProjectsContent() {
   return (
     <div className="w-full space-y-4">
       <PageHeader
-        title="Projetos"
-        icon={<FolderGit2 className="w-10 h-10 text-brand" />}
-        subtitle="Gerencie os projetos do Tenant. Projetos possuem repositórios vinculados."
         search={{
           type: "simple",
           onSearch: handleSimpleSearch,
@@ -95,31 +94,25 @@ function ProjectsContent() {
           placeholder: "Buscar projetos (ex: name:MeuProjeto OR projectId:...)",
         }}
         actions={
-          <div className="flex items-center gap-2">
-            <button
+          <div className="flex items-center gap-1">
+            <HeaderActions
               onClick={() => setShowAssignModal(true)}
               disabled={selectedProjectIds.length === 0}
-              className="flex items-center gap-2 btn-secondary"
+              tooltip="Atribuir a Time"
+              color="brand"
             >
-              <FolderPlus className="w-4 h-4" /> Atribuir a Time
-            </button>
-            <button
+              <FolderPlus />
+            </HeaderActions>
+
+            <HeaderActions
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center group gap-2 btn-primary"
+              requiredRoles={["admin"]}
+              tooltip={syncing ? "Sincronizando..." : "Sincronizar com Azure"}
+              color="success"
             >
-              {syncing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Sincronizando...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 group-hover:animate-[spin_0.5s_linear_1]" />{" "}
-                  Sincronizar
-                </>
-              )}
-            </button>
+              <RefreshCw />
+            </HeaderActions>
           </div>
         }
       />

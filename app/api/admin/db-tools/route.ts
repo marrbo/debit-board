@@ -8,7 +8,7 @@ import { dumpDatabase, restoreDatabase } from "@/lib/db-tools";
 import { verifyKeycloakPassword } from "@/lib/keycloak-verify";
 import { computeNextRun } from "@/lib/backup-schedule";
 import { BackupSchedule } from "@/models/BackupSchedule";
-import { requireAdmin, requireSession } from "@/lib/api-auth";
+import { requireRole, requireSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -156,7 +156,7 @@ export async function GET() {
  * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const body = (await req.json()) as Record<string, unknown>;

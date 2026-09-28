@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
   const dbqlId = searchParams.get("q");
+  const isAll = searchParams.get("all") === "true";
 
   const rawRange = searchParams.get("range");
   const rawFrom = searchParams.get("from");
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
   return handleGenericGet(req, {
     model: Project,
     defaultSort: "name",
-    all: true,
+    all: isAll,
     additionalMatch:
       allowedProjectIds !== null ? { _id: { $in: allowedProjectIds } } : {},
     skipDbqlParsing: true,

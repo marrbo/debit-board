@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();

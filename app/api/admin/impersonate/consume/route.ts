@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (payload.type !== "impersonation") throw new Error("Invalid token");
 
     const isProd = process.env.NODE_ENV === "production";
-    const res = NextResponse.redirect(new URL("/stats", req.url));
+    const res = NextResponse.redirect(new URL("/", req.url));
 
     res.cookies.set("impersonating_user", String(payload.sub), {
       httpOnly: true,

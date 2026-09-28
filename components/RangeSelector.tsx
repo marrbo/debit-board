@@ -2,16 +2,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
-import { CalendarRange, Check, ChevronDown } from "lucide-react";
+import { CalendarRange, Check } from "lucide-react";
+import HeaderActions from "@/components/PageHeader/HeaderActions";
 import {
   RANGE_PRESETS,
   DEFAULT_PRESET,
-  getRangeShortLabel,
+  parseRangeState,
+  writeRangeState,
   getRangeLongLabel,
   type RangePreset,
+  type RangeState,
 } from "@/lib/range-options";
-import { useRangeState } from "@/hooks/useRangeState";
 
 /** ISO → `YYYY-MM-DDTHH:mm` (aceito por `datetime-local`). */
 function toLocalInput(iso: string): string {
@@ -22,8 +25,17 @@ function toLocalInput(iso: string): string {
   )}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * Seletor de janela temporal — versão compacta (icon-only).
+ *
+ * O valor atual não aparece como texto no botão; fica disponível no
+ * tooltip ("Período: Últimos 30 dias") e como item marcado no popover.
+ * Mantém a barra do header limpa sem perder a informação.
+ */
 export default function RangeSelector() {
-  const { state, setState, reset } = useRangeState();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [open, setOpen] = useState(false);
   const [popoverPos, setPopoverPos] = useState<{
@@ -37,10 +49,9 @@ export default function RangeSelector() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const shortLabel = getRangeShortLabel(state);
-  const longLabel = getRangeLongLabel(state);
+  const state = parseRangeState(searchParams);
+  const tooltip = `Período: ${getRangeLongLabel(state)}`;
 
-  // Posiciona/reposiciona popover
   useEffect(() => {
     if (!open || !buttonRef.current) return;
     const place = () => {
@@ -56,7 +67,6 @@ export default function RangeSelector() {
     return () => window.removeEventListener("resize", place);
   }, [open]);
 
-  // Fecha em clique fora / Esc
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
@@ -81,7 +91,6 @@ export default function RangeSelector() {
     };
   }, [open]);
 
-  // Prefill custom ao abrir
   useEffect(() => {
     if (!open) return;
     if (state.mode === "custom" && state.from && state.to) {
@@ -90,11 +99,17 @@ export default function RangeSelector() {
     }
   }, [open, state.mode, state.from, state.to]);
 
-  const handlePreset = (preset: RangePreset) => {
-    setState({ mode: "preset", preset });
+  const applyState = (next: RangeState) => {
+    const params = new URLSearchParams(searchParams.toString());
+    writeRangeState(next, params);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     setOpen(false);
     setError(null);
   };
+
+  const handlePreset = (preset: RangePreset) =>
+    applyState({ mode: "preset", preset });
 
   const handleApplyCustom = () => {
     if (!customFrom || !customTo) {
@@ -111,35 +126,27 @@ export default function RangeSelector() {
       setError("A data inicial deve ser anterior à final.");
       return;
     }
-    setState({
+    applyState({
       mode: "custom",
       preset: DEFAULT_PRESET,
       from: from.toISOString(),
       to: to.toISOString(),
     });
-    setOpen(false);
-    setError(null);
   };
 
   return (
     <>
-      <button
+      <HeaderActions
         ref={buttonRef}
-        type="button"
+        tooltip={tooltip}
+        color="success"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={longLabel}
-        className="flex items-center gap-1.5 bg-elevated border border-default dark:border-strong rounded-lg px-2.5 py-1.5 text-xs font-medium text-heading hover:border-brand transition-colors whitespace-nowrap"
+        isActive={open}
       >
-        <CalendarRange className="w-3.5 h-3.5 text-muted shrink-0" />
-        <span className="max-w-[120px] truncate">{shortLabel}</span>
-        <ChevronDown
-          className={`w-3.5 h-3.5 text-muted shrink-0 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+        <CalendarRange />
+      </HeaderActions>
 
       {open &&
         popoverPos &&
@@ -148,7 +155,7 @@ export default function RangeSelector() {
             ref={popoverRef}
             role="dialog"
             aria-label="Janela temporal"
-            className="fixed z-[9999] w-72 bg-sunken border border-default dark:border-strong rounded-lg shadow-xl"
+            className="fixed z-[9999] w-72 bg-sunken border border-default rounded-lg shadow-xl"
             style={{ top: popoverPos.top, right: popoverPos.right }}
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-default">
@@ -157,11 +164,10 @@ export default function RangeSelector() {
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  reset();
-                  setOpen(false);
-                }}
-                className="text-[11px] text-muted hover:text-brand transition-colors"
+                onClick={() =>
+                  applyState({ mode: "preset", preset: DEFAULT_PRESET })
+                }
+                className="text-[11px] text-muted hover:text-brand"
               >
                 Resetar
               </button>
@@ -220,14 +226,12 @@ export default function RangeSelector() {
                   />
                 </label>
               </div>
-              {error && (
-                <p className="mt-2 text-[10px] text-red-400">{error}</p>
-              )}
+              {error && <p className="mt-2 text-[10px] text-error">{error}</p>}
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="px-3 py-1 rounded-md text-xs text-muted hover:text-heading"
+                  className="btn-ghost"
                 >
                   Cancelar
                 </button>
@@ -235,7 +239,7 @@ export default function RangeSelector() {
                   type="button"
                   onClick={handleApplyCustom}
                   disabled={!customFrom || !customTo}
-                  className="px-3 py-1 rounded-md text-xs font-medium bg-brand text-white hover:opacity-90 disabled:opacity-40"
+                  className="btn-primary disabled:opacity-40"
                 >
                   Aplicar
                 </button>

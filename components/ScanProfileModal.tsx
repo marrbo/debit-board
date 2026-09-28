@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   Loader2,
-  Plus,
   Save,
   Search,
   Trash2,

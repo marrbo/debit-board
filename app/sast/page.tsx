@@ -3,11 +3,13 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Play, RefreshCw, ShieldKeyhole } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import { Play, RefreshCw } from "lucide-react";
+import PageHeader from "@/components/PageHeader/Header";
+import HeaderActions from "@/components/PageHeader/HeaderActions";
 import { DataTable } from "@/components/DataTable";
 import type { Column } from "@/components/DataTable";
 import ScanProfileModal from "@/components/ScanProfileModal";
+import Loading from "@/components/Loading";
 
 interface SASTScanRow {
   _id: string;
@@ -135,8 +137,7 @@ function SASTScansContent() {
     return () => clearInterval(interval);
   }, [scanning]);
 
-  if (status === "loading")
-    return <div className="py-10 text-center">Carregando...</div>;
+  if (status === "loading") return <Loading />;
   if (!session) {
     router.push("/login");
     return null;
@@ -145,35 +146,30 @@ function SASTScansContent() {
   return (
     <div className="w-full space-y-4 p-8">
       <PageHeader
-        title="SAST Scanner"
-        icon={<ShieldKeyhole className="w-10 h-10 text-brand" />}
-        subtitle="Executa o scanner e acompanhe o histórico de execuções."
+        search={undefined}
         actions={
-          <div className="flex items-center gap-2">
-            <button
+          <div className="flex items-center gap-1">
+            <HeaderActions
               onClick={() => setModalOpen(true)}
               disabled={scanning}
-              className="flex items-center gap-2 bg-brand hover:bg-brand/80 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              tooltip={scanning ? "Executando..." : "Executar Scanner"}
+              color="success"
+              badge={
+                scanning ? (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+                ) : null
+              }
             >
-              {scanning ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Executando...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Executar Scanner
-                </>
-              )}
-            </button>
-            <button
+              <Play />
+            </HeaderActions>
+
+            <HeaderActions
               onClick={() => setRefreshKey((prev) => prev + 1)}
-              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all shadow-sm hover:drop-shadow-lg"
+              tooltip="Atualizar"
+              color="info"
             >
-              <RefreshCw className="w-4 h-4" />
-              Atualizar
-            </button>
+              <RefreshCw />
+            </HeaderActions>
           </div>
         }
       />

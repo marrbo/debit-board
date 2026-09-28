@@ -6,9 +6,10 @@ import { getServerSessionIds } from "@/lib/session-server";
 import { handleGenericGet } from "@/lib/api-handler";
 import type { PipelineStage } from "mongoose";
 import mongoose from "mongoose";
-import { requireAdmin } from "@/lib/api-auth";
+
 import { toObjectId, toObjectIds } from "@/lib/mongo-id";
 import * as Sentry from "@sentry/nextjs";
+import { requireRole } from "@/lib/api-auth";
 
 /**
  * Lista recursos do endpoint /api/teams.
@@ -140,7 +141,7 @@ export const dynamic = "force-dynamic";
 export async function DELETE(req: NextRequest) {
   try {
     // 🔒 Regra: apenas admin pode excluir times
-    const auth = await requireAdmin();
+    const auth = await requireRole(["admin"]);
     if (auth.ok === false) return auth.response;
 
     const tenantObjectId = toObjectId(auth.user.tenantId);

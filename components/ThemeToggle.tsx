@@ -40,7 +40,7 @@ export default function ThemeToggle() {
       />
       <span
         className={`absolute flex items-center justify-center w-5 h-5 rounded-full bg-white dark:bg-black shadow-md transition-transform duration-300 ${
-          active ? "translate-x-0" : "-translate-x-3.5"
+          active ? "translate-x-4" : "translate-x-0.5"
         }`}
       >
         {active ? (

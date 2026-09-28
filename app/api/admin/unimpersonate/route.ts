@@ -1,3 +1,4 @@
+//app/api/admin/unimpersonate/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 

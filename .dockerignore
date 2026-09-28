@@ -1,0 +1,111 @@
+# ============================================================
+
+# Dependências (reinstaladas dentro do container pelo Dockerfile)
+
+# ============================================================
+
+node_modules
+\*\*/node_modules
+.pnp
+.pnp.js
+
+# ============================================================
+
+# Build do Next.js (o Dockerfile roda `next build` do zero)
+
+# ============================================================
+
+.next
+out
+build
+dist
+.turbo
+
+# ============================================================
+
+# Git e metadados de editor
+
+# ============================================================
+
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+\*.swp
+.DS_Store
+
+# ============================================================
+
+# Dumps do MongoDB — NUNCA devem entrar no build
+
+# ============================================================
+
+dumps
+dumps/\*\*
+\*\*/dumps
+
+# ============================================================
+
+# Variáveis de ambiente e secrets
+
+# ============================================================
+
+.env
+.env.\*
+!.env.example
+
+# ============================================================
+
+# Testes, cobertura, cache de ferramentas
+
+# ============================================================
+
+coverage
+.nyc_output
+.sentry
+_.log
+npm-debug.log_
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log\*
+.eslintcache
+.cache
+
+# ============================================================
+
+# Arquivos estáticos que NÃO são consumidos pelo build do app
+
+# ============================================================
+
+# Dockerfile do sidecar e seu conteúdo — só o app é copiado
+
+docker/realm-exporter
+
+# Configs do Keycloak montados em runtime, não no build
+
+.docker
+
+# Modelos do Ollama (montados como volume, nunca no build)
+
+ollama_models
+\*\*/ollama_models
+
+# ============================================================
+
+# Documentação e assets que não vão para a imagem
+
+# ============================================================
+
+README.md
+LICENSE
+docs
+
+# ============================================================
+
+# Saídas de scripts
+
+# ============================================================
+
+\*.tsbuildinfo

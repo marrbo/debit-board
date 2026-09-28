@@ -14,6 +14,7 @@ import SlideToggle from "./SlideToggle";
 import { usePathname } from "next/navigation";
 import { useSlideToggle } from "@/hooks/useLocalSettings";
 import { createPortal } from "react-dom";
+import { CATEGORY_COLORS, SEVERITY_COLORS } from "@/lib/palette";
 
 interface TeamStatsCardProps {
   type: "status" | "category";
@@ -27,66 +28,11 @@ interface TeamStatsCardProps {
   variant?: "default" | "compact";
 }
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: "#ef4444",
-  high: "#f97316",
-  medium: "#eab308",
-  low: "#22c55e",
-};
-
 const SEVERITY_SHIELDS = [
   { key: "critical", letter: "C", color: "#ef4444", label: "Critical" },
   { key: "high", letter: "H", color: "#f97316", label: "High" },
   { key: "medium", letter: "M", color: "#eab308", label: "Medium" },
   { key: "low", letter: "L", color: "#22c55e", label: "Low" },
-];
-
-const CATEGORY_COLORS = [
-  "#911eb4",
-  "#3cb44b",
-  "#ffe119",
-  "#4363d8",
-  "#f58231",
-  "#42d4f4",
-  "#f032e6",
-  "#bfef45",
-  "#fabed4",
-  "#e6194B",
-  "#469990",
-  "#dcbeff",
-  "#9A6324",
-  "#fffac8",
-  "#800000",
-  "#aaffc3",
-  "#808000",
-  "#ffd8b1",
-  "#000075",
-  "#a9a9a9",
-  "#1f77b4",
-  "#ff7f0e",
-  "#2ca02c",
-  "#d62728",
-  "#9467bd",
-  "#8c564b",
-  "#e377c2",
-  "#7f7f7f",
-  "#bcbd22",
-  "#17becf",
-  "#393b79",
-  "#5254a3",
-  "#6b6ecf",
-  "#9c9ede",
-  "#637939",
-  "#8ca252",
-  "#b5cf6b",
-  "#cedb9c",
-  "#8c6d31",
-  "#bd9e39",
-  "#e7ba52",
-  "#e7cb94",
-  "#843c39",
-  "#ad494a",
-  "#d6616b",
 ];
 
 const STATUS_CONFIG: Record<
@@ -109,7 +55,7 @@ const STATUS_CONFIG: Record<
   wont_fix: {
     label: "Não Corrigir",
     icon: ShieldX,
-    color: "#000000",
+    color: "#991697",
     bg: "#f3f4f6",
   },
 };
@@ -185,7 +131,7 @@ function CategoryPopup({
     <div
       ref={popupRef}
       style={style}
-      className="bg-page border border-default dark:border-strong rounded-lg shadow-lg overflow-hidden"
+      className="bg-page border border-default dark:border-none rounded-lg shadow-lg overflow-hidden"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="px-4 py-3 border-b border-default dark:border-strong">
@@ -322,7 +268,7 @@ export default function TeamStatsCard({
         className="flex justify-between items-center gap-2"
         title={`${label}: ${severity?.[key] || 0}`}
       >
-        <div className="relative w-5 h-6">
+        <div className="relative w-6 h-7">
           <svg
             viewBox="0 0 24 24"
             className="w-full h-full drop-shadow-sm hover:drop-shadow-lg"
@@ -334,15 +280,15 @@ export default function TeamStatsCard({
             <path
               d="M12 2L4 5v6c0 5.2 3.4 8.7 8 10 4.6-1.3 8-4.8 8-10V5l-8-3z"
               fill="none"
-              stroke="rgba(0,0,0,0.15)"
+              stroke="rgba(0,0,0,0)"
               strokeWidth="0.8"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-body font-bold text-[8px]">
+          <span className="absolute inset-0 flex items-center justify-center text-black font-bold text-[10px]">
             {letter}
           </span>
         </div>
-        <span className="text-sm font-semibold text-heading dark:text-heading">
+        <span className="text-sm font-semibold text-body dark:text-heading">
           {severity?.[key] || 0}
         </span>
       </div>
@@ -360,19 +306,16 @@ export default function TeamStatsCard({
     const count = status?.[statusKey] || 0;
 
     return (
-      <div className="flex flex-col items-start justify-center p-4 border-r last:border-r-0 border-subtle dark:border-strong hover:border-brand-subtle">
+      <div className="flex flex-col items-start group justify-center p-4 border-r last:border-r-0 border-subtle dark:border-strong hover:border-brand-subtle">
         <div className="flex items-center gap-2 mb-2">
-          <span
-            className="w-6 h-6 flex items-center justify-center rounded-md"
-            style={{ backgroundColor: config.bg }}
-          >
-            <Icon className="w-4 h-4" style={{ color: config.color }} />
+          <span className="w-6 h-6 flex items-center justify-center rounded-md">
+            <Icon className="w-5 h-5" style={{ color: config.color }} />
           </span>
           <span className="text-sm font-medium text-heading dark:text-heading">
             {config.label}
           </span>
         </div>
-        <div className="text-2xl font-bold text-heading dark:text-heading">
+        <div className="select-none text-2xl font-bold text-heading dark:text-heading mt-3 w-full text-center group-hover:!text-brand">
           {count}
         </div>
       </div>
@@ -426,7 +369,7 @@ export default function TeamStatsCard({
       <>
         <div
           ref={cardRef}
-          className="bg-elevated border border-subtle dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg relative flex flex-col h-[280px] transition-all duration-300"
+          className="bg-elevated border border-subtle dark:border-none rounded-lg p-5 shadow-sm hover:drop-shadow-lg relative flex flex-col h-[280px] transition-all duration-300"
         >
           {/* Cabeçalho - Distribuição por Categoria*/}
           <div className="flex items-center justify-between mb-4">
@@ -661,7 +604,7 @@ export default function TeamStatsCard({
   // ===================== CARD DE SEVERIDADE (variante compacta) =====================
   if (type === "status" && variant === "compact") {
     return (
-      <div className="bg-elevated border border-sunken dark:border-strong rounded-lg p-5 shadow-sm hover:drop-shadow-lg">
+      <div className="bg-elevated border border-sunken dark:border-none rounded-lg p-5 shadow-sm hover:drop-shadow-lg">
         <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-x-16 gap-6 items-center">
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-heading dark:text-heading uppercase tracking-wide">
@@ -719,7 +662,7 @@ export default function TeamStatsCard({
 
   // ===================== CARD DE SEVERIDADE (variante padrão) =====================
   return (
-    <div className="dark:bg-surface gap-0.5 border border-sunken dark:border-strong rounded-lg overflow-hidden shadow-sm hover:drop-shadow-lg h-full flex flex-col">
+    <div className="dark:bg-surface gap-0.5 border border-sunken dark:border-none rounded-lg overflow-hidden shadow-sm hover:drop-shadow-lg h-full flex flex-col">
       <div className="p-6 pb-4 bg-elevated shadow-md">
         <h3 className="text-lg font-semibold text-heading dark:text-heading">
           {title}

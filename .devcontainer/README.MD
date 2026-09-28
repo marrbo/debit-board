@@ -453,7 +453,7 @@ O VSCode mostra no status bar inferior: `Auto Attach: On` ou a barra laranja de 
 
 ### 7. Testar um breakpoint
 
-Abra qualquer route handler (`app/api/stats/route.ts`) e coloque um breakpoint na primeira linha da função `GET`. Faça uma requisição que a execute (ex.: acesse a página que a chama). O VSCode pausa na linha.
+Abra qualquer route handler (`app/api/dashboard/route.ts`) e coloque um breakpoint na primeira linha da função `GET`. Faça uma requisição que a execute (ex.: acesse a página que a chama). O VSCode pausa na linha.
 
 ---
 

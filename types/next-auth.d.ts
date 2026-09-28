@@ -20,6 +20,9 @@ declare module "next-auth" {
       firstName?: string;
       avatar?: string;
       originalAdminSub?: string;
+      // 🔥 RBAC — expostos em `auth-options.session()`
+      groups?: string[];
+      realmRoles?: string[];
     } & DefaultSession["user"];
   }
 }

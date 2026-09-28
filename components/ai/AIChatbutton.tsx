@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { BotMessageSquare } from "lucide-react";
+import { Bot } from "lucide-react";
 import AIChatModal from "./AIChatModal";
+import HeaderActions from "../PageHeader/HeaderActions";
 
 interface AIChatButtonProps {
   context?: string;
@@ -16,18 +17,15 @@ export default function AIChatButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
+      <HeaderActions
+        tooltip={"Debit-Board AI"}
+        color="brand"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 group btn-ghost"
-        title={title}
-        aria-label={title}
+        aria-haspopup="false"
+        isActive={open}
       >
-        <BotMessageSquare className="w-5 h-5" />
-        <span className="hidden group-hover:inline whitespace-nowrap">
-          Debit-Board AI
-        </span>
-      </button>
+        <Bot className="w-5 h-5" />
+      </HeaderActions>
       <AIChatModal
         isOpen={open}
         onClose={() => setOpen(false)}

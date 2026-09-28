@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
-import { requireAdmin } from "@/lib/api-auth";
+
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
+import { requireRole } from "@/lib/api-auth";
 
 const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
 
@@ -11,7 +12,7 @@ const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
  * O frontend abre uma nova janela consumindo esse token.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const { userId } = await req.json();

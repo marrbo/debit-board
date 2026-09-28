@@ -50,7 +50,7 @@ export default function KPICards({ items }: KPICardsProps) {
       {cards.map((card) => (
         <div
           key={card.label}
-          className="bg-surface dark:bg-surface border border-default dark:border-strong rounded-lg p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors"
+          className="bg-surface dark:bg-surface rounded-lg p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:shadow-none transition-colors"
         >
           <div>
             <p className="text-[10px] uppercase font-semibold text-muted dark:text-muted tracking-wider">

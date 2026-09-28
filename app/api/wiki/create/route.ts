@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { requireAdmin } from "@/lib/api-auth";
+
 import { connectToDatabase } from "@/lib/mongodb";
 import { reconcileWiki } from "@/lib/ai/ingest";
+import { requireRole } from "@/lib/api-auth";
 
 const WIKI_DIR = path.join(process.cwd(), "content", "wiki");
 
@@ -120,7 +121,7 @@ function resolveSafe(input: string): { full: string; slug: string } | null {
  *               $ref: '#/components/schemas/AuthError'
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const { path: slugInput, content = "" } = await req.json();

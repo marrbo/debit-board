@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable, type Column } from "@/components/DataTable";
 
 // ============================================================

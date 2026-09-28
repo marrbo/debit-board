@@ -2,9 +2,10 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { requireAdmin } from "@/lib/api-auth";
+
 import { connectToDatabase } from "@/lib/mongodb";
 import { reconcileWiki } from "@/lib/ai/ingest";
+import { requireRole } from "@/lib/api-auth";
 
 const WIKI_DIR = path.join(process.cwd(), "content", "wiki");
 
@@ -173,7 +174,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
  *               $ref: '#/components/schemas/AuthError'
  */
 export async function PUT(req: NextRequest, { params }: RouteContext) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   const { slug: slugParts } = await params;

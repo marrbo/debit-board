@@ -52,7 +52,7 @@ export const OPENAPI_SCHEMAS: Record<string, SchemaObject> = {
       },
       code: {
         type: "string",
-        enum: ["NO_SESSION", "NOT_ADMIN"],
+        enum: ["NO_SESSION", "NOT_ADMIN", "INSUFFICIENT_ROLE"],
         description: "Código estável para o cliente tratar programaticamente.",
       },
     },
@@ -106,6 +106,117 @@ export const OPENAPI_SCHEMAS: Record<string, SchemaObject> = {
         type: "array",
         items: { type: "string" },
       },
+    },
+  },
+  DashboardWidgetRef: {
+    type: "object",
+    required: ["widgetId", "visible", "order", "span"],
+    properties: {
+      widgetId: { type: "string", example: "severity-status" },
+      visible: { type: "boolean" },
+      order: { type: "integer", minimum: 0 },
+      span: { type: "integer", enum: [2, 3, 4, 6] },
+    },
+  },
+  DashboardProfileTV: {
+    type: "object",
+    required: ["refreshSec", "cycleTeams"],
+    properties: {
+      teamId: { type: "string", nullable: true },
+      refreshSec: { type: "integer", minimum: 0, example: 60 },
+      cycleTeams: { type: "boolean", default: false },
+    },
+  },
+  DashboardProfile: {
+    type: "object",
+    required: ["_id", "name", "kind", "visibility", "layout"],
+    properties: {
+      _id: { type: "string" },
+      name: { type: "string" },
+      kind: { type: "string", enum: ["dashboard", "tv"] },
+      visibility: {
+        type: "string",
+        enum: ["private", "shared", "public"],
+      },
+      layout: {
+        type: "array",
+        items: { $ref: "#/components/schemas/DashboardWidgetRef" },
+      },
+      tv: { $ref: "#/components/schemas/DashboardProfileTV" },
+      favorites: { type: "array", items: { type: "string" } },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  DashboardProfileInput: {
+    type: "object",
+    required: ["name", "kind", "visibility", "layout"],
+    properties: {
+      name: { type: "string", minLength: 1 },
+      kind: { type: "string", enum: ["dashboard", "tv"] },
+      visibility: {
+        type: "string",
+        enum: ["private", "shared", "public"],
+      },
+      layout: {
+        type: "array",
+        items: { $ref: "#/components/schemas/DashboardWidgetRef" },
+      },
+      tv: { $ref: "#/components/schemas/DashboardProfileTV" },
+    },
+  },
+  KeycloakRealmSummary: {
+    type: "object",
+    required: ["realm", "users", "clients", "groups", "roles"],
+    properties: {
+      realm: { type: "string", example: "debit-board" },
+      users: { type: "integer", minimum: 0, example: 42 },
+      clients: { type: "integer", minimum: 0, example: 8 },
+      groups: { type: "integer", minimum: 0, example: 12 },
+      roles: { type: "integer", minimum: 0, example: 25 },
+    },
+  },
+  KeycloakRealmExport: {
+    type: "object",
+    description:
+      "Objeto `RealmRepresentation` do Keycloak. Contém `realm`, `clients`, " +
+      "`roles`, `groups`, `users`, `identityProviders`, `authenticationFlows`, " +
+      "`clientScopes`, `defaultGroups`. Também carrega campos de auditoria " +
+      "(`_exportedAt`, `_exportedBy`, `_note`) que podem ser ignorados no import.",
+    additionalProperties: true,
+    properties: {
+      realm: { type: "string" },
+      clients: { type: "array", items: { type: "object" } },
+      roles: { type: "object" },
+      groups: { type: "array", items: { type: "object" } },
+      users: {
+        type: "array",
+        items: { type: "object" },
+        description:
+          "Usuários do realm. No export online, o array `credentials` é " +
+          "omitido. No export offline, contém os hashes de senha.",
+      },
+      _exportedAt: { type: "string", format: "date-time" },
+      _exportedBy: { type: "string" },
+      _note: { type: "string" },
+    },
+  },
+  KeycloakExportOfflineResponse: {
+    type: "object",
+    required: ["error"],
+    properties: {
+      error: { type: "string" },
+    },
+  },
+  DashboardProfileListResponse: {
+    type: "object",
+    required: ["data", "total"],
+    properties: {
+      data: {
+        type: "array",
+        items: { $ref: "#/components/schemas/DashboardProfile" },
+      },
+      total: { type: "integer" },
     },
   },
   ScanProfileListResponse: {

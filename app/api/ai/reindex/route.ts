@@ -1,6 +1,6 @@
 // app/api/ai/reindex/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/api-auth";
+
 import { connectToDatabase } from "@/lib/mongodb";
 import {
   reconcileAiDocs,
@@ -8,6 +8,7 @@ import {
   purgeDeprecatedEmbeddings,
 } from "@/lib/ai/ingest";
 import { reconcileOpenApi } from "@/lib/ai/openapi-ingest";
+import { requireRole } from "@/lib/api-auth";
 
 /**
  * @openapi
@@ -126,7 +127,7 @@ import { reconcileOpenApi } from "@/lib/ai/openapi-ingest";
  *                   example: 'connect ECONNREFUSED 127.0.0.1:11434'
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
   try {

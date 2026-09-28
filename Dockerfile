@@ -1,32 +1,42 @@
 # ============================================================
 # 1. deps — instala node_modules a partir do lockfile
 # ============================================================
-FROM node:20-alpine AS deps
+FROM cgr.dev/chainguard/node:latest-dev AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --frozen-lockfile
+COPY --chown=65532:65532 package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm,uid=65532,gid=65532 \
+    npm ci --no-audit --no-fund
 
 # ============================================================
 # 2. builder — compila o Next em modo standalone
 # ============================================================
-FROM node:20-alpine AS builder
-WORKDIR /src
+FROM cgr.dev/chainguard/node:latest-dev AS builder
+WORKDIR /app
 
-# Variáveis usadas em build time (Next inlines NEXT_PUBLIC_*)
 ARG NEXT_PUBLIC_ADMIN_EMAIL
 ENV NEXT_PUBLIC_ADMIN_EMAIL=${NEXT_PUBLIC_ADMIN_EMAIL}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV RUNNING_IN_CONTAINER=true
+ENV NODE_OPTIONS="--max-old-space-size=3072"
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps --chown=65532:65532 /app/node_modules ./node_modules
+COPY --chown=65532:65532 . .
 
-RUN npm run build
+RUN mkdir -p /app/.next
+
+RUN --mount=type=cache,target=/app/.next/cache,uid=65532,gid=65532 \
+    --mount=type=cache,target=/root/.npm,uid=65532,gid=65532 \
+    npm run build
+
+USER root
+RUN mkdir -p /var/lib/debit-board/dumps \
+ && chown -R 65532:65532 /var/lib/debit-board
+USER 65532:65532
 
 # ============================================================
-# 3. runner — imagem final enxuta
+# 3. runner — imagem final distroless (sem shell)
 # ============================================================
-FROM node:20-alpine AS runner
+FROM cgr.dev/chainguard/node:latest-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -34,20 +44,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN addgroup -g 1001 -S nodejs \
- && adduser  -S nextjs -u 1001
-
-# Diretório persistente para os dumps
-RUN mkdir -p /var/lib/debit-board/dumps \
- && chown -R nextjs:nodejs /var/lib/debit-board
-
-# Artefatos do standalone
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=65532:65532 /app/.next/standalone ./
+COPY --from=builder --chown=65532:65532 /app/.next/static ./.next/static
+COPY --from=builder --chown=65532:65532 /var/lib/debit-board /var/lib/debit-board
 
-USER nextjs
+USER 65532:65532
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# 🔑 Sem `node` — o ENTRYPOINT do Chainguard já é o binário.
+#    `["node", "server.js"]` vira `node node server.js` e falha
+#    com MODULE_NOT_FOUND. Só o argumento do script.
+CMD ["server.js"]

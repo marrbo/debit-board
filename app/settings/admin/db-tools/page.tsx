@@ -13,7 +13,7 @@ import {
   Server,
   Clock,
 } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 import ConfirmPasswordDialog from "@/components/ConfirmPasswordDialog";
 import { useFeedback } from "@/hooks/useFeedback";
 
@@ -442,9 +442,9 @@ export default function DbToolsPage() {
         title="Confirmação por senha"
         description={
           pendingRestore
-            ? `Restaurar "${pendingRestore.id}" em "${connections.find(
-                (c) => c.id === restoreTarget,
-              )?.label}". Isto substitui os dados atuais do destino.`
+            ? `Restaurar "${pendingRestore.id}" em "${
+                connections.find((c) => c.id === restoreTarget)?.label
+              }". Isto substitui os dados atuais do destino.`
             : ""
         }
         onCancel={() => setPendingRestore(null)}

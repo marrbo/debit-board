@@ -5,9 +5,10 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { RefreshCw, ArrowLeft, GitBranchPlus } from "lucide-react";
-import PageHeader from "@/components/PageHeader";
+import PageHeader from "@/components/PageHeader/Header";
 import { DataTable, type Column } from "@/components/DataTable";
 import type { IRepository } from "@/types/IRepository";
+import Loading from "@/components/Loading";
 
 // ============================================================================
 // Configuração das Colunas
@@ -71,8 +72,7 @@ function RepositoriesContent() {
     }
   };
 
-  if (status === "loading")
-    return <div className="py-10 text-center">Carregando...</div>;
+  if (status === "loading") return <Loading />;
 
   if (!session) {
     router.push("/login");

@@ -1,8 +1,9 @@
 // hooks/useResolvedTheme.ts
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useLocalSetting } from "@/hooks/useLocalSettings";
+import { writeThemeCookie } from "@/lib/theme-cookie";
 
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
@@ -14,8 +15,7 @@ const subscribeMedia = (cb: () => void) => {
 };
 
 const getMediaSnapshot = (): boolean =>
-  typeof window !== "undefined" &&
-  window.matchMedia(MEDIA_QUERY).matches;
+  typeof window !== "undefined" && window.matchMedia(MEDIA_QUERY).matches;
 
 const getMediaServerSnapshot = (): boolean => false;
 
@@ -27,9 +27,15 @@ export function useResolvedTheme(): "light" | "dark" {
     getMediaServerSnapshot,
   );
 
-  return theme === "system"
-    ? systemDark
-      ? "dark"
-      : "light"
-    : theme;
+  const resolved: "light" | "dark" =
+    theme === "system" ? (systemDark ? "dark" : "light") : theme;
+
+  // Espelha o tema resolvido no cookie lido pelo Keycloak.
+  // Dispara em: troca manual no toggle OU mudança do SO enquanto
+  // `theme === "system"`. Não dispara em re-renders com mesmo valor.
+  useEffect(() => {
+    writeThemeCookie(resolved);
+  }, [resolved]);
+
+  return resolved;
 }

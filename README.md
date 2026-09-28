@@ -35,26 +35,25 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-
 # Instalar VITEST
 
 ```shell
 npm install -D vitest @vitejs/plugin-react @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom @testing-library/dom
-````
+```
 
-* vitest – o próprio framework de testes (usa o Vite internamente).
+- vitest – o próprio framework de testes (usa o Vite internamente).
 
-* @vitejs/plugin-react – suporte para transformar JSX/TSX no Vite.
+- @vitejs/plugin-react – suporte para transformar JSX/TSX no Vite.
 
-* @testing-library/react – renderiza componentes React para testes.
+- @testing-library/react – renderiza componentes React para testes.
 
-* @testing-library/jest-dom – matchers extras (ex.: toBeInTheDocument()).
+- @testing-library/jest-dom – matchers extras (ex.: toBeInTheDocument()).
 
-* @testing-library/user-event – simula eventos de usuário de forma realista.
+- @testing-library/user-event – simula eventos de usuário de forma realista.
 
-* jsdom – simula um ambiente de navegador para os testes.
+- jsdom – simula um ambiente de navegador para os testes.
 
-* @testing-library/dom – dependência interna do Testing Library (já instalada junto, mas é bom listar).
+- @testing-library/dom – dependência interna do Testing Library (já instalada junto, mas é bom listar).
 
 ### Para gerar Coverage
 
@@ -63,6 +62,22 @@ npm install -D @vitest/coverage-v8
 ```
 
 ### Backup dos volumes
+
 ```shell
 docker run --rm -v debitboard_mongo_data:/data -v $(pwd):/backup alpine tar czf /backup/mongo-data.tgz -C /data .
 ```
+
+### backup das realms do Keycloak
+
+docker run --rm \
+ --network debit-board_debitboard-network \
+ -v "$(pwd)/dumps:/tmp/export" \
+ -e KC_DB=postgres \
+ -e KC_DB_URL=jdbc:postgresql://debitboard-keycloak-db:5432/keycloak \
+ -e KC_DB_USERNAME=keycloak \
+ -e KC_DB_PASSWORD=keycloak \
+ quay.io/keycloak/keycloak:26.7.2 \
+ export \
+ --dir /tmp/export \
+ --realm debit-board \
+ --users realm_file

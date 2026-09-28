@@ -115,15 +115,40 @@ export async function GET(req: NextRequest) {
     // ============================================================
     // Categorias
     // ============================================================
-    const categoryData = await Observation.aggregate([
-      { $match: baseMatch },
-      { $group: { _id: "$category", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
+    // Substitua o bloco `const categoryData = await ...` por:
+
+    const [categoryData, categoryGroupData] = await Promise.all([
+      Observation.aggregate([
+        { $match: baseMatch },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Observation.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            patternId: { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: { category: "$category", patternId: "$patternId" } } },
+        { $group: { _id: "$_id.category", count: { $sum: 1 } } },
+      ]),
     ]);
+
     const categoryTotals = categoryData.map((d: any) => ({
       label: d._id || "Sem Categoria",
       value: d.count,
     }));
+
+    const categoryGroupTotals: Record<string, number> = {};
+    categoryGroupData.forEach((item: any) => {
+      categoryGroupTotals[item._id] = item.count;
+    });
+
+    // Fallback quando não há patterns associados
+    if (Object.values(categoryGroupTotals).reduce((a, b) => a + b, 0) === 0) {
+      for (const c of categoryTotals) categoryGroupTotals[c.label] = c.value;
+    }
 
     // ============================================================
     // Projetos (TOP 10 + detalhes)
@@ -287,6 +312,7 @@ export async function GET(req: NextRequest) {
       },
       severityTotals,
       categoryTotals,
+      categoryGroupTotals, // 🔥 novo
       projectTotals: projectTotalsArray,
       chartData,
     });
