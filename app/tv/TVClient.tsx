@@ -3,16 +3,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { AlertCircle, Calendar, Loader2, X } from "lucide-react";
-import TeamStatsCard from "@/components/TeamStatsCard";
-import TeamsExecutiveCard from "@/components/stats/TeamsExecutiveCard";
-import EvolutionWidget from "@/components/dashboard/EvolutionWidget";
-import TopProjectsWidget from "@/components/dashboard/TopProjectsWidget";
-import CategoryPieWidget from "@/components/dashboard/CategoryPieWidget";
-import { DataTable } from "@/components/DataTable";
-import { projectColumns } from "@/components/dashboard/projectColumns";
+import { AlertCircle, Calendar, Loader2, LogOut } from "lucide-react";
 import TVControls from "./TVControls";
+import {
+  renderDashboardWidget,
+  WIDGETS_NEEDING_DASHBOARD_STATS,
+  WIDGETS_NEEDING_STATS,
+} from "@/components/dashboard/widget-renderer";
 import { useRangeState } from "@/hooks/useRangeState";
 import { useDashboardLayout } from "@/hooks/useDashboardLayout";
 import { useDashboardProfiles } from "@/hooks/useDashboardProfiles";
@@ -22,6 +19,7 @@ import { writeRangeState } from "@/lib/range-options";
 import type { StatsData, DashboardStatsResponse } from "@/types/IStats";
 
 const DEFAULT_REFRESH = 60;
+
 const SPAN_CLASS: Record<number, string> = {
   2: "lg:col-span-2",
   3: "lg:col-span-3",
@@ -29,18 +27,14 @@ const SPAN_CLASS: Record<number, string> = {
   6: "lg:col-span-6",
 };
 
-// Widgets que consomem /api/stats
-const TV_IDS_NEEDING_STATS = [
-  "severity-status",
-  "evolution",
-  "category-pie",
-  "category",
-  "top-projects",
-] as const;
-
-// Widget que consome /api/dashboard/stats (coluna severidade do grid
-// de projetos — `extraData`)
-const TV_ID_NEEDING_DASHBOARD_STATS = "projects-table";
+/**
+ * Slot de rotação. `id === "all"` representa o agregado Global, que
+ * sempre encabeça a lista.
+ */
+interface CycleSlot {
+  id: string;
+  name: string;
+}
 
 function parseRefresh(raw: string | null, fallback: number): number {
   if (!raw) return fallback;
@@ -55,13 +49,14 @@ function parseBool(raw: string | null): boolean {
 
 /**
  * Modo TV. Carrega o perfil (`?profile=`) quando informado, cuja
- * `layout` sobrepõe o storage local. Ciclo de times: quando ativo, o
- * `teamId` efetivo é o time na posição `currentIndex` da lista — e a
- * cada refresh o índice avança com wrap.
+ * `layout` sobrepõe o storage local.
  *
- * Todos os widgets do catálogo podem ser exibidos em TV — incluindo o
- * grid de projetos (renderizado como tabela read-only, alimentada pelo
- * mesmo `/api/dashboard/stats` do Dashboard).
+ * Ciclo de times: começa por **Global** (agregado de todos os times)
+ * e depois rotaciona pelos times que possuem projetos vinculados.
+ *
+ * Encerramento: fecha a janela se ela foi aberta por script (caso
+ * típico — link "Modo TV" no Dashboard abre com `target="_blank"`),
+ * ou navega para `/` se a URL foi aberta diretamente.
  */
 export default function TVClient() {
   const searchParams = useSearchParams();
@@ -70,12 +65,10 @@ export default function TVClient() {
   const { profiles } = useDashboardProfiles();
   const { settings } = useLocalSettings();
 
-  // Perfil: URL tem prioridade; fallback para o ativo no localStorage
   const urlProfileId = searchParams.get("profile");
   const profileId = urlProfileId ?? settings.dashboardProfileId;
   const profile = profiles.find((p) => p._id.toString() === profileId);
 
-  // Layout: aceita qualquer tipo de perfil (dashboard ou tv)
   const overrideLayout = useMemo(() => profile?.layout ?? null, [profile]);
   const { widgets } = useDashboardLayout({
     overrideLayout,
@@ -99,29 +92,34 @@ export default function TVClient() {
   );
   const dbqlId = searchParams.get("q") ?? "";
 
-  // Times com projeto vinculado — evita ciclo com times vazios
-  const cycleableTeams = useMemo(
-    () => teams.filter((t) => !t.isGlobal && (t.projectCount ?? 0) > 0),
-    [teams],
-  );
+  // ============================================================
+  // Slots de ciclo — Global SEMPRE primeiro, depois times com projetos
+  // ============================================================
+  const cycleSlots = useMemo<CycleSlot[]>(() => {
+    const slots: CycleSlot[] = [{ id: "all", name: "Global" }];
+    for (const t of teams) {
+      if (t.isGlobal) continue;
+      if ((t.projectCount ?? 0) === 0) continue;
+      slots.push({ id: t._id.toString(), name: t.name });
+    }
+    return slots;
+  }, [teams]);
 
-  const [currentTeamIndex, setCurrentTeamIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   /**
-   * Time efetivo pronto para a URL do endpoint. Nunca retorna `null`:
-   * quando não há time específico (Global), usa `"all"`.
+   * Time efetivo. `"all"` = Global. Quando o ciclo está ativo,
+   * percorre `cycleSlots`; senão usa `fixedTeamId` ou `"all"`.
    */
   const teamIdForApi = useMemo(() => {
-    if (cycleTeams && cycleableTeams.length > 0) {
-      return cycleableTeams[
-        currentTeamIndex % cycleableTeams.length
-      ]._id.toString();
+    if (cycleTeams && cycleSlots.length > 0) {
+      return cycleSlots[currentIndex % cycleSlots.length].id;
     }
     if (fixedTeamId && String(fixedTeamId) !== "all") {
       return String(fixedTeamId);
     }
     return "all";
-  }, [cycleTeams, cycleableTeams, currentTeamIndex, fixedTeamId]);
+  }, [cycleTeams, cycleSlots, currentIndex, fixedTeamId]);
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [dashboardStats, setDashboardStats] =
@@ -143,8 +141,10 @@ export default function TVClient() {
   );
 
   const fetchAll = useCallback(async () => {
-    const needsStats = TV_IDS_NEEDING_STATS.some((id) => visibleIds.has(id));
-    const needsDashboardStats = visibleIds.has(TV_ID_NEEDING_DASHBOARD_STATS);
+    const needsStats = WIDGETS_NEEDING_STATS.some((id) => visibleIds.has(id));
+    const needsDashboardStats = WIDGETS_NEEDING_DASHBOARD_STATS.some((id) =>
+      visibleIds.has(id),
+    );
 
     if (!needsStats && !needsDashboardStats) {
       setLoading(false);
@@ -153,9 +153,7 @@ export default function TVClient() {
 
     try {
       const baseParams = new URLSearchParams();
-      if (teamIdForApi !== "all") {
-        baseParams.set("teamId", teamIdForApi);
-      }
+      if (teamIdForApi !== "all") baseParams.set("teamId", teamIdForApi);
       if (dbqlId) baseParams.set("q", dbqlId);
       writeRangeState(rangeState, baseParams);
       const qs = baseParams.toString();
@@ -213,30 +211,20 @@ export default function TVClient() {
   useEffect(() => {
     if (paused || refreshSec === 0) return;
     const id = setInterval(() => {
-      if (cycleRef.current && cycleableTeams.length > 0) {
-        setCurrentTeamIndex((i) => (i + 1) % cycleableTeams.length);
+      if (cycleRef.current && cycleSlots.length > 0) {
+        setCurrentIndex((i) => (i + 1) % cycleSlots.length);
       } else {
         fetchAll();
       }
     }, refreshSec * 1000);
     return () => clearInterval(id);
-  }, [fetchAll, paused, refreshSec, cycleableTeams.length]);
+  }, [fetchAll, paused, refreshSec, cycleSlots.length]);
 
   useEffect(() => {
     if (!cycleTeams) return;
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTeamIndex, cycleTeams]);
-
-  const statusTotals = useMemo(
-    () => ({
-      open: stats?.kpi?.accepted || 0,
-      resolved: stats?.kpi?.resolved || 0,
-      recurring: stats?.kpi?.recurring || 0,
-      wont_fix: stats?.kpi?.wontFix || 0,
-    }),
-    [stats],
-  );
+  }, [currentIndex, cycleTeams]);
 
   const secondsUntilRefresh = useMemo(() => {
     if (paused || refreshSec === 0 || !lastUpdate) return null;
@@ -246,12 +234,12 @@ export default function TVClient() {
   }, [lastUpdate, refreshSec, paused, tick]);
 
   const currentTeamName = useMemo(() => {
-    if (cycleTeams && cycleableTeams.length > 0) {
-      return cycleableTeams[currentTeamIndex % cycleableTeams.length].name;
+    if (cycleTeams && cycleSlots.length > 0) {
+      return cycleSlots[currentIndex % cycleSlots.length].name;
     }
     if (teamIdForApi === "all") return "Global";
     return teams.find((t) => t._id.toString() === teamIdForApi)?.name ?? "—";
-  }, [cycleTeams, cycleableTeams, currentTeamIndex, teamIdForApi, teams]);
+  }, [cycleTeams, cycleSlots, currentIndex, teamIdForApi, teams]);
 
   const rangeLabel = useMemo(() => {
     if (rangeState.mode === "custom" && rangeState.from && rangeState.to) {
@@ -269,86 +257,25 @@ export default function TVClient() {
     return map[rangeState.preset] ?? "Tudo";
   }, [rangeState]);
 
-  const renderWidget = (id: string) => {
-    switch (id) {
-      case "severity-status":
-        return (
-          <TeamStatsCard
-            type="status"
-            title="Severidade e Status"
-            total={stats?.kpi?.total ?? 0}
-            severity={stats?.severityTotals ?? {}}
-            status={statusTotals}
-          />
-        );
-      case "evolution":
-        return (
-          <EvolutionWidget chartData={stats?.chartData ?? []} height={360} />
-        );
-      case "executive":
-        // 🔑 `teamIdForApi` nunca é "null" — cai em "all" (Global),
-        //    que o endpoint interpreta como "todos os times".
-        return (
-          <TeamsExecutiveCard teamId={teamIdForApi} searchQuery={dbqlId} />
-        );
-      case "category-pie":
-        return <CategoryPieWidget categories={stats?.categoryTotals ?? []} />;
-      case "category":
-        return (
-          <TeamStatsCard
-            type="category"
-            title="Distribuição por Categoria"
-            total={stats?.kpi?.total ?? 0}
-            category={Object.fromEntries(
-              (stats?.categoryTotals ?? []).map((c) => [c.label, c.value]),
-            )}
-            categoryGroup={stats?.categoryGroupTotals}
-          />
-        );
-      case "top-projects":
-        return (
-          <TopProjectsWidget
-            projects={stats?.projectTotals ?? []}
-            height={420}
-            limit={10}
-          />
-        );
-      case "projects-table":
-        // Grid de projetos em modo leitura — sem export (não faz
-        // sentido em TV). A coluna de severidade usa o `extraData` de
-        // `/api/dashboard/stats`, mesma fonte do Dashboard.
-        return (
-          <div className="w-full">
-            <h3 className="text-lg font-semibold mb-4 text-heading">
-              Projetos - {currentTeamName}
-            </h3>
-            <DataTable
-              endpoint="/api/dashboard"
-              columns={projectColumns}
-              defaultSort={{ field: "name", order: "asc" }}
-              defaultLimit={5}
-              teamId={teamIdForApi}
-              range={
-                rangeState.mode === "preset" && rangeState.preset !== "all"
-                  ? rangeState.preset
-                  : undefined
-              }
-              rangeFrom={
-                rangeState.mode === "custom" ? rangeState.from : undefined
-              }
-              rangeTo={rangeState.mode === "custom" ? rangeState.to : undefined}
-              searchDbqlId={dbqlId}
-              extraData={dashboardStats?.projectStats ?? {}}
-              exportPDF={false}
-              pdfTitle={`Projetos: Severidades - ${currentTeamName}`}
-              onRowClick={() => {}}
-            />
-          </div>
-        );
-      default:
-        return null;
+  /**
+   * Sai do modo TV.
+   *
+   * - Se a janela foi aberta por outra (`window.opener`), fecha — é o
+   *   caso típico: o botão "Modo TV" no Dashboard usa
+   *   `target="_blank"`, então a janela atual é a nova aba.
+   * - Senão, navega para o Dashboard. Cobre acesso direto pela URL
+   *   (bookmark, QR code, atalho) — onde `window.close()` seria
+   *   silenciosamente ignorado pelos browsers modernos.
+   */
+  const handleExit = useCallback(() => {
+    if (window.opener && !window.opener.closed) {
+      window.close();
+    } else {
+      window.location.href = "/";
     }
-  };
+  }, []);
+
+  const showCycleBadge = cycleTeams && cycleSlots.length > 1;
 
   return (
     <div className="dark fixed inset-0 z-[9999] bg-page text-body overflow-auto">
@@ -358,10 +285,9 @@ export default function TVClient() {
             Security Posture - {currentTeamName}
           </h1>
           <span className="text-muted truncate flex items-start justify-start">
-            {cycleTeams && cycleableTeams.length > 1 && (
+            {showCycleBadge && (
               <span className="ml-2 px-1.5 flex items-center rounded bg-brand/15 text-brand text-[12px] font-mono">
-                {(currentTeamIndex % cycleableTeams.length) + 1}/
-                {cycleableTeams.length}
+                {(currentIndex % cycleSlots.length) + 1}/{cycleSlots.length}
                 {" | "}
               </span>
             )}
@@ -378,9 +304,9 @@ export default function TVClient() {
           lastUpdate={lastUpdate}
           onTogglePause={() => setPaused((p) => !p)}
           cycleTeams={cycleTeams}
-          cycleableTeamCount={cycleableTeams.length}
+          cycleableTeamCount={cycleSlots.length}
           onToggleCycleTeams={() => {
-            setCurrentTeamIndex(0);
+            setCurrentIndex(0);
             const params = new URLSearchParams(searchParams.toString());
             if (cycleTeams) params.delete("cycle");
             else params.set("cycle", "1");
@@ -394,14 +320,15 @@ export default function TVClient() {
           }}
         />
 
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={handleExit}
           className="btn-ghost shrink-0"
           title="Sair do modo TV"
           aria-label="Sair do modo TV"
         >
-          <X className="w-5 h-5" />
-        </Link>
+          <LogOut className="w-5 h-5" />
+        </button>
       </header>
 
       {error && (
@@ -428,13 +355,20 @@ export default function TVClient() {
           <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
             {widgets.map((w) => (
               <div
-                key={`${w.id}-${w.effectiveSpan}`}
+                key={`${w.id}-${w.span}`}
                 style={{ order: w.order }}
-                className={`min-w-0 ${
-                  SPAN_CLASS[w.effectiveSpan] ?? "lg:col-span-6"
-                }`}
+                className={`min-w-0 ${SPAN_CLASS[w.span] ?? "lg:col-span-6"}`}
               >
-                {renderWidget(w.id)}
+                {renderDashboardWidget(w.id, {
+                  stats,
+                  dashboardStats,
+                  teamId: teamIdForApi,
+                  teamName: currentTeamName,
+                  searchDbqlId: dbqlId,
+                  rangeState,
+                  searchVersion: 0,
+                  variant: "tv",
+                })}
               </div>
             ))}
           </div>

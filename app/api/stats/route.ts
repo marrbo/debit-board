@@ -2,7 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import { subDays, format } from "date-fns";
+import { subDays, subHours, format } from "date-fns";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
 import { buildObservationFilters } from "@/lib/observation-filters";
@@ -11,17 +11,49 @@ import * as Sentry from "@sentry/nextjs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+interface EvolutionBucket {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+  open: number;
+  recurring: number;
+  resolved: number;
+  wontFix: number;
+  expired: number;
+}
+
+function emptyBucket(): EvolutionBucket {
+  return {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    total: 0,
+    open: 0,
+    recurring: 0,
+    resolved: 0,
+    wontFix: 0,
+    expired: 0,
+  };
+}
+
 /**
  * Estatísticas agregadas das observations do tenant.
  *
  * **Fonte única de filtros**: usa `buildObservationFilters` — os mesmos
  * filtros aplicados aqui são aplicados em `/api/observations` e
- * `/api/dashboard/stats`. Isso garante que o `kpi.total` retornado aqui
- * bata com o total mostrado nas outras telas para a mesma DBQL + time +
- * janela temporal.
+ * `/api/dashboard/stats`. Isso garante que TODOS os números retornados
+ * aqui (KPI, severidade, categoria, projetos, evolução) contem
+ * **exatamente o mesmo conjunto** de observations para o mesmo range.
  *
  * Aceita `range=1h|24h|7d|14d|30d|90d|all` (preset) **ou** `from` + `to`
  * (ISO, custom). Quando ambos vêm preenchidos, `from`/`to` têm precedência.
+ *
+ * A janela de exibição do gráfico de evolução é derivada do próprio
+ * range. Quando `all`, usa o intervalo real dos dados (min/max de
+ * `firstSeen`). Nunca há um filtro "extra" por cima do range.
  *
  * @summary Estatísticas agregadas do tenant
  * @tags Stats
@@ -50,6 +82,9 @@ export async function GET(req: NextRequest) {
     const rangeFrom = searchParams.get("from");
     const rangeTo = searchParams.get("to");
 
+    // ============================================================
+    // Filtro único — respeita DBQL + time + range. Nada além disso.
+    // ============================================================
     const { match } = await buildObservationFilters({
       tenantId,
       dbqlId,
@@ -59,7 +94,6 @@ export async function GET(req: NextRequest) {
       rangeTo,
     });
 
-    // `projectId` é específico desta tela — adiciona como cláusula extra.
     const baseMatch: Record<string, unknown> =
       projectId && projectId !== "all"
         ? { $and: [match, { project: projectId }] }
@@ -115,8 +149,6 @@ export async function GET(req: NextRequest) {
     // ============================================================
     // Categorias
     // ============================================================
-    // Substitua o bloco `const categoryData = await ...` por:
-
     const [categoryData, categoryGroupData] = await Promise.all([
       Observation.aggregate([
         { $match: baseMatch },
@@ -145,7 +177,6 @@ export async function GET(req: NextRequest) {
       categoryGroupTotals[item._id] = item.count;
     });
 
-    // Fallback quando não há patterns associados
     if (Object.values(categoryGroupTotals).reduce((a, b) => a + b, 0) === 0) {
       for (const c of categoryTotals) categoryGroupTotals[c.label] = c.value;
     }
@@ -209,95 +240,102 @@ export async function GET(req: NextRequest) {
     }));
 
     // ============================================================
-    // Evolução — deriva `days` do mesmo range usado no match.
+    // Evolução — respeita o range, sem filtro extra.
     // ============================================================
-    let days = 30;
-    if (range === "1h") days = 1;
-    else if (range === "24h") days = 1;
-    else if (range === "7d") days = 7;
-    else if (range === "14d") days = 14;
-    else if (range === "30d") days = 30;
-    else if (range === "90d") days = 90;
-    else if (rangeFrom && rangeTo) {
-      // Custom: calcula em dias entre os extremos (limitado a 180 para o gráfico)
-      const ms = new Date(rangeTo).getTime() - new Date(rangeFrom).getTime();
-      days = Math.min(180, Math.max(1, Math.ceil(ms / 86_400_000)));
+    // 1. Determina a janela de exibição a partir do range.
+    //    - Presets: [agora - N, agora]
+    //    - Custom:  [from, to]
+    //    - "all":   [min(firstSeen) dos dados, agora]
+    // ------------------------------------------------------------
+    const rangeEnd = new Date();
+    let rangeStart: Date;
+
+    if (rangeFrom && rangeTo) {
+      rangeStart = new Date(rangeFrom);
+      rangeEnd.setTime(new Date(rangeTo).getTime());
+    } else if (range === "1h") {
+      rangeStart = subHours(rangeEnd, 1);
+    } else if (range === "24h") {
+      rangeStart = subHours(rangeEnd, 24);
+    } else if (range === "7d") {
+      rangeStart = subDays(rangeEnd, 7);
+    } else if (range === "14d") {
+      rangeStart = subDays(rangeEnd, 14);
+    } else if (range === "30d") {
+      rangeStart = subDays(rangeEnd, 30);
+    } else if (range === "90d") {
+      rangeStart = subDays(rangeEnd, 90);
+    } else {
+      // "all" ou valor desconhecido → usa a extensão real dos dados.
+      const minResult = await Observation.aggregate([
+        { $match: baseMatch },
+        { $group: { _id: null, min: { $min: "$firstSeen" } } },
+      ]);
+      const dataMin: Date | undefined = minResult[0]?.min;
+      rangeStart = dataMin ? new Date(dataMin) : subDays(rangeEnd, 30);
     }
 
-    const dateFilter = { $gte: subDays(new Date(), days) };
-
-    const [evolutionSeverityData, evolutionStatusData] = await Promise.all([
-      Observation.aggregate([
-        { $match: { ...baseMatch, firstSeen: dateFilter } },
-        {
-          $group: {
-            _id: {
-              day: {
-                $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" },
-              },
-              severity: "$severity",
+    // ------------------------------------------------------------
+    // 2. Agrega usando o MESMO `baseMatch` — sem filtro extra.
+    // ------------------------------------------------------------
+    const evolutionData = await Observation.aggregate([
+      { $match: baseMatch },
+      {
+        $group: {
+          _id: {
+            day: {
+              $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" },
             },
-            count: { $sum: 1 },
+            severity: "$severity",
+            status: "$status",
           },
+          count: { $sum: 1 },
         },
-        { $sort: { "_id.day": 1 } },
-      ]),
-      Observation.aggregate([
-        { $match: { ...baseMatch, firstSeen: dateFilter } },
-        {
-          $group: {
-            _id: {
-              day: {
-                $dateToString: { format: "%Y-%m-%d", date: "$firstSeen" },
-              },
-              status: "$status",
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { "_id.day": 1 } },
-      ]),
+      },
+      { $sort: { "_id.day": 1 } },
     ]);
 
-    const today = new Date();
-    const chartData: any[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const key = format(subDays(today, i), "yyyy-MM-dd");
-      chartData.push({
-        label: key,
-        critical: 0,
-        high: 0,
-        medium: 0,
-        low: 0,
-        total: 0,
-        open: 0,
-        recurring: 0,
-        resolved: 0,
-        wontFix: 0,
-        expired: 0,
-      });
+    // ------------------------------------------------------------
+    // 3. Gera os buckets por dia para toda a janela.
+    // ------------------------------------------------------------
+    const chartData: Array<{ label: string } & EvolutionBucket> = [];
+    const cursor = new Date(rangeStart);
+    cursor.setHours(0, 0, 0, 0);
+    const endDay = new Date(rangeEnd);
+    endDay.setHours(23, 59, 59, 999);
+
+    while (cursor <= endDay) {
+      chartData.push({ label: format(cursor, "yyyy-MM-dd"), ...emptyBucket() });
+      cursor.setDate(cursor.getDate() + 1);
     }
 
     const dayMap = new Map<string, number>();
     chartData.forEach((item, index) => dayMap.set(item.label, index));
 
-    evolutionSeverityData.forEach((item: any) => {
-      const idx = dayMap.get(item._id.day);
+    // ------------------------------------------------------------
+    // 4. Preenche os buckets com o resultado da agregação.
+    //    A soma de todos os buckets == `kpi.total`.
+    // ------------------------------------------------------------
+    evolutionData.forEach((row: any) => {
+      const idx = dayMap.get(row._id.day);
       if (idx === undefined) return;
-      const sev = item._id.severity || "unknown";
-      chartData[idx][sev] = (chartData[idx][sev] || 0) + item.count;
-      chartData[idx].total += item.count;
-    });
 
-    evolutionStatusData.forEach((item: any) => {
-      const idx = dayMap.get(item._id.day);
-      if (idx === undefined) return;
-      const status = item._id.status || "unknown";
-      if (status === "wont_fix") chartData[idx].wontFix += item.count;
-      else if (status === "resolved") chartData[idx].resolved += item.count;
-      else if (status === "open") chartData[idx].open += item.count;
-      else if (status === "recurring") chartData[idx].recurring += item.count;
-      else if (status === "expired") chartData[idx].expired += item.count;
+      const b = chartData[idx];
+      const sev = row._id.severity || "unknown";
+      const status = row._id.status || "unknown";
+      const count = row.count;
+
+      if (sev === "critical") b.critical += count;
+      else if (sev === "high") b.high += count;
+      else if (sev === "medium") b.medium += count;
+      else if (sev === "low") b.low += count;
+      b.total += count;
+
+      if (status === "open") b.open += count;
+      else if (status === "resolved") b.resolved += count;
+      else if (status === "recurring") b.recurring += count;
+      else if (status === "wont_fix") b.wontFix += count;
+      else if (status === "expired") b.expired += count;
     });
 
     return NextResponse.json({
@@ -312,7 +350,7 @@ export async function GET(req: NextRequest) {
       },
       severityTotals,
       categoryTotals,
-      categoryGroupTotals, // 🔥 novo
+      categoryGroupTotals,
       projectTotals: projectTotalsArray,
       chartData,
     });

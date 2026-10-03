@@ -2,7 +2,7 @@
 import { type NextRequest } from "next/server";
 import { Project } from "@/models/Project";
 import { Observation } from "@/models/Observation";
-import mongoose from "mongoose";
+import type mongoose from "mongoose";
 import { handleGenericGet } from "@/lib/api-handler";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";

@@ -36,11 +36,20 @@ export async function GET(req: NextRequest) {
     all: isAll,
     projection: {
       _id: 1,
+      scanId: 1,
+      origin: 1,
       scanDate: 1,
+      completedAt: 1,
       status: 1,
       totalOccurrences: 1,
       patternCount: 1,
       failedPatterns: 1,
+      riskScore: 1,
+      riskBand: 1,
+      profileId: 1,
+      profileName: 1,
+      rerunOfScanId: 1,
+      durationMs: 1,
     },
   });
 }

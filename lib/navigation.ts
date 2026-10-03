@@ -17,6 +17,7 @@ import {
   Database,
   ShieldCheck,
   Puzzle,
+  Activity,
 } from "lucide-react";
 import { SiOpenapiinitiative } from "react-icons/si";
 import type { Role } from "./permissions";
@@ -97,6 +98,16 @@ export const NAVIGATION: NavItem[] = [
     slot: "primary",
     teamAware: true,
     order: 2,
+  },
+  {
+    href: "/sast/timeline",
+    label: "Timeline",
+    title: "SAST Timeline",
+    subtitle: "Evolução do risco ao longo dos scans",
+    icon: Activity,
+    slot: "hidden", // não aparece na sidebar; resolvido pelo Header
+    teamAware: true,
+    order: 3,
   },
 
   // ============================================================

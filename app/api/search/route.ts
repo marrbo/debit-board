@@ -7,6 +7,7 @@ import { User } from "@/models/User";
 import { Tenant } from "@/models/Tenant";
 import mongoose from "mongoose";
 import { requireSession } from "@/lib/api-auth";
+import { toObjectId } from "@/lib/mongo-id";
 
 /**
  * Cria recurso do endpoint /api/search.
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireSession();
   if (auth.ok === false) return auth.response;
 
-  const tenantId = auth.user.tenantId;
+  const tenantId = toObjectId(auth.user.tenantId);
   const azureSettings = auth.user.azureSettings;
 
   try {

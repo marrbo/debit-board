@@ -131,7 +131,7 @@ function CategoryPopup({
     <div
       ref={popupRef}
       style={style}
-      className="bg-page border border-default dark:border-none rounded-lg shadow-lg overflow-hidden"
+      className="bg-page border border-default dark:border-none rounded-lg shadow-lg overflow-hidden h-full min-h-[280px]"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="px-4 py-3 border-b border-default dark:border-strong">
@@ -369,7 +369,7 @@ export default function TeamStatsCard({
       <>
         <div
           ref={cardRef}
-          className="bg-elevated border border-subtle dark:border-none rounded-lg p-5 shadow-sm hover:drop-shadow-lg relative flex flex-col h-[280px] transition-all duration-300"
+          className="bg-elevated border border-subtle dark:border-none rounded-lg p-5 shadow-sm hover:drop-shadow-lg relative flex flex-col min-h-[280px] h-full transition-all duration-300"
         >
           {/* Cabeçalho - Distribuição por Categoria*/}
           <div className="flex items-center justify-between mb-4">

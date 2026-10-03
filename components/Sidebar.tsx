@@ -89,7 +89,7 @@ export default function Sidebar() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex flex-col items-center justify-center font-mono font-thin py-4 px-1 group hover:bg-elevated m-1 rounded-full text-[9px] transition-colors w-full ${
+        className={`flex flex-col items-center justify-center font-mono font-thin py-4 px-1 group hover:bg-elevated m-1 rounded-md text-[9px] transition-colors w-full ${
           active ? "font-bold" : ""
         }`}
       >
@@ -150,7 +150,7 @@ export default function Sidebar() {
 
           {isAccountOpen && (
             <div
-              className="fixed bottom-4 left-16 z-[200] w-80 bg-elevated border border-subtle rounded-full p-2 flex flex-col gap-2 transition-colors"
+              className="fixed bottom-4 left-16 z-[200] w-80 bg-elevated border border-subtle rounded-md p-1 flex flex-col gap-2 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 pb-3 border-b border-subtle">
@@ -163,7 +163,7 @@ export default function Sidebar() {
                     {session?.user?.email}
                   </p>
                   {isImpersonating && (
-                    <span className="mt-1 inline-block text-[9px] border px-2 py-0.5 rounded-full">
+                    <span className="mt-1 inline-block text-[9px] border px-2 py-0.5 rounded-md">
                       🔀 Impersonating
                     </span>
                   )}
@@ -175,7 +175,7 @@ export default function Sidebar() {
                   href="/settings/profile/user"
                   role="button"
                   onClick={() => setIsAccountOpen(false)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-full text-sm text-muted transition-colors text-left w-full"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted transition-colors text-left w-full"
                 >
                   <UserCog2 className="w-4 h-4" /> User Settings
                 </Link>
@@ -183,14 +183,14 @@ export default function Sidebar() {
                 {isImpersonating ? (
                   <button
                     onClick={handleUnimpersonate}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-full text-sm text-muted transition-colors text-left w-full"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted transition-colors text-left w-full"
                   >
                     <UserMinus className="w-4 h-4" /> Stop Impersonating
                   </button>
                 ) : (
                   <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-full text-sm text-muted transition-colors text-left w-full"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted transition-colors text-left w-full"
                   >
                     <DoorOpen className="w-4 h-4" /> Sign Out
                   </button>

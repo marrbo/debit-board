@@ -261,20 +261,23 @@ export async function GET(req: NextRequest) {
   const patternDocs = await VulnerabilityPattern.find({
     _id: { $in: validObjectIds },
   })
-    .select("_id name")
+    .select("_id dbId name")
     .lean();
 
-  const patternNameMap = new Map<string, string>();
+  const patternLabelMap = new Map<string, string>();
   patternDocs.forEach((p) => {
-    patternNameMap.set(p._id.toString(), p.name);
+    // Prefere `dbId` — chave estável entre ambientes e imune a
+    // mudanças cosméticas no `name`. Fallback para `name` cobre
+    // patterns não migrados.
+    patternLabelMap.set(p._id.toString(), p.dbId ?? p.name ?? p._id.toString());
   });
 
   const categoryDetails: Record<string, Record<string, number>> = {};
   Object.entries(rawCategoryDetails).forEach(([category, patterns]) => {
     categoryDetails[category] = {};
     Object.entries(patterns).forEach(([patternId, count]) => {
-      const name = patternNameMap.get(patternId) ?? patternId;
-      categoryDetails[category][name] = count;
+      const label = patternLabelMap.get(patternId) ?? patternId;
+      categoryDetails[category][label] = count;
     });
   });
 

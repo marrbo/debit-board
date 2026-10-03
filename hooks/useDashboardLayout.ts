@@ -33,32 +33,39 @@ export const DASHBOARD_WIDGETS: DashboardWidgetMeta[] = [
     defaultOrder: 1,
   },
   {
+    id: "sast-timeline",
+    label: "Evolução do Risco SAST",
+    defaultSpan: 3,
+    allowedSpans: [3, 4, 6],
+    defaultOrder: 2,
+  },
+  {
     id: "executive",
     label: "Resumo Executivo",
     defaultSpan: 4,
     allowedSpans: [3, 4, 6],
-    defaultOrder: 2,
+    defaultOrder: 3,
   },
   {
     id: "category-pie",
     label: "Pizza por Categoria",
     defaultSpan: 2,
     allowedSpans: [2, 3, 4],
-    defaultOrder: 3,
+    defaultOrder: 4,
   },
   {
     id: "evolution",
     label: "Evolução das ocorrências",
     defaultSpan: 3,
     allowedSpans: [3, 4, 6],
-    defaultOrder: 4,
+    defaultOrder: 5,
   },
   {
     id: "top-projects",
     label: "Top Projetos",
     defaultSpan: 3,
     allowedSpans: [3, 4, 6],
-    defaultOrder: 5,
+    defaultOrder: 6,
   },
   {
     id: "projects-table",
@@ -66,7 +73,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetMeta[] = [
     defaultSpan: 6,
     allowedSpans: [6],
     allowSpanEdit: false,
-    defaultOrder: 6,
+    defaultOrder: 7,
   },
 ];
 
@@ -74,7 +81,6 @@ export interface OrderedWidget extends DashboardWidgetMeta {
   visible: boolean;
   order: number;
   span: WidgetSpan;
-  effectiveSpan: number;
 }
 
 export interface UseDashboardLayoutResult {
@@ -94,29 +100,7 @@ export interface UseDashboardLayoutResult {
 }
 
 function computeLayout(widgets: OrderedWidget[]): OrderedWidget[] {
-  const visible = widgets.filter((w) => w.visible);
-  const out: OrderedWidget[] = [];
-  let rowStart = 0;
-  let usedCols = 0;
-
-  for (let i = 0; i < visible.length; i++) {
-    const w = { ...visible[i], effectiveSpan: visible[i].span };
-    const span = w.effectiveSpan;
-
-    if (usedCols > 0 && usedCols + span > 6) {
-      if (i - rowStart === 1) out[rowStart].effectiveSpan = 6;
-      rowStart = i;
-      usedCols = 0;
-    }
-    out.push(w);
-    usedCols += span;
-  }
-
-  if (visible.length - rowStart === 1 && out.length > 0) {
-    out[out.length - 1].effectiveSpan = 6;
-  }
-
-  return out;
+  return widgets.filter((w) => w.visible);
 }
 
 export interface UseDashboardLayoutOptions {

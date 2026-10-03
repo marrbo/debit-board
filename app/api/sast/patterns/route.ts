@@ -20,8 +20,18 @@ export async function GET() {
 
   await connectToDatabase();
 
-  const patterns = await VulnerabilityPattern.find({ enabled: true })
-    .select({ _id: 1, name: 1, category: 1, severity: 1 })
+  const patterns = await VulnerabilityPattern.find({
+    enabled: true,
+    deprecated: { $ne: true },
+  })
+    .select({
+      _id: 1,
+      dbId: 1,
+      dbName: 1,
+      name: 1,
+      category: 1,
+      severity: 1,
+    })
     .sort({ category: 1, name: 1 })
     .lean();
 

@@ -9,10 +9,21 @@ import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
 import { buildObservationFilters } from "@/lib/observation-filters";
 import { normalizeProjectIds } from "@/lib/serverUtils";
+import {
+  aggregateRisk,
+  type RiskAggregate,
+  type RiskFinding,
+  type RiskSeverity,
+  type RiskStatus,
+} from "@/lib/risk";
 import type {
+  CurrentStateAging,
+  CurrentStateProjectRow,
+  CurrentStateTotals,
+  TeamCategoryRow,
+  TeamCurrentState,
   TeamExecutiveEntry,
   TeamPatternRow,
-  TeamProjectRow,
   TeamSeverityTotals,
   TeamsExecutiveResponse,
 } from "@/types/ITeamsExecutive";
@@ -23,8 +34,11 @@ export const revalidate = 0;
 
 const TOP_CATEGORIES = 10;
 const TOP_PATTERNS = 10;
-const TOP_PROJECTS = 10;
+const TOP_EXPOSED_PROJECTS = 10;
 
+// ============================================================
+// Helpers de valores vazios
+// ============================================================
 const emptyTotals = (): TeamSeverityTotals => ({
   total: 0,
   critical: 0,
@@ -38,6 +52,42 @@ const emptyTotals = (): TeamSeverityTotals => ({
   expired: 0,
 });
 
+const emptyCurrentTotals = (): CurrentStateTotals => ({
+  total: 0,
+  critical: 0,
+  high: 0,
+  medium: 0,
+  low: 0,
+  overdue: 0,
+  atRisk: 0,
+  onTrack: 0,
+});
+
+const emptyAging = (): CurrentStateAging => ({
+  days0To30: 0,
+  days31To60: 0,
+  days61To90: 0,
+  days90Plus: 0,
+});
+
+const emptyRisk = (): RiskAggregate => ({
+  score: 0,
+  band: "minimal",
+  findings: 0,
+  bySeverity: { critical: 0, high: 0, medium: 0, low: 0 },
+  topFindingRisk: 0,
+});
+
+const emptyCurrentState = (): TeamCurrentState => ({
+  risk: emptyRisk(),
+  totals: emptyCurrentTotals(),
+  aging: emptyAging(),
+  projects: [],
+});
+
+// ============================================================
+// Tipos internos de facet
+// ============================================================
 interface ByProjectSevStatusRow {
   _id: { project: string; severity: string; status: string };
   count: number;
@@ -54,30 +104,41 @@ interface ByPatternRow {
   count: number;
 }
 
+interface CurrentRawRow {
+  project: string | null;
+  severity: string;
+  status: string;
+  hitCount: number;
+  firstSeen: Date;
+  slaDueAt: Date;
+}
+
+interface AgingRow {
+  _id: { project: string; bucket: "0-30" | "31-60" | "61-90" | "90+" };
+  count: number;
+}
+
 /**
- * Gera o relatório executivo comparativo entre times.
+ * Relatório executivo comparativo entre times.
  *
- * **Respeita os mesmos filtros de `/api/observations` e `/api/stats`** —
- * usa `buildObservationFilters` para combinar DBQL + time + janela
- * temporal. Quando `teamId=all`, retorna **todos** os times do tenant;
- * quando um `teamId` específico é passado, retorna apenas ele.
+ * **Duas visões complementares**:
  *
- * Cada entrada inclui:
- *  - `totals`: contagem por severidade e status
- *  - `categories`: top 10 categorias com nº de padrões distintos
- *  - `patterns`: top 10 padrões com categoria e contagem
- *  - `projects`: top 10 projetos com quebra por severidade
+ *  - **Fluxo** (`totals`, `categories`, `patterns`): respeita o
+ *    range selecionado. Responde "o que apareceu no período?".
  *
- * O bloco `aggregated` combina todos os times visíveis (rollup),
- * usado quando a UI mostra "Global".
+ *  - **Estado atual** (`currentState`): **ignora o range**,
+ *    restringe a `status:open | recurring` e mede o que existe
+ *    agora — com **risk score** (0–100), SLA e aging. É o painel
+ *    de exposição presente da indústria (OWASP SAMM VM-2, NIST
+ *    SSDF PW.7, PCI-DSS 6.3.1, ISO 27001 A.8.8).
+ *
+ * Respeita DBQL + teamId + tenantId em ambas as visões.
  *
  * @summary Relatório executivo entre times
  * @tags Stats, Teams
  * @route GET /api/stats/teams-executive
  * @async
  * @function GET
- * @param {NextRequest} req - Requisição HTTP.
- * @returns {Promise<NextResponse>} `TeamsExecutiveResponse`.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -94,7 +155,7 @@ export async function GET(req: NextRequest) {
     const rangeFrom = searchParams.get("from");
     const rangeTo = searchParams.get("to");
 
-    const { match: baseMatch } = await buildObservationFilters({
+    const { match: flowMatch } = await buildObservationFilters({
       tenantId,
       dbqlId,
       teamId,
@@ -103,11 +164,22 @@ export async function GET(req: NextRequest) {
       rangeTo,
     });
 
+    const { match: lifetimeMatch } = await buildObservationFilters({
+      tenantId,
+      dbqlId,
+      teamId,
+      range: "all",
+    });
+
+    const openMatch = {
+      $and: [lifetimeMatch, { status: { $in: ["open", "recurring"] } }],
+    };
+
     const scope: "global" | "team" =
       !teamId || teamId === "all" ? "global" : "team";
 
     // ============================================================
-    // 1. Times + projetos (respeitando o filtro)
+    // 1. Times + projetos
     // ============================================================
     const teamFilter =
       scope === "team"
@@ -126,14 +198,13 @@ export async function GET(req: NextRequest) {
         teams: [],
         aggregated: {
           totals: emptyTotals(),
+          currentState: emptyCurrentState(),
           categories: [],
           patterns: [],
-          projects: [],
         },
       } satisfies TeamsExecutiveResponse);
     }
 
-    // Coleta todos os projectIds referenciados pelos times visíveis
     const allProjectIds = teams.flatMap((t) =>
       normalizeProjectIds(t.projectIds),
     );
@@ -145,7 +216,6 @@ export async function GET(req: NextRequest) {
       .select("_id name")
       .lean();
 
-    // Mapas auxiliares
     const projectIdToTeamId = new Map<string, string>();
     for (const t of teams) {
       for (const pId of normalizeProjectIds(t.projectIds)) {
@@ -163,17 +233,23 @@ export async function GET(req: NextRequest) {
     for (const t of teams) teamIdToName.set(t._id.toString(), t.name);
 
     // ============================================================
-    // 2. Agregação em uma única passada com $facet
+    // 2. Facet — fluxo + aging + risco
     // ============================================================
+    const now = new Date();
+    const soonDate = new Date(now.getTime() + 3 * 86_400_000);
+
     const [facets] = await Observation.aggregate<{
       byProjectSevStatus: ByProjectSevStatusRow[];
       byCategory: ByCategoryRow[];
       byPattern: ByPatternRow[];
+      currentRaw: CurrentRawRow[];
+      currentAging: AgingRow[];
     }>([
-      { $match: baseMatch },
       {
         $facet: {
+          // --- Fluxo (respeita range) ---
           byProjectSevStatus: [
+            { $match: flowMatch },
             {
               $group: {
                 _id: {
@@ -186,6 +262,7 @@ export async function GET(req: NextRequest) {
             },
           ],
           byCategory: [
+            { $match: flowMatch },
             { $match: { patternId: { $exists: true, $ne: null } } },
             {
               $group: {
@@ -208,6 +285,7 @@ export async function GET(req: NextRequest) {
             },
           ],
           byPattern: [
+            { $match: flowMatch },
             { $match: { patternId: { $exists: true, $ne: null } } },
             {
               $group: {
@@ -220,12 +298,61 @@ export async function GET(req: NextRequest) {
               },
             },
           ],
+
+          // --- Estado atual (SEM range) ---
+          // Retorna raw findings; a agregação em memória cobre
+          // tanto os KPIs quanto o cálculo de risco.
+          currentRaw: [
+            { $match: openMatch },
+            {
+              $project: {
+                _id: 0,
+                project: 1,
+                severity: 1,
+                status: 1,
+                hitCount: 1,
+                firstSeen: 1,
+                slaDueAt: 1,
+              },
+            },
+          ],
+          currentAging: [
+            { $match: openMatch },
+            {
+              $addFields: {
+                ageDays: {
+                  $divide: [{ $subtract: [now, "$firstSeen"] }, 86_400_000],
+                },
+              },
+            },
+            {
+              $project: {
+                project: 1,
+                bucket: {
+                  $switch: {
+                    branches: [
+                      { case: { $lt: ["$ageDays", 31] }, then: "0-30" },
+                      { case: { $lt: ["$ageDays", 61] }, then: "31-60" },
+                      { case: { $lt: ["$ageDays", 91] }, then: "61-90" },
+                    ],
+                    default: "90+",
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: { project: "$project", bucket: "$bucket" },
+                count: { $sum: 1 },
+              },
+            },
+          ],
         },
       },
     ]);
 
     // ============================================================
-    // 3. Carrega nomes dos patterns presentes no resultado
+    // 3. Nomes de patterns (para o flow)
     // ============================================================
     const patternIdStrings = new Set<string>();
     for (const row of facets.byPattern) {
@@ -233,26 +360,74 @@ export async function GET(req: NextRequest) {
     }
 
     const validPatternIds = Array.from(patternIdStrings)
-      .filter((id) => id.match(/^[a-f0-9]{24}$/i))
+      .filter((id) => /^[a-f0-9]{24}$/i.test(id))
       .map((id) => toObjectId(id))
       .filter((id): id is NonNullable<typeof id> => id !== null);
 
     const patternDocs = await VulnerabilityPattern.find({
       _id: { $in: validPatternIds },
     })
-      .select("_id name")
+      .select("_id dbId name")
       .lean();
 
+    // Dois mapas: um para exibição (`name`), outro para relatórios (`dbId`).
     const patternNameMap = new Map<string, string>();
+    const patternDbIdMap = new Map<string, string>();
     for (const p of patternDocs) {
       patternNameMap.set(p._id.toString(), p.name);
+      if (p.dbId) patternDbIdMap.set(p._id.toString(), p.dbId);
     }
 
     // ============================================================
-    // 4. Estruturas por time (acumuladores)
+    // 4. Risco em 3 níveis — construído a partir de currentRaw
+    // ============================================================
+    const findingsByProject = new Map<string, RiskFinding[]>();
+    for (const f of facets.currentRaw) {
+      const key = f.project ?? "";
+      const arr = findingsByProject.get(key) ?? [];
+      arr.push({
+        severity: f.severity as RiskSeverity,
+        status: f.status as RiskStatus,
+        hitCount: f.hitCount ?? 0,
+        firstSeen: f.firstSeen,
+        slaDueAt: f.slaDueAt,
+      });
+      findingsByProject.set(key, arr);
+    }
+
+    const riskByProject = new Map<string, RiskAggregate>();
+    for (const [project, findings] of findingsByProject) {
+      riskByProject.set(project, aggregateRisk(findings));
+    }
+
+    const findingsByTeam = new Map<string, RiskFinding[]>();
+    for (const [project, findings] of findingsByProject) {
+      const tId = projectNameToTeamId.get(project);
+      if (!tId) continue;
+      const arr = findingsByTeam.get(tId) ?? [];
+      arr.push(...findings);
+      findingsByTeam.set(tId, arr);
+    }
+
+    const riskByTeam = new Map<string, RiskAggregate>();
+    for (const [tId, findings] of findingsByTeam) {
+      riskByTeam.set(tId, aggregateRisk(findings));
+    }
+
+    const allFindings: RiskFinding[] = [];
+    for (const findings of findingsByProject.values()) {
+      allFindings.push(...findings);
+    }
+    const aggregateCurrentRisk = aggregateRisk(allFindings);
+
+    // ============================================================
+    // 5. Acumuladores por time
     // ============================================================
     interface TeamAccumulator {
       totals: TeamSeverityTotals;
+      currentTotals: CurrentStateTotals;
+      currentAging: CurrentStateAging;
+      currentProjects: Map<string, CurrentStateProjectRow>;
       categoryMap: Map<string, { observations: number; patterns: Set<string> }>;
       patternMap: Map<
         string,
@@ -263,20 +438,21 @@ export async function GET(req: NextRequest) {
           observations: number;
         }
       >;
-      projectMap: Map<string, TeamProjectRow>;
     }
 
     const teamAcc = new Map<string, TeamAccumulator>();
     for (const t of teams) {
       teamAcc.set(t._id.toString(), {
         totals: emptyTotals(),
+        currentTotals: emptyCurrentTotals(),
+        currentAging: emptyAging(),
+        currentProjects: new Map(),
         categoryMap: new Map(),
         patternMap: new Map(),
-        projectMap: new Map(),
       });
     }
 
-    // 4a. Totais por severidade + status
+    // 5a. Fluxo — severidade + status
     for (const row of facets.byProjectSevStatus) {
       const tId = projectNameToTeamId.get(row._id.project);
       if (!tId) continue;
@@ -300,7 +476,84 @@ export async function GET(req: NextRequest) {
       else if (status === "expired") acc.totals.expired += count;
     }
 
-    // 4b. Categorias (por time)
+    // 5b. Estado atual — KPIs por severidade + SLA
+    for (const f of facets.currentRaw) {
+      const tId = f.project ? projectNameToTeamId.get(f.project) : undefined;
+      if (!tId) continue;
+      const acc = teamAcc.get(tId);
+      if (!acc) continue;
+
+      const sev = f.severity || "unknown";
+      const due = f.slaDueAt ? new Date(f.slaDueAt) : null;
+      const isOverdue = due && due < now;
+      const isAtRisk = due && !isOverdue && due < soonDate;
+
+      acc.currentTotals.total += 1;
+      if (sev === "critical") acc.currentTotals.critical += 1;
+      else if (sev === "high") acc.currentTotals.high += 1;
+      else if (sev === "medium") acc.currentTotals.medium += 1;
+      else if (sev === "low") acc.currentTotals.low += 1;
+
+      if (isOverdue) acc.currentTotals.overdue += 1;
+      else if (isAtRisk) acc.currentTotals.atRisk += 1;
+      else acc.currentTotals.onTrack += 1;
+
+      // Projeto dentro do time
+      const projectKey = f.project ?? "";
+      if (!projectKey) continue;
+
+      const cur = acc.currentProjects.get(projectKey) ?? {
+        project: projectKey,
+        teamName: teamIdToName.get(tId) ?? "—",
+        risk: emptyRisk(),
+        total: 0,
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        overdue: 0,
+      };
+      cur.total += 1;
+      if (sev === "critical") cur.critical += 1;
+      else if (sev === "high") cur.high += 1;
+      else if (sev === "medium") cur.medium += 1;
+      else if (sev === "low") cur.low += 1;
+      if (isOverdue) cur.overdue += 1;
+      acc.currentProjects.set(projectKey, cur);
+    }
+
+    // Atribui o risco consolidado por projeto (vem do cálculo global)
+    for (const acc of teamAcc.values()) {
+      for (const [projectKey, row] of acc.currentProjects) {
+        row.risk = riskByProject.get(projectKey) ?? emptyRisk();
+      }
+    }
+
+    // 5c. Aging
+    for (const row of facets.currentAging) {
+      const tId = projectNameToTeamId.get(row._id.project);
+      if (!tId) continue;
+      const acc = teamAcc.get(tId);
+      if (!acc) continue;
+
+      const count = row.count;
+      switch (row._id.bucket) {
+        case "0-30":
+          acc.currentAging.days0To30 += count;
+          break;
+        case "31-60":
+          acc.currentAging.days31To60 += count;
+          break;
+        case "61-90":
+          acc.currentAging.days61To90 += count;
+          break;
+        case "90+":
+          acc.currentAging.days90Plus += count;
+          break;
+      }
+    }
+
+    // 5d. Categorias (fluxo)
     for (const row of facets.byCategory) {
       const tId = projectNameToTeamId.get(row._id.project);
       if (!tId) continue;
@@ -317,7 +570,7 @@ export async function GET(req: NextRequest) {
       acc.categoryMap.set(cat, existing);
     }
 
-    // 4c. Padrões (por time)
+    // 5e. Padrões (fluxo)
     for (const row of facets.byPattern) {
       const tId = projectNameToTeamId.get(row._id.project);
       if (!tId) continue;
@@ -327,6 +580,7 @@ export async function GET(req: NextRequest) {
       const pId = String(row._id.patternId);
       const existing = acc.patternMap.get(pId) ?? {
         patternId: pId,
+        dbId: patternDbIdMap.get(pId) ?? null,
         patternName: patternNameMap.get(pId) ?? "(padrão desconhecido)",
         category: row._id.category || "Sem Categoria",
         observations: 0,
@@ -335,61 +589,16 @@ export async function GET(req: NextRequest) {
       acc.patternMap.set(pId, existing);
     }
 
-    // 4d. Projetos (por time) — usa os totais já calculados para quebra por sev
-    const projectBreakdown = new Map<
-      string,
-      {
-        total: number;
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-      }
-    >();
-    for (const row of facets.byProjectSevStatus) {
-      const key = row._id.project;
-      const cur = projectBreakdown.get(key) ?? {
-        total: 0,
-        critical: 0,
-        high: 0,
-        medium: 0,
-        low: 0,
-      };
-      cur.total += row.count;
-      const sev = row._id.severity;
-      if (sev === "critical") cur.critical += row.count;
-      else if (sev === "high") cur.high += row.count;
-      else if (sev === "medium") cur.medium += row.count;
-      else if (sev === "low") cur.low += row.count;
-      projectBreakdown.set(key, cur);
-    }
-
-    for (const [projectName, breakdown] of projectBreakdown) {
-      const tId = projectNameToTeamId.get(projectName);
-      if (!tId) continue;
-      const acc = teamAcc.get(tId);
-      if (!acc) continue;
-
-      acc.projectMap.set(projectName, {
-        project: projectName,
-        teamName: teamIdToName.get(tId) ?? "—",
-        total: breakdown.total,
-        critical: breakdown.critical,
-        high: breakdown.high,
-        medium: breakdown.medium,
-        low: breakdown.low,
-      });
-    }
-
     // ============================================================
-    // 5. Monta as entradas por time (ordenadas por total desc)
+    // 6. Monta as entradas por time
     // ============================================================
     const entries: TeamExecutiveEntry[] = [];
     for (const [tId, acc] of teamAcc) {
-      // Filtra times sem observações para não poluir o comparativo
-      if (acc.totals.total === 0) continue;
+      if (acc.totals.total === 0 && acc.currentTotals.total === 0) continue;
 
-      const categories = Array.from(acc.categoryMap.entries())
+      const categories: TeamCategoryRow[] = Array.from(
+        acc.categoryMap.entries(),
+      )
         .map(([category, v]) => ({
           category,
           observations: v.observations,
@@ -398,34 +607,47 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => b.observations - a.observations)
         .slice(0, TOP_CATEGORIES);
 
-      const patterns = Array.from(acc.patternMap.values())
+      const patterns: TeamPatternRow[] = Array.from(acc.patternMap.values())
         .sort((a, b) => b.observations - a.observations)
         .slice(0, TOP_PATTERNS);
 
-      const projects = Array.from(acc.projectMap.values())
-        .sort((a, b) => b.total - a.total)
-        .slice(0, TOP_PROJECTS);
+      const currentProjects = Array.from(acc.currentProjects.values())
+        .sort((a, b) => b.risk.score - a.risk.score || b.total - a.total)
+        .slice(0, TOP_EXPOSED_PROJECTS);
 
       entries.push({
         teamId: tId,
         teamName: teamIdToName.get(tId) ?? "—",
         totals: acc.totals,
+        currentState: {
+          risk: riskByTeam.get(tId) ?? emptyRisk(),
+          totals: acc.currentTotals,
+          aging: acc.currentAging,
+          projects: currentProjects,
+        },
         categories,
         patterns,
-        projects,
       });
     }
 
-    entries.sort((a, b) => b.totals.total - a.totals.total);
+    // Ordena por risco atual desc — o pior primeiro
+    entries.sort(
+      (a, b) => b.currentState.risk.score - a.currentState.risk.score,
+    );
 
     // ============================================================
-    // 6. Rollup para o "agregado" (usado quando Global)
+    // 7. Rollup agregado
     // ============================================================
     const aggregated: TeamsExecutiveResponse["aggregated"] = {
       totals: emptyTotals(),
+      currentState: {
+        risk: aggregateCurrentRisk,
+        totals: emptyCurrentTotals(),
+        aging: emptyAging(),
+        projects: [],
+      },
       categories: [],
       patterns: [],
-      projects: [],
     };
 
     const aggCategoryMap = new Map<
@@ -433,6 +655,7 @@ export async function GET(req: NextRequest) {
       { observations: number; patterns: Set<string> }
     >();
     const aggPatternMap = new Map<string, TeamPatternRow>();
+    const aggCurrentProjects = new Map<string, CurrentStateProjectRow>();
 
     for (const entry of entries) {
       const t = entry.totals;
@@ -447,7 +670,37 @@ export async function GET(req: NextRequest) {
       aggregated.totals.wontFix += t.wontFix;
       aggregated.totals.expired += t.expired;
 
-      // Categorias: precisa recomputar pattern sets a partir do acumulador bruto
+      const cs = entry.currentState;
+      aggregated.currentState.totals.total += cs.totals.total;
+      aggregated.currentState.totals.critical += cs.totals.critical;
+      aggregated.currentState.totals.high += cs.totals.high;
+      aggregated.currentState.totals.medium += cs.totals.medium;
+      aggregated.currentState.totals.low += cs.totals.low;
+      aggregated.currentState.totals.overdue += cs.totals.overdue;
+      aggregated.currentState.totals.atRisk += cs.totals.atRisk;
+      aggregated.currentState.totals.onTrack += cs.totals.onTrack;
+
+      aggregated.currentState.aging.days0To30 += cs.aging.days0To30;
+      aggregated.currentState.aging.days31To60 += cs.aging.days31To60;
+      aggregated.currentState.aging.days61To90 += cs.aging.days61To90;
+      aggregated.currentState.aging.days90Plus += cs.aging.days90Plus;
+
+      for (const p of cs.projects) {
+        const existing = aggCurrentProjects.get(p.project);
+        if (existing) {
+          existing.total += p.total;
+          existing.critical += p.critical;
+          existing.high += p.high;
+          existing.medium += p.medium;
+          existing.low += p.low;
+          existing.overdue += p.overdue;
+          // risk já é o consolidado do projeto — substitui
+          existing.risk = p.risk;
+        } else {
+          aggCurrentProjects.set(p.project, { ...p });
+        }
+      }
+
       const acc = teamAcc.get(entry.teamId);
       if (acc) {
         for (const [cat, v] of acc.categoryMap) {
@@ -485,10 +738,9 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.observations - a.observations)
       .slice(0, TOP_PATTERNS);
 
-    aggregated.projects = entries
-      .flatMap((e) => e.projects)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, TOP_PROJECTS);
+    aggregated.currentState.projects = Array.from(aggCurrentProjects.values())
+      .sort((a, b) => b.risk.score - a.risk.score || b.total - a.total)
+      .slice(0, TOP_EXPOSED_PROJECTS);
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),

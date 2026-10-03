@@ -81,3 +81,7 @@ docker run --rm \
  --dir /tmp/export \
  --realm debit-board \
  --users realm_file
+
+## Observação:
+
+Uma observação de arquitetura futura, para registrar: quando o import do SonarQube existir, precisará de uma tabela de mapeamento SonarQubeRule → VulnerabilityPattern para não recriar patterns a cada import. Isso é um módulo separado (ex.: SonarQubeRuleMapping) — não é escopo desta rodada, mas o origin no modelo já prepara o terreno.

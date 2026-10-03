@@ -23,9 +23,9 @@ import LoadingSkeleton from "@/components/LoadingSkeleton";
 const statusColor = (status: string) => {
   const colors: Record<string, string> = {
     open: "bg-red-50 text-red-700 border-red-200",
-    recurring: "bg-orange-50 text-orange-700 border-orange-200",
     resolved: "bg-emerald-50 text-emerald-700 border-emerald-200",
     wont_fix: "bg-gray-50 text-gray-700 border-gray-200",
+    expired: "bg-gray-100 text-gray-600 border-gray-200",
   };
   return colors[status] || "bg-gray-100";
 };
@@ -78,10 +78,10 @@ export default function ObservationsClient({
   const handleUpdateAssignee = useCallback(
     async (id: string, value: string | null) => {
       try {
-        const res = await fetch("/api/observations", {
+        const res = await fetch(`/api/observations/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ issueId: id, assignedTo: value }),
+          body: JSON.stringify({ assignedTo: value }),
         });
         if (res.ok) {
           setRefreshKey((prev) => prev + 1);

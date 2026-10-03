@@ -7,21 +7,17 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { requireRole } from "@/lib/api-auth";
 
 /**
- * Lista recursos do endpoint /api/patterns.
+ * Lista patterns de segurança.
  *
- * Este endpoint expõe a operação get em /api/patterns.
+ * Paginado via `handleGenericGet`. Inclui patterns obsoletos (o
+ * cliente decide se filtra via `deprecated:false` na DBQL).
  *
- * @summary Lista recursos do endpoint /api/patterns
+ * @summary Lista patterns
  * @tags Patterns
  * @route GET /api/patterns
- * @async
  * @access admin
- * @function GET
- * @param {NextRequest} req - Requisição HTTP recebida pelo endpoint.
- * @returns {Promise<NextResponse>} Resposta JSON da operação executada.
  */
 export async function GET(req: NextRequest) {
-  // 1. Autenticação
   const auth = await requireRole(["admin"]);
   if (auth.ok === false) return auth.response;
 
@@ -33,20 +29,16 @@ export async function GET(req: NextRequest) {
   const isAll = searchParams.get("all") === "true";
   const categoriesOnly = searchParams.get("categories") === "true";
 
-  // 2. Modo "categorias" (compatibilidade legada)
   if (categoriesOnly) {
     const patterns = await VulnerabilityPattern.find({ enabled: true })
       .select("category")
       .lean();
-
     const categories = Array.from(
       new Set(patterns.map((p: any) => p.category).filter(Boolean)),
     );
-
     return NextResponse.json(categories);
   }
 
-  // 3. Resolve DBQL (se houver saved query)
   let finalSearchQuery = searchQueryRaw;
   if (dbqlId) {
     try {
@@ -59,28 +51,176 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 4. Lista paginada — pattern é GLOBAL, então skipTenantFilter: true
   return handleGenericGet(req, {
     model: VulnerabilityPattern,
     defaultSort: "name",
     overrideSearchQuery: finalSearchQuery,
     all: isAll,
-    skipTenantFilter: true, // para collections que não possuem tenantId (globais)
+    skipTenantFilter: true,
     projection: {
       _id: 1,
+      dbId: 1,
+      dbName: 1,
       name: 1,
       queryPattern: 1,
       severity: 1,
       category: 1,
       description: 1,
       recommendation: 1,
+      score: 1,
       slaHours: 1,
       externalId: 1,
       externalLink: 1,
+      externalIdCWE: 1,
+      externalLinkCWE: 1,
       reference: 1,
       enabled: 1,
+      deprecated: 1,
+      deprecatedAt: 1,
+      deprecatedReason: 1,
+      supersededBy: 1,
       createdAt: 1,
       updatedAt: 1,
     },
   });
+}
+
+/**
+ * Cria um novo pattern.
+ *
+ * @summary Cria pattern
+ * @tags Patterns
+ * @route POST /api/patterns
+ * @access admin
+ */
+export async function POST(req: NextRequest) {
+  const auth = await requireRole(["admin"]);
+  if (auth.ok === false) return auth.response;
+
+  await connectToDatabase();
+  const body = await req.json();
+
+  try {
+    const created = await VulnerabilityPattern.create(body);
+    return NextResponse.json(created, { status: 201 });
+  } catch (err: unknown) {
+    if (isDuplicateKeyError(err)) {
+      return NextResponse.json(
+        {
+          error:
+            "Já existe um pattern com esse dbId ou dbName. Escolha outro identificador.",
+        },
+        { status: 409 },
+      );
+    }
+    if (isValidationError(err)) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Atualiza um pattern.
+ *
+ * Bloqueia mudança de `dbId` e `dbName` (identificadores imutáveis).
+ * Bloqueia reativação de patterns obsoletos.
+ *
+ * @summary Atualiza pattern
+ * @tags Patterns
+ * @route PUT /api/patterns?id=<mongoId>
+ * @access admin
+ */
+export async function PUT(req: NextRequest) {
+  const auth = await requireRole(["admin"]);
+  if (auth.ok === false) return auth.response;
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+  }
+
+  await connectToDatabase();
+  const body = await req.json();
+
+  // Identificadores são imutáveis
+  delete body.dbId;
+  delete body.dbName;
+  delete body._id;
+
+  try {
+    const updated = await VulnerabilityPattern.findByIdAndUpdate(id, body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!updated) {
+      return NextResponse.json(
+        { error: "Pattern não encontrado." },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(updated);
+  } catch (err: unknown) {
+    if (isValidationError(err)) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Remove um pattern.
+ *
+ * **Bloqueia exclusão** se o pattern foi referenciado por scans ou
+ * profiles. Use `PUT` com `deprecated: true` para obsoletá-lo.
+ *
+ * @summary Remove pattern
+ * @tags Patterns
+ * @route DELETE /api/patterns?id=<mongoId>
+ * @access admin
+ */
+export async function DELETE(req: NextRequest) {
+  const auth = await requireRole(["admin"]);
+  if (auth.ok === false) return auth.response;
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+  }
+
+  await connectToDatabase();
+
+  // Verifica referências em Observation
+  const { Observation } = await import("@/models/Observation");
+  const usedByObs = await Observation.exists({ patternId: id });
+  if (usedByObs) {
+    return NextResponse.json(
+      {
+        error:
+          "Este pattern já foi executado em scans. Marque como obsoleto (deprecated) em vez de excluir.",
+      },
+      { status: 409 },
+    );
+  }
+
+  await VulnerabilityPattern.findByIdAndDelete(id);
+  return NextResponse.json({ success: true });
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function isDuplicateKeyError(err: unknown): err is { code: number } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: number }).code === 11000
+  );
+}
+
+function isValidationError(err: unknown): err is Error {
+  return err instanceof Error && err.name === "ValidationError";
 }

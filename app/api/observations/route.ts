@@ -1,15 +1,17 @@
 // app/api/observations/route.ts
 import { type NextRequest, NextResponse } from "next/server";
+import type { Types } from "mongoose";
 import { handleGenericGet } from "@/lib/api-handler";
+import { connectToDatabase } from "@/lib/mongodb";
 import { Observation } from "@/models/Observation";
-import {
-  VulnerabilityPattern,
-  type IVulnerabilityPattern,
-} from "@/models/VulnerabilityPattern";
+import { ObservationEvent } from "@/models/ObservationEvent";
+import { User } from "@/models/User";
+import { VulnerabilityPattern } from "@/models/VulnerabilityPattern";
 import { buildObservationFilters } from "@/lib/observation-filters";
 import { requireSession } from "@/lib/api-auth";
 import { toObjectId } from "@/lib/mongo-id";
 import type { IObservation } from "@/types/IObservation";
+import type { IVulnerabilityPattern } from "@/types/IVulnerabilityPattern";
 
 /**
  * Lista observations respeitando DBQL, time e janela temporal.
@@ -139,4 +141,131 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+/**
+ * Atribuição em lote de responsável.
+ *
+ * Body: `{ observationIds: string[], assignedTo: string | null }`
+ *
+ * Grava 1 evento `assigned` por observation (cada uma tem sua própria
+ * timeline) — bulk insert numa única chamada.
+ *
+ * @summary Atribui responsável em lote
+ * @tags Observations
+ * @route PATCH /api/observations
+ * @async
+ * @function PATCH
+ */
+export async function PATCH(req: NextRequest) {
+  const auth = await requireSession();
+  if (auth.ok === false) return auth.response;
+
+  const tenantId = toObjectId(auth.user.tenantId);
+  if (!tenantId) {
+    return NextResponse.json({ error: "Tenant inválido." }, { status: 400 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+
+  const rawIds: unknown = body?.observationIds;
+  const rawIdList = Array.isArray(rawIds)
+    ? rawIds.filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      )
+    : [];
+  if (rawIdList.length === 0) {
+    return NextResponse.json(
+      { error: "`observationIds` deve ser uma lista não vazia." },
+      { status: 400 },
+    );
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(body, "assignedTo")) {
+    return NextResponse.json(
+      { error: "Campo `assignedTo` ausente." },
+      { status: 400 },
+    );
+  }
+  const rawAssignee: unknown = body.assignedTo;
+  const nextAssignee: string | null =
+    rawAssignee === null
+      ? null
+      : typeof rawAssignee === "string"
+        ? rawAssignee
+        : (undefined as unknown as string);
+  if (nextAssignee === undefined) {
+    return NextResponse.json(
+      { error: "`assignedTo` deve ser string ou null." },
+      { status: 400 },
+    );
+  }
+
+  await connectToDatabase();
+
+  const objectIds: Types.ObjectId[] = [];
+  for (const id of rawIdList) {
+    const oid = toObjectId(id);
+    if (oid) objectIds.push(oid);
+  }
+  if (objectIds.length === 0) {
+    return NextResponse.json({ error: "Nenhum ID válido." }, { status: 400 });
+  }
+
+  const observations = await Observation.find({
+    _id: { $in: objectIds },
+    tenantId,
+  })
+    .select("_id patternId assignedTo")
+    .lean();
+
+  if (observations.length === 0) {
+    return NextResponse.json(
+      { error: "Nenhuma observation encontrada para os IDs informados." },
+      { status: 404 },
+    );
+  }
+
+  const dbUser = await User.findOne({ sub: auth.user.sub })
+    .select("_id name email")
+    .lean();
+  const actorName = dbUser?.name ?? dbUser?.email ?? auth.user.sub;
+  const actorId = dbUser?._id;
+
+  const now = new Date();
+  const changed = observations.filter(
+    (o) => (o.assignedTo ?? null) !== nextAssignee,
+  );
+
+  if (changed.length > 0) {
+    await Observation.updateMany(
+      { _id: { $in: changed.map((o) => o._id) } },
+      { $set: { assignedTo: nextAssignee } },
+    );
+
+    // Uma timeline por observation — eventos individuais, bulk insert.
+    await ObservationEvent.insertMany(
+      changed.map((o) => ({
+        tenantId,
+        type: "assigned" as const,
+        at: now,
+        actor: {
+          type: "user" as const,
+          userId: actorId,
+          displayName: actorName,
+        },
+        observationIds: [o._id],
+        patternId: o.patternId,
+        metadata: {
+          previousAssignee: o.assignedTo ?? null,
+          newAssignee: nextAssignee,
+        },
+      })),
+    );
+  }
+
+  return NextResponse.json({
+    updated: changed.length,
+    unchanged: observations.length - changed.length,
+  });
 }

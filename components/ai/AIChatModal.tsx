@@ -365,9 +365,9 @@ export default function AIChatModal({
               <div key={i} className="flex gap-3 items-start">
                 <div className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center bg-brand/10 mt-0.5">
                   {isStreaming && isLastAssistant ? (
-                    <ThinkingIcon className="w-3.5 h-3.5 text-brand" />
+                    <ThinkingIcon className="w-5 h-5 mt-6 text-brand" />
                   ) : (
-                    <Bot className="w-3.5 h-3.5 text-brand" />
+                    <Bot className="w-5 h-5 mt-6 text-brand" />
                   )}
                 </div>
 
@@ -375,7 +375,7 @@ export default function AIChatModal({
                   <div className="rounded-lg px-4 py-3 bg-surface text-body border border-default/50">
                     {isThinking ? (
                       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-                        <ThinkingIcon className="w-3 h-3 text-brand" />
+                        {/* <ThinkingIcon className="w-3 h-3 text-brand" /> */}
                         Pensando…
                       </span>
                     ) : (

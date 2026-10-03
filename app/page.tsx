@@ -8,19 +8,23 @@ import { Tv } from "lucide-react";
 import { FaFilePdf } from "react-icons/fa";
 
 import PageHeader from "@/components/PageHeader/Header";
-import TeamStatsCard from "@/components/TeamStatsCard";
 import TeamSelector from "@/components/TeamSelector";
 import RangeSelector from "@/components/RangeSelector";
-import TeamsExecutiveCard from "@/components/stats/TeamsExecutiveCard";
+import WidgetsMenu from "@/components/dashboard/WidgetsMenu";
+import DashboardProfileBar from "@/components/dashboard/DashboardProfileBar";
+import LoadingSkeleton from "@/components/LoadingSkeleton";
+import DashboardProfileModal from "@/app/settings/dashboards/DashboardProfileModal";
 import EvolutionWidget from "@/components/dashboard/EvolutionWidget";
 import TopProjectsWidget from "@/components/dashboard/TopProjectsWidget";
 import CategoryPieWidget from "@/components/dashboard/CategoryPieWidget";
-import WidgetsMenu from "@/components/dashboard/WidgetsMenu";
-import DashboardProfileBar from "@/components/dashboard/DashboardProfileBar";
-import { DataTable } from "@/components/DataTable";
-import { projectColumns } from "@/components/dashboard/projectColumns";
-import LoadingSkeleton from "@/components/LoadingSkeleton";
-import DashboardProfileModal from "@/app/settings/dashboards/DashboardProfileModal";
+import Loading from "@/components/Loading";
+import HeaderActions from "@/components/PageHeader/HeaderActions";
+
+import {
+  renderDashboardWidget,
+  WIDGETS_NEEDING_DASHBOARD_STATS,
+  WIDGETS_NEEDING_STATS,
+} from "@/components/dashboard/widget-renderer";
 
 import { useTeam, useLocalSettings } from "@/hooks/useLocalSettings";
 import { useTeams } from "@/hooks/useTeams";
@@ -41,26 +45,9 @@ import type {
   StatsData,
 } from "@/types/IStats";
 import type { IDashboardWidgetRef } from "@/types/IDashboardProfile";
-import HeaderActions from "@/components/PageHeader/HeaderActions";
-import Loading from "@/components/Loading";
 
 // ============================================================
-// Mapa de dependências de endpoints por widget
-// ============================================================
-const WIDGETS_NEEDING_DASHBOARD_STATS = [
-  "severity-status",
-  "category",
-  "projects-table",
-] as const;
-
-const WIDGETS_NEEDING_STATS = [
-  "evolution",
-  "category-pie",
-  "top-projects",
-] as const;
-
-// ============================================================
-// Mapeamento de span → classe Tailwind
+// Span → classe Tailwind
 // ============================================================
 const SPAN_CLASS: Record<number, string> = {
   2: "lg:col-span-2",
@@ -147,9 +134,6 @@ function DashboardContent() {
     overrideKey: activeProfileId ?? undefined,
   });
 
-  // Se o perfil salvo no storage não existir mais (foi excluído por
-  // outra instância, por exemplo), limpa o ponteiro — evita que o
-  // Dashboard fique preso em "perfil fantasma".
   useEffect(() => {
     if (!activeProfileId) return;
     if (profiles.length === 0) return;
@@ -173,8 +157,6 @@ function DashboardContent() {
     }
   }, [activeProfileId, draftLayout, updateLayout, discardDraft, toast]);
 
-  // Ao ativar um perfil que tem `teamId` (raro em dashboard, mas
-  // possível), aplica uma vez.
   useEffect(() => {
     if (!activeProfile?.tv?.teamId) return;
     if (activeProfile.kind !== "dashboard") return;
@@ -222,7 +204,7 @@ function DashboardContent() {
   }, [effectiveTeamId, searchDbqlId, rangeState]);
 
   // ============================================================
-  // Fetch condicional
+  // Fetch condicional (listas vindas do renderer compartilhado)
   // ============================================================
   useEffect(() => {
     if (!teamsLoaded || !effectiveTeamId) return;
@@ -371,102 +353,6 @@ function DashboardContent() {
     );
   }
 
-  const { teamStats, projectStats, categoryDetails } = dashboardStats;
-
-  const renderWidget = (id: string) => {
-    switch (id) {
-      case "severity-status":
-        return (
-          <TeamStatsCard
-            type="status"
-            title="Severidade e Status"
-            total={teamStats.total}
-            severity={teamStats.severityTotals}
-            status={teamStats.statusTotals}
-          />
-        );
-
-      case "evolution":
-        return (
-          <EvolutionWidget
-            chartData={stats.chartData}
-            onExpand={() => setExpandedChart("evolution")}
-          />
-        );
-
-      case "executive":
-        return (
-          <TeamsExecutiveCard
-            teamId={effectiveTeamId}
-            searchQuery={searchDbqlId}
-          />
-        );
-
-      case "category-pie":
-        return (
-          <CategoryPieWidget
-            categories={stats.categoryTotals}
-            onExpand={() => setExpandedChart("category-pie")}
-          />
-        );
-
-      case "category":
-        return (
-          <TeamStatsCard
-            type="category"
-            title="Distribuição por Categoria"
-            total={teamStats.total}
-            category={teamStats.categoryTotals}
-            categoryGroup={teamStats.categoryGroupTotals}
-            categoryDetails={categoryDetails}
-          />
-        );
-
-      case "top-projects":
-        return (
-          <TopProjectsWidget
-            projects={stats.projectTotals}
-            onExpand={() => setExpandedChart("top-projects")}
-          />
-        );
-
-      case "projects-table":
-        return (
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-heading">
-              Projetos - {effectiveTeamId === "all" ? "Global" : teamName}
-            </h3>
-            <DataTable
-              endpoint="/api/dashboard"
-              columns={projectColumns}
-              defaultSort={{ field: "name", order: "asc" }}
-              defaultLimit={5}
-              searchDbqlId={searchDbqlId}
-              refreshKey={searchVersion}
-              range={
-                rangeState.mode === "preset" && rangeState.preset !== "all"
-                  ? rangeState.preset
-                  : undefined
-              }
-              rangeFrom={
-                rangeState.mode === "custom" ? rangeState.from : undefined
-              }
-              rangeTo={rangeState.mode === "custom" ? rangeState.to : undefined}
-              pdfTitle={`Projetos: Severidades - ${
-                effectiveTeamId === "all" ? "Global" : teamName
-              }`}
-              teamId={effectiveTeamId}
-              extraData={projectStats}
-              onRowClick={() => {}}
-            />
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="w-full space-y-6 p-8">
       <PageHeader
@@ -533,13 +419,21 @@ function DashboardContent() {
           if (!w) return null;
           return (
             <div
-              key={`${w.id}-${w.effectiveSpan}`}
+              key={`${w.id}-${w.span}`}
               style={{ order: w.order }}
-              className={`min-w-0 ${
-                SPAN_CLASS[w.effectiveSpan] ?? "lg:col-span-6"
-              }`}
+              className={`min-w-0 ${SPAN_CLASS[w.span] ?? "lg:col-span-6"}`}
             >
-              {renderWidget(w.id)}
+              {renderDashboardWidget(w.id, {
+                stats,
+                dashboardStats,
+                teamId: effectiveTeamId,
+                teamName,
+                searchDbqlId,
+                rangeState,
+                searchVersion,
+                onExpand: setExpandedChart,
+                variant: "dashboard",
+              })}
             </div>
           );
         })}
@@ -597,9 +491,6 @@ function DashboardContent() {
           onClose={() => setSaveAsOpen(false)}
           onSaved={async (created) => {
             setSaveAsOpen(false);
-            // Garante que o cache global já tem o perfil antes de
-            // apontá-lo como ativo — sem isso o Dashboard fica 1 tick
-            // sem `activeProfile` e o layout pisca.
             await refresh();
             update({ dashboardProfileId: created._id.toString() });
           }}

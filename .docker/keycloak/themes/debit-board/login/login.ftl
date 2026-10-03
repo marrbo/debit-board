@@ -15,7 +15,7 @@
 </#if>
 
 <#assign ph_placeholder_msg = msg("passwordPlaceholder")>
-<#if ph_placeholder_msg == "passwordPlaceholder" || !(ph_password?has_content)>
+<#if ph_placeholder_msg == "passwordPlaceholder" || !(ph_placeholder_msg?has_content)>
     <#assign ph_placeholder_msg = "Digite sua senha">
 </#if>
 
@@ -64,7 +64,7 @@
                                    type="password"
                                    autocomplete="current-password"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
-                                   placeholder="${ph_password}" />
+                                   placeholder="${ph_placeholder_msg}" />
                         </div>
 
                         <#if messagesPerField.existsError('username','password')>

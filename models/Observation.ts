@@ -23,12 +23,18 @@ const ObservationSchema = new Schema<IObservation>(
     slaHours: { type: Number, required: true },
     status: {
       type: String,
-      enum: ["open", "resolved", "recurring", "wont_fix", "expired"],
+      enum: ["open", "resolved", "wont_fix", "expired"],
       default: "open",
     },
     firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now },
     resolvedAt: { type: Date },
+    resolvedReason: {
+      type: String,
+      enum: ["scan-not-found", "auto-resolved", "duplicate-merged", "manual"],
+    },
+    reopenedAt: { type: Date },
+    recurrenceCount: { type: Number, default: 0, required: true },
     slaDueAt: { type: Date, required: true },
     assignedTo: { type: String, ref: "User" },
     snippet: { type: String },
@@ -48,6 +54,24 @@ ObservationSchema.index({ tenantId: 1, filePath: 1, patternId: 1 });
 ObservationSchema.index({ tenantId: 1, status: 1 });
 ObservationSchema.index({ tenantId: 1, assignedTo: 1 });
 ObservationSchema.index({ tenantId: 1, slaDueAt: 1 });
+// Identidade canônica da observation. Impede duplicatas futuras.
+// `partialFilterExpression` permite observações sem patternId (legado).
+ObservationSchema.index(
+  {
+    tenantId: 1,
+    patternId: 1,
+    project: 1,
+    repository: 1,
+    filePath: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      patternId: { $exists: true, $type: "objectId" },
+    },
+    name: "uniq_observation_identity",
+  },
+);
 
 // ============================================================
 // Statics
@@ -81,7 +105,7 @@ ObservationSchema.statics.findOverdueSla = function (
 
   return this.find({
     tenantId: { $eq: tenantObjectId },
-    status: { $in: ["open", "recurring"] },
+    status: "open",
     slaDueAt: { $lt: new Date() },
   })
     .sort({ slaDueAt: 1 })

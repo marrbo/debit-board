@@ -81,10 +81,11 @@ export const authOptions: NextAuthOptions = {
             token.organization = orgName;
 
             if (mongoose.Types.ObjectId.isValid(orgName)) {
-              token.organizationData = {
-                tenantId: new mongoose.Types.ObjectId(orgName),
-              };
-              token.tenantId = token.organizationData.tenantId;
+              // Armazenado como string — o cookie JWT serializa assim
+              // de qualquer forma, e o Next 16 não aceita BSON em
+              // componentes client.
+              token.organizationData = { tenantId: orgName };
+              token.tenantId = orgName;
             }
           }
         }
@@ -110,7 +111,7 @@ export const authOptions: NextAuthOptions = {
         if (tenant) {
           token.azureSettings = tenant.azureSettings;
           token.organizationData = {
-            tenantId: tenant._id,
+            tenantId: String(tenant._id),
             domain: tenant.dominio,
             id: tenant.uuid,
             isActive: tenant.isActive,
@@ -141,13 +142,15 @@ export const authOptions: NextAuthOptions = {
 
           session.user = {
             ...session.user,
-            _id: target._id,
+            // 🔥 String(), não ObjectId: o Next 16 recusa BSON no
+            //    boundary Server → Client.
+            _id: String(target._id),
             sub: target.sub,
             name: target.name,
             email: target.email,
             avatar: target.avatar,
             role: (target as any).role ?? "user",
-            tenantId: tenant?._id,
+            tenantId: tenant?._id ? String(tenant._id) : undefined,
             onboardingCompleted: target.onboardingCompleted,
             isActive: target.isActive ?? true,
             impersonating: true,
@@ -165,7 +168,6 @@ export const authOptions: NextAuthOptions = {
       }
 
       // ---- Caminho normal (sem impersonação) ----
-      // Antes o código só setava `sub`, o que fazia requireAdmin/requireSession falharem.
       if (session.user) {
         session.user.sub = (token.sub as string) ?? "";
         session.user.email = (token.email as string) ?? session.user.email;
@@ -173,7 +175,11 @@ export const authOptions: NextAuthOptions = {
 
         session.user.isAdmin = token.isAdmin ?? false;
         session.user.isActive = token.isActive ?? true;
-        session.user.tenantId = token.tenantId;
+        // 🔥 `token.tenantId` pode ser ObjectId no primeiro request
+        //    (recém-criado em `jwt()`); String() normaliza.
+        session.user.tenantId = token.tenantId
+          ? String(token.tenantId)
+          : undefined;
         session.user.organization = token.organization;
         session.user.onboardingCompleted = token.onboardingCompleted;
         session.user.azureSettings = token.azureSettings;

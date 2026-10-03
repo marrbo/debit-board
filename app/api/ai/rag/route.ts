@@ -1,5 +1,5 @@
 // app/api/ai/rag/route.ts
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { streamChat } from "@/lib/ollama";
 import AiEmbedding from "@/models/AiEmbedding";
