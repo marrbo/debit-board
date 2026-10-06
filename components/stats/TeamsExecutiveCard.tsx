@@ -350,7 +350,7 @@ function RiskHero({ risk }: { risk: RiskAggregate }) {
       className={`rounded-lg border p-4 flex items-center gap-5 ${meta.bg} ${meta.border}`}
     >
       <div className="shrink-0">
-        <ScoreGauge score={risk.score} size={104} />
+        <ScoreGauge score={risk.score} size={104} theme="auto" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[10px] uppercase tracking-wider text-muted">

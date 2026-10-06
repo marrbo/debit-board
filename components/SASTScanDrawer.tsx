@@ -259,7 +259,12 @@ export default function SASTScanDrawer({
         scan ? (
           <div className="flex items-center gap-3">
             {risk && (
-              <ScoreGauge score={risk.score} size={44} variant="compact" />
+              <ScoreGauge
+                score={risk.score}
+                size={44}
+                variant="compact"
+                theme="auto"
+              />
             )}
             <span className="truncate font-mono">
               {scan.scanId ?? shortScanId(scan._id)}
@@ -462,7 +467,7 @@ function OverviewPanel({ rows, scan, risk }: OverviewPanelProps) {
         <div
           className={`rounded-lg border p-4 flex items-center gap-5 ${BAND_META[risk.band].bg} ${BAND_META[risk.band].border}`}
         >
-          <ScoreGauge score={risk.score} size={110} />
+          <ScoreGauge score={risk.score} size={110} theme="auto" />
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-wider text-gray-400">
               Risco do scan

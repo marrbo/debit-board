@@ -130,7 +130,7 @@ export default function ObservationDrawer({
                 </div>
               </div>
               <div className="shrink-0 pt-28 pr-5">
-                <ScoreGauge score={score * 10.0} size={90} />
+                <ScoreGauge score={score * 10.0} size={90} theme="dark" />
               </div>
             </div>
           </div>

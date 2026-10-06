@@ -23,10 +23,8 @@ export interface RiskAggregate {
   /** 0–100, arredondado. */
   score: number;
   band: RiskBand;
-  /** Quantidade de findings ativos (não-resolvidos). */
   findings: number;
   bySeverity: Record<RiskSeverity, number>;
-  /** Contribuinte mais relevante — 0–10. */
   topFindingRisk: number;
 }
 
@@ -42,9 +40,9 @@ const SEVERITY_BASE: Record<RiskSeverity, number> = {
 
 const STATUS_MULT: Record<RiskStatus, number> = {
   open: 1.0,
-  recurring: 1.15, // regressão é pior que nunca ter resolvido
-  wont_fix: 0.7, // risco aceito, mas ainda exposto
-  expired: 0.5, // considerado fora do escopo
+  recurring: 1.15,
+  wont_fix: 0.7,
+  expired: 0.5,
   resolved: 0.0,
 };
 
@@ -93,8 +91,19 @@ export function findingRisk(f: RiskFinding): number {
 // ============================================================
 // Agregação
 // ============================================================
+/**
+ * 4 faixas efetivas em 0–100:
+ *   0        → "minimal"  (sem exposição ativa; caso especial)
+ *   1–39     → "low"
+ *   40–59    → "moderate"
+ *   60–79    → "high"
+ *   80–100   → "critical"
+ *
+ * `minimal` existe apenas em score 0 para sinalizar "nenhum risco ativo".
+ * Visualmente ele compartilha cor com `low`.
+ */
 export function bandOf(score: number): RiskBand {
-  if (score < 20) return "minimal";
+  if (score <= 0) return "minimal";
   if (score < 40) return "low";
   if (score < 60) return "moderate";
   if (score < 80) return "high";
@@ -157,50 +166,59 @@ export interface BandMeta {
   border: string;
 }
 
+/**
+ * Paleta de 4 cores efetivas. `minimal` e `low` compartilham o mesmo hex
+ * (emerald-500) porque representam o mesmo estado visual ("nada ativo" /
+ * "poucos riscos"). As demais faixas têm cores perceptivelmente distintas:
+ * amber → orange → red.
+ *
+ * As classes Tailwind (`text-*`, `bg-*`, `border-*`) ficam alinhadas com
+ * a família de cada hex — útil para badges/ícones que reaproveitam BAND_META.
+ */
 export const BAND_META: Record<RiskBand, BandMeta> = {
   minimal: {
     label: "Mínimo",
     executive: "Postura sólida. Nada crítico ou alto pendente.",
     specialist: "Nenhuma exposição crítica ou alta ativa.",
-    hex: "#34d399",
-    text: "text-emerald-400",
-    bg: "bg-emerald-400/10",
-    border: "border-emerald-400/30",
+    hex: "#10b981", // emerald-500
+    text: "text-emerald-500",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/30",
   },
   low: {
     label: "Baixo",
     executive: "Poucos riscos relevantes, sob controle.",
     specialist: "Riscos residuais; nenhuma ação imediata.",
-    hex: "#4ade80",
-    text: "text-green-400",
-    bg: "bg-green-400/10",
-    border: "border-green-400/30",
+    hex: "#10b981", // emerald-500 (mesma família do minimal)
+    text: "text-emerald-500",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/30",
   },
   moderate: {
     label: "Moderado",
     executive: "Requer atenção. Há itens abertos relevantes.",
     specialist: "Findings de severidade média/alta demandam plano.",
-    hex: "#fbbf24",
-    text: "text-amber-400",
-    bg: "bg-amber-400/10",
-    border: "border-amber-400/30",
+    hex: "#f59e0b", // amber-500
+    text: "text-amber-500",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
   },
   high: {
     label: "Alto",
     executive: "Ação prioritária. Riscos significativos expostos.",
     specialist: "Exposição relevante; SLA tende a estourar.",
-    hex: "#fb923c",
-    text: "text-orange-400",
-    bg: "bg-orange-400/10",
-    border: "border-orange-400/30",
+    hex: "#f97316", // orange-500
+    text: "text-orange-500",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/30",
   },
   critical: {
     label: "Crítico",
     executive: "Intervenção urgente. Riscos severos expostos.",
     specialist: "Exposição severa e/ou volume crítico acumulado.",
-    hex: "#f87171",
-    text: "text-red-400",
-    bg: "bg-red-400/10",
-    border: "border-red-400/30",
+    hex: "#ef4444", // red-500
+    text: "text-red-500",
+    bg: "bg-red-500/10",
+    border: "border-red-500/30",
   },
 };
